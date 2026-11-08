@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    @apply bg-void font-sans text-base text-fg antialiased;
+    background-image:
+      radial-gradient(ellipse 60% 35% at 50% 0%, rgba(200, 146, 58, 0.16), transparent 70%),
+      radial-gradient(ellipse 80% 50% at 50% 100%, rgba(120, 70, 20, 0.12), transparent 70%);
+    background-attachment: fixed;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: rgba(243, 192, 74, 0.35);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid #f3c04a;
+    outline-offset: 2px;
+  }
+  /* Barras de rolagem no tema */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #6b4a1c #16100a;
+  }
+  select,
+  input {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Cartão de conta: moldura dourada, fundo marrom escuro e brilho suave. */
+  .card {
+    @apply relative border-2 border-edge text-fg;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #2c1f12 0%, #1d140b 100%);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      0 10px 28px -8px rgba(0, 0, 0, 0.6),
+      0 0 26px -6px rgba(200, 146, 58, 0.22),
+      inset 0 1px 0 rgba(255, 220, 150, 0.12);
+  }
+  .dialog {
+    @apply card;
+  }
+  .tile {
+    @apply border border-line bg-tile text-fg;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.04);
+  }
+  .tile-green {
+    @apply border-[#2f6b3a] text-poke-green;
+    background: linear-gradient(180deg, #1b3a22, #142b19);
+  }
+  .tile-gold {
+    @apply border-[#7a5a1c] text-poke-gold;
+    background: linear-gradient(180deg, #38290f, #2a1e0b);
+  }
+  .label {
+    @apply text-sm font-medium leading-none text-mute;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 border border-line bg-tile px-2.5 py-1.5 text-xs font-semibold sm:px-3.5 sm:py-2 sm:text-sm text-fg transition-[background-color,border-color,color,transform] duration-200;
+    border-radius: 10px;
+  }
+  .btn:hover {
+    @apply border-edge/70 bg-[#241a0f];
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn[data-active="true"] {
+    @apply border-edge bg-[#3a2a12] text-poke-gold;
+  }
+  .btn:disabled {
+    @apply opacity-40;
+  }
+  .field {
+    @apply h-9 border border-line bg-tile px-3 text-sm sm:h-10 text-fg outline-none transition-colors duration-200;
+    border-radius: 10px;
+  }
+  .field:focus {
+    @apply border-edge;
+  }
+  .field::placeholder {
+    @apply text-mute/60;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

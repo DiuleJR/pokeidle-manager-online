@@ -1,0 +1,28 @@
+# Segredos e config local
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+bot.log
+
+# Frontend
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+web_dist/
+
+# Ferramentas locais
+.agents/
+.claude/
+
+# Estado de sessão persistido (runtime)
+session_state.json
+daily_state.json
+
+# Documentação local do protocolo (não publicada)
+docs/

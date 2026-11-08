@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(46, 33, 19)"/><stop offset="1" stop-color="rgb(14, 10, 6)"/></linearGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="rgb(200, 146, 58)" stop-opacity=".4"/><stop offset="1" stop-color="rgb(200, 146, 58)" stop-opacity="0"/></radialGradient>
+    <clipPath id="ball"><circle cx="256" cy="256" r="142"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="190" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="rgb(200, 146, 58)" stroke-width="20"/>
+  <circle cx="256" cy="256" r="176" fill="none" stroke="rgb(138, 95, 34)" stroke-width="4"/>
+  <polygon points="256,35 273,52 256,69 239,52" fill="rgb(243, 192, 74)" stroke="rgb(14, 10, 6)" stroke-width="2"/>
+  <polygon points="460,239 477,256 460,273 443,256" fill="rgb(243, 192, 74)" stroke="rgb(14, 10, 6)" stroke-width="2"/>
+  <polygon points="256,443 273,460 256,477 239,460" fill="rgb(243, 192, 74)" stroke="rgb(14, 10, 6)" stroke-width="2"/>
+  <polygon points="52,239 69,256 52,273 35,256" fill="rgb(243, 192, 74)" stroke="rgb(14, 10, 6)" stroke-width="2"/>
+  <g clip-path="url(#ball)">
+    <path d="M114 256A142 142 0 0 1 398 256Z" fill="rgb(214, 58, 34)"/>
+    <path d="M114 256A142 142 0 0 0 398 256Z" fill="rgb(244, 232, 204)"/>
+    <ellipse cx="201" cy="154" rx="31" ry="18" fill="#fff" fill-opacity=".21"/>
+    <ellipse cx="197" cy="153" rx="13" ry="7" fill="#fff" fill-opacity=".47"/>
+    <rect x="114" y="239" width="284" height="34" fill="rgb(26, 16, 8)"/>
+  </g>
+  <circle cx="256" cy="256" r="142" fill="none" stroke="rgb(26, 16, 8)" stroke-width="12"/>
+  <circle cx="256" cy="256" r="50" fill="rgb(26, 16, 8)"/>
+  <circle cx="256" cy="256" r="36" fill="rgb(244, 232, 204)" stroke="rgb(214, 196, 156)" stroke-width="3"/>
+  <polygon points="256,236 232,256 256,256" fill="rgb(243, 192, 74)"/>
+  <polygon points="256,236 280,256 256,256" fill="rgb(255, 232, 150)"/>
+  <polygon points="232,256 256,256 256,282" fill="rgb(214, 158, 52)"/>
+  <polygon points="280,256 256,256 256,282" fill="rgb(200, 146, 58)"/>
+  <polygon points="248,244 252,248 248,252 244,248" fill="#fff"/>
+</svg>
