@@ -4,15 +4,30 @@ Bot headless em Python para gerenciar até 4 contas do jogo **pokeidle.io** ao m
 tempo, pensado para rodar em background numa VPS Linux (sem navegador), com um
 dashboard web para acompanhar tudo.
 
-> ⚠️ **Projeto não oficial.** Não tem relação com o pokeidle.io nem com seus
-> desenvolvedores. Automatizar contas pode violar os Termos de Uso do jogo e
-> resultar em banimento. **Use por sua conta e risco** e leia os termos antes.
+> **Projeto não oficial.** Não tem relação com o pokeidle.io nem com seus
+> desenvolvedores.
+>
+> Segundo os [Termos de Uso do jogo](https://pokeidle.io/terms#conduta) (seção
+> "Conduta"), automações são permitidas, desde que sigam as mesmas regras de quem
+> joga na mão. Ou seja, **não** podem:
+>
+> - explorar falhas (bugs) ou duplicar itens, Pokémon, Coins, diamantes ou Gemas;
+> - burlar limites do jogo, como o de contas, ou as travas e retenções do Mercado;
+> - sobrecarregar o servidor.
+>
+> **Limite de contas:** cada pessoa pode ter até **4 contas** no total, somando
+> todas as redes e aparelhos. Cada rede também pode ter no máximo 4 contas
+> conectadas ao mesmo tempo. Por isso o bot gerencia **no máximo 4 contas**.
+> Passar disso pode banir todas as suas contas.
+>
+> Os termos podem mudar: leia a versão atual antes de usar. Você é o único
+> responsável pelo uso que fizer deste projeto.
 
 ## Recursos
 
 - Conexão WebSocket por conta (handshake, heartbeat, reconexão automática)
 - Cooldown ao detectar login externo (close code `4001`)
-- Seleção de hunt e captura automática de Balls
+- Captura automática de Balls
 - Reposição automática de Potions e Balls na loja
 - Visão de inventário por conta
 - Proxy (SOCKS5/HTTP) individual por conta
