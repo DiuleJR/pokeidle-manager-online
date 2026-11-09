@@ -260,6 +260,41 @@ function ProxyFields({ value, onChange, accountId, hasSavedPassword }: { value: 
 // ------------------------------------------------------------------ adicionar conta
 type Method = "bookmarklet" | "console" | "manual";
 
+/** Passo a passo para copiar nick/token/dispositivo do jogo (bookmarklet ou console). */
+function CopyGuide({ method }: { method: "bookmarklet" | "console" }) {
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    // React bloqueia "javascript:" em href; definimos direto no DOM (o bookmarklet é arrastado dali).
+    linkRef.current?.setAttribute("href", BOOKMARKLET);
+  }, [method]);
+
+  return method === "bookmarklet" ? (
+    <ol className="list-decimal space-y-2 pl-5 text-sm">
+      <li>
+        Arraste este botão para a barra de favoritos do navegador (no PC):{" "}
+        <a ref={linkRef} draggable className="btn inline-flex" onClick={(e) => e.preventDefault()} title="Arraste para a barra de favoritos">
+          ⭐ Copiar conta Pokeidle
+        </a>{" "}
+        ou <CopyButton text={BOOKMARKLET} label="copiar o endereço" /> e crie um favorito colando-o em "URL".
+      </li>
+      <li>
+        Abra <b>pokeidle.io/app</b>, entre na conta e clique no favorito. Os dados da conta vão para a área de transferência.
+      </li>
+      <li>Volte aqui e cole no campo abaixo.</li>
+    </ol>
+  ) : (
+    <ol className="list-decimal space-y-2 pl-5 text-sm">
+      <li>
+        <CopyButton text={SNIPPET} label="Copiar o código" />
+      </li>
+      <li>
+        Abra <b>pokeidle.io/app</b> logada, aperte <b>F12</b>, vá na aba <b>Console</b>, cole o código e aperte Enter. (Se o navegador pedir, digite <code>allow pasting</code> antes.)
+      </li>
+      <li>Volte aqui e cole o resultado no campo abaixo.</li>
+    </ol>
+  );
+}
+
 function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [method, setMethod] = useState<Method>("bookmarklet");
   const [text, setText] = useState("");
@@ -270,13 +305,6 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const linkRef = useRef<HTMLAnchorElement>(null);
-
-  useEffect(() => {
-    // React bloqueia "javascript:" em href; definimos direto no DOM (o bookmarklet é arrastado dali).
-    linkRef.current?.setAttribute("href", BOOKMARKLET);
-  }, [method]);
-
   const submit = async (skipTest: boolean) => {
     setBusy(true);
     setError(null);
@@ -345,32 +373,7 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
         ))}
       </div>
 
-      {method === "bookmarklet" && (
-        <ol className="list-decimal space-y-2 pl-5 text-sm">
-          <li>
-            Arraste este botão para a barra de favoritos do navegador (no PC):{" "}
-            <a ref={linkRef} draggable className="btn inline-flex" onClick={(e) => e.preventDefault()} title="Arraste para a barra de favoritos">
-              ⭐ Copiar conta Pokeidle
-            </a>{" "}
-            ou <CopyButton text={BOOKMARKLET} label="copiar o endereço" /> e crie um favorito colando-o em "URL".
-          </li>
-          <li>
-            Abra <b>pokeidle.io/app</b>, entre na conta e clique no favorito. Os dados da conta vão para a área de transferência.
-          </li>
-          <li>Volte aqui e cole abaixo.</li>
-        </ol>
-      )}
-      {method === "console" && (
-        <ol className="list-decimal space-y-2 pl-5 text-sm">
-          <li>
-            <CopyButton text={SNIPPET} label="Copiar o código" />
-          </li>
-          <li>
-            Abra <b>pokeidle.io/app</b> logada, aperte <b>F12</b>, vá na aba <b>Console</b>, cole o código e aperte Enter. (Se o navegador pedir, digite <code>allow pasting</code> antes.)
-          </li>
-          <li>Volte aqui e cole o resultado abaixo.</li>
-        </ol>
-      )}
+      {method !== "manual" && <CopyGuide method={method} />}
 
       {method === "manual" ? (
         <div className="space-y-2.5">
@@ -445,6 +448,7 @@ function EditAccountDialog({ acc, onClose, onDone }: { acc: AdminAccount; onClos
     ball_restock_qty: String(o.ball_restock_qty),
   });
   const [paste, setPaste] = useState("");
+  const [guide, setGuide] = useState<"bookmarklet" | "console">("bookmarklet");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -516,11 +520,27 @@ function EditAccountDialog({ acc, onClose, onDone }: { acc: AdminAccount; onClos
           </div>
         )}
       </div>
-      <div>
-        <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-mute">Reimportar token</h3>
-        <textarea className="field h-16 w-full resize-y py-2 font-mono text-xs" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Cole aqui os dados copiados do jogo (só se o token venceu)" spellCheck={false} />
-        <p className="mt-1 text-xs text-mute">Token atual: {acc.tokenHint}</p>
-      </div>
+      <details className="rounded-lg border border-line px-3 py-2.5" open={!!acc.blocked || acc.tokenStatus === "invalid"}>
+        <summary className="cursor-pointer text-sm font-bold uppercase tracking-wide text-mute">Reimportar token</summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-mute">Use quando o jogo deixar de aceitar o token da conta (venceu ou foi encerrado).</p>
+          <div className="flex gap-1.5" role="tablist">
+            {(
+              [
+                ["bookmarklet", "Bookmarklet (1 clique)"],
+                ["console", "Console (F12)"],
+              ] as ["bookmarklet" | "console", string][]
+            ).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={guide === id} className="btn" data-active={guide === id} onClick={() => setGuide(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <CopyGuide method={guide} />
+        <textarea className="field h-16 w-full resize-y py-2 font-mono text-xs" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Cole aqui os dados copiados do jogo" spellCheck={false} />
+        <p className="text-xs text-mute">Token atual: {acc.tokenHint}</p>
+        </div>
+      </details>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <button className="btn" onClick={onClose} disabled={busy}>
