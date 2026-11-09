@@ -45,25 +45,23 @@ navegador), com um painel web para acompanhar e configurar tudo.
 
 ## Instalação
 
+Guia completo, passo a passo (Windows, Linux/macOS e VPS), com solução dos problemas
+comuns: **[INSTALACAO.md](INSTALACAO.md)**.
+
+Resumo rápido:
+
 ```bash
 git clone https://github.com/DiuleJR/pokeidle-manager-online.git
 cd pokeidle-manager-online
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Dashboard (gera web_dist/ servido pelo próprio bot)
+venv/bin/python -m pip install -r requirements.txt     # Windows: venv\Scripts\python
 cd web && npm ci && npm run build && cd ..
-mkdir -p web_dist && cp -r web/dist/. web_dist/     # Windows: copie web\dist para web_dist
-
-cp .env.example .env            # opcional: porta, host, chave do painel
-python main.py
+mkdir -p web_dist && cp -r web/dist/. web_dist/         # Windows: Copy-Item web\dist web_dist -Recurse
+venv/bin/python main.py
 ```
 
-Na **primeira execução** o console mostra a **chave do painel**. Guarde-a: ela é
-pedida ao abrir o painel (ou defina a sua em `TELEMETRY_TOKEN` no `.env`).
-
-Abra `http://localhost:8080`, vá em **Configurações → Adicionar conta**.
+Na **primeira execução** o console mostra a **chave do painel**. Abra `http://localhost:8080`,
+cole a chave e vá em **Configurações → Adicionar conta**.
 
 ## Adicionando uma conta
 
