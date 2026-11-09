@@ -39,7 +39,7 @@ navegador), com um painel web para acompanhar e configurar tudo.
 
 ## Requisitos
 
-- Python 3.12+
+- Python 3.12+ (em Debian/Ubuntu, instale também `python3-venv`: `sudo apt install python3-venv`)
 - Node 18+ (apenas para compilar o dashboard)
 - Suas próprias contas do jogo
 
@@ -48,7 +48,8 @@ navegador), com um painel web para acompanhar e configurar tudo.
 Guia completo, passo a passo (Windows, Linux/macOS e VPS), com solução dos problemas
 comuns: **[INSTALACAO.md](INSTALACAO.md)**.
 
-Resumo rápido (precisa de Git, Python 3.12+ e Node 18+):
+Resumo rápido (precisa de Git, Python 3.12+ e, no Debian/Ubuntu, `python3-venv`; o Node 18+ é
+opcional):
 
 ```bash
 git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle

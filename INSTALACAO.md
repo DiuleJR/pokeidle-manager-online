@@ -17,6 +17,7 @@ numa **VPS**. Se algo não funcionar, veja [Problemas comuns](#problemas-comuns)
 |---|---|---|
 | Git | qualquer | baixar e atualizar o projeto |
 | Python | 3.12 ou mais novo | rodar o bot (no Windows, marque **"Add python.exe to PATH"** ao instalar) |
+| python3-venv | — | **só Debian/Ubuntu** (inclusive VPS): pacote que permite criar o ambiente do bot. Instale com `sudo apt install python3-venv` |
 | Node.js | 18 ou mais novo | compilar o dashboard (só na instalação e nas atualizações). **Opcional:** sem o Node, o script baixa o dashboard já compilado da página de Releases do projeto |
 
 Confira no terminal (PowerShell no Windows); cada comando deve mostrar uma versão:
@@ -131,10 +132,14 @@ tokens.
   janela para não fechá-la sem querer. Para iniciar junto com o Windows, use o Agendador de
   Tarefas apontando para o `iniciar.bat`.
 - **Numa VPS Linux** (recomendado para 24 horas por dia): instale como no bloco Linux acima
-  (o `./iniciar.sh` serve para a primeira vez) e use o serviço systemd de exemplo em
-  [`deploy/pokeidle.service`](deploy/pokeidle.service):
+  (o `./iniciar.sh` serve para a primeira vez; em Debian/Ubuntu rode antes
+  `sudo apt install -y git python3-venv`, e use a pasta `/opt/pokeidle`) e use o serviço
+  systemd de exemplo em [`deploy/pokeidle.service`](deploy/pokeidle.service). Ele roda como o
+  usuário `pokeidle`, que precisa existir e ser dono da pasta:
 
   ```bash
+  sudo useradd --system --home /opt/pokeidle --shell /usr/sbin/nologin pokeidle
+  sudo chown -R pokeidle:pokeidle /opt/pokeidle
   sudo cp deploy/pokeidle.service /etc/systemd/system/pokeidle.service
   # ajuste User, WorkingDirectory e ExecStart se sua pasta for outra
   sudo systemctl daemon-reload
