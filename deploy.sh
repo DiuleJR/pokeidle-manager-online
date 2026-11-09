@@ -19,7 +19,8 @@ git push -q origin main
 echo "✔ GitHub atualizado ($(git rev-parse --short HEAD))"
 
 # 2) Build do dashboard (a VPS tem pouca RAM: compila aqui)
-(cd web && npm run build --silent)
+# VITE_MOCK vazio: o .env.local de desenvolvimento (dados falsos) nunca pode entrar no build publicado.
+(cd web && VITE_MOCK= npm run build --silent)
 echo "✔ Build do dashboard pronto"
 
 # 3) VPS: puxa o código, instala dependências se mudaram, envia o dist e reinicia
