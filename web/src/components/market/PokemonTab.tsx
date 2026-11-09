@@ -7,7 +7,7 @@ import { type Listing, type Moeda, marketApi, secondsUntil } from "@/lib/market"
 import { fmtInt } from "@/lib/utils";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
-import { CurrencyToggle, ErrorBox, Loading, Money, Pager, fmtCountdown, useAsync, useTick } from "./shared";
+import { CurrencyToggle, ErrorBox, Loading, Money, type MoedaSel, Pager, fmtCountdown, useAsync, useTick } from "./shared";
 
 const ELEMENTS = ["", "NORMAL", "FIRE", "WATER", "GRASS", "ELECTRIC", "ICE", "FIGHTING", "POISON", "GROUND", "FLYING", "PSYCHIC", "BUG", "ROCK", "GHOST", "DRAGON", "DARK", "STEEL", "FAIRY"];
 const ORDERS = [
@@ -18,7 +18,7 @@ const ORDERS = [
 
 /** Vitrine de Pokémon à venda. Os filtros avançados ficam recolhidos. */
 export function PokemonTab() {
-  const [moeda, setMoeda] = useState<Moeda>("gold");
+  const [moeda, setMoeda] = useState<MoedaSel>("gold");
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
   const [elemento, setElemento] = useState("");
@@ -37,10 +37,22 @@ export function PokemonTab() {
 
   const res = useAsync(
     async () => {
-      const r = await marketApi.vitrine({
-        moeda, ordem, busca: applied, elemento, pagina: page, soShiny, soP5,
-        ivMin: ivMin ? Number(ivMin) : null, nivelMin: nivelMin ? Number(nivelMin) : null,
-      });
+      const ask = (m: Moeda) =>
+        marketApi.vitrine({
+          moeda: m, ordem, busca: applied, elemento, pagina: page, soShiny, soP5,
+          ivMin: ivMin ? Number(ivMin) : null, nivelMin: nivelMin ? Number(nivelMin) : null,
+        });
+      // "Tudo": consulta as duas moedas e junta (Gemas primeiro, depois Gold)
+      const r =
+        moeda === "all"
+          ? await Promise.all([ask("orb"), ask("gold")]).then(([o, g]) => ({
+              ...o,
+              total: (o.total ?? 0) + (g.total ?? 0),
+              listings: [...o.listings, ...g.listings],
+              both: true,
+              more: (o.total != null ? (page + 1) * (o.perPage ?? 24) < o.total : o.listings.length >= 24) || (g.total != null ? (page + 1) * (g.perPage ?? 24) < g.total : g.listings.length >= 24),
+            }))
+          : { ...(await ask(moeda)), both: false, more: undefined };
       setFetchedAt(Date.now());
       return r;
     },
@@ -55,7 +67,7 @@ export function PokemonTab() {
   };
   const rows = res.data?.listings ?? [];
   const perPage = res.data?.perPage ?? 24;
-  const hasMore = res.data?.total != null ? (page + 1) * perPage < res.data.total : rows.length >= perPage;
+  const hasMore = res.data?.more !== undefined ? res.data.more : res.data?.total != null ? (page + 1) * perPage < res.data.total : rows.length >= perPage;
 
   return (
     <div className="space-y-3">
@@ -68,7 +80,7 @@ export function PokemonTab() {
         }}
       >
         <input className="field min-w-0 flex-1 sm:max-w-xs" type="search" placeholder="Nome do Pokémon…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Nome do Pokémon" maxLength={40} />
-        <CurrencyToggle value={moeda} onChange={reset(setMoeda)} />
+        <CurrencyToggle value={moeda} onChange={reset(setMoeda)} allowAll />
         <button className="btn" type="button" data-active={showFilters || active > 0} onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters}>
           <SlidersHorizontal className="size-4" /> Filtros{active ? ` (${active})` : ""}
         </button>
@@ -157,7 +169,7 @@ export function PokemonTab() {
         {alert && (
           <RuleDialog
             kind="alert"
-            preset={{ target: "pokemon", busca: applied, elemento, so_shiny: soShiny, so_p5: soP5, iv_min: ivMin ? Number(ivMin) : null, nivel_min: nivelMin ? Number(nivelMin) : null, moeda }}
+            preset={{ target: "pokemon", busca: applied, elemento, so_shiny: soShiny, so_p5: soP5, iv_min: ivMin ? Number(ivMin) : null, nivel_min: nivelMin ? Number(nivelMin) : null, moeda: moeda === "all" ? "gold" : moeda }}
             onClose={() => setAlert(false)}
             onSaved={() => setAlert(false)}
           />

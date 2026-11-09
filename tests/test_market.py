@@ -413,3 +413,11 @@ def test_valuation_items_and_shiny(env, monkeypatch):
     assert v["usdPerGem"] == 0.01
     assert [s["gems"] for s in v["shinies"]] == [200, 200]          # mediana das vendas; só os shiny contam
     assert first == 1 and second == 1
+
+
+def test_icon_by_history_description(env):
+    env.conn.itens_nossos = {70013: {"name": "Bicycle Fragment", "icon": "items/bike_frag.png"}}
+    svc = env.mgr.market
+    assert svc.icon_by_name("1× Bicycle Fragment") == "https://pokeidle.io/assets/items/bike_frag.png"
+    assert svc.icon_by_name("13× Cocoon Stone") is not None            # nome do catálogo
+    assert svc.icon_by_name("Item que não existe") is None

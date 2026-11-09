@@ -147,7 +147,7 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
 
       <div className="space-y-1.5">
         <span className="label block">Moeda</span>
-        <CurrencyToggle value={spec.moeda} onChange={(m: Moeda) => set("moeda", m)} />
+        <CurrencyToggle value={spec.moeda} onChange={(m) => set("moeda", m as Moeda)} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">

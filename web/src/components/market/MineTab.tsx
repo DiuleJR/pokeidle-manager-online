@@ -125,12 +125,12 @@ export function MineTab() {
           </section>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <section className="space-y-1.5">
+            <section className="flex flex-col gap-1.5">
               <h2 className="label px-1">Saques</h2>
               {withdrawals.length === 0 ? (
-                <p className="card p-4 text-center text-sm text-mute">Nenhum saque.</p>
+                <p className="card flex-1 p-4 text-center text-sm text-mute">Nenhum saque.</p>
               ) : (
-                <ul className="card divide-y divide-line">
+                <ul className="card max-h-[28rem] flex-1 divide-y divide-line overflow-y-auto">
                   {withdrawals.slice(0, 12).map((s, i) => (
                     <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
                       <span className="tnum">
@@ -145,12 +145,12 @@ export function MineTab() {
                 </ul>
               )}
             </section>
-            <section className="space-y-1.5">
+            <section className="flex flex-col gap-1.5">
               <h2 className="label px-1">Extrato</h2>
               {ledger.length === 0 ? (
-                <p className="card p-4 text-center text-sm text-mute">Sem movimento.</p>
+                <p className="card flex-1 p-4 text-center text-sm text-mute">Sem movimento.</p>
               ) : (
-                <ul className="card max-h-72 divide-y divide-line overflow-y-auto">
+                <ul className="card max-h-[28rem] flex-1 divide-y divide-line overflow-y-auto">
                   {ledger.slice(0, 60).map((l, i) => (
                     <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                       <span className="min-w-0 truncate">

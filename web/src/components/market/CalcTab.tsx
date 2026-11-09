@@ -27,7 +27,7 @@ export function CalcCard() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-extrabold sm:text-lg">Quanto vou receber numa venda?</h2>
         <div className="flex flex-wrap gap-2">
-          <CurrencyToggle value={moeda} onChange={setMoeda} />
+          <CurrencyToggle value={moeda} onChange={(m) => setMoeda(m as Moeda)} />
           {moeda === "orb" && (
             <Seg
               label="O que vende"

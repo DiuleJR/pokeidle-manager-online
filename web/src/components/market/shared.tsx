@@ -113,13 +113,31 @@ export function AccountPicker({ value, onChange, label = "Conta", allowAll = fal
   );
 }
 
-export function CurrencyToggle({ value, onChange }: { value: Moeda; onChange: (m: Moeda) => void }) {
+export type MoedaSel = Moeda | "all";
+
+/** Gold e Gema empilhadas, como um baralho: a Gema por cima da moeda de ouro. */
+export function CoinStack({ size = 18 }: { size?: number }) {
+  return (
+    <span className="relative inline-block" style={{ width: size * 1.35, height: size * 1.1 }} aria-hidden>
+      <span className="absolute left-0 top-[8%] -rotate-12">
+        <Coin kind="gold" size={size} />
+      </span>
+      <span className="absolute right-0 top-0 rotate-12">
+        <Coin kind="gem" size={size} />
+      </span>
+    </span>
+  );
+}
+
+/** Gold | Tudo | Gemas. Sem `allowAll`, só Gold e Gemas. */
+export function CurrencyToggle({ value, onChange, allowAll = false }: { value: MoedaSel; onChange: (m: MoedaSel) => void; allowAll?: boolean }) {
+  const opts: MoedaSel[] = allowAll ? ["gold", "all", "orb"] : ["gold", "orb"];
   return (
     <div className="flex gap-1 rounded-xl border border-line bg-tile p-0.5" role="group" aria-label="Moeda">
-      {(["gold", "orb"] as Moeda[]).map((m) => (
+      {opts.map((m) => (
         <button key={m} className="btn !border-transparent" data-active={value === m} aria-pressed={value === m} onClick={() => onChange(m)}>
-          <Coin kind={m === "orb" ? "gem" : "gold"} size={16} />
-          {m === "orb" ? "Gemas" : "Gold"}
+          {m === "all" ? <CoinStack size={16} /> : <Coin kind={m === "orb" ? "gem" : "gold"} size={16} />}
+          {m === "orb" ? "Gemas" : m === "gold" ? "Gold" : "Tudo"}
         </button>
       ))}
     </div>

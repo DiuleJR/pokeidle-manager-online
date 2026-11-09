@@ -177,8 +177,10 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
         except MarketError as e:
             return fail(e)
         for row in res["rows"]:
-            if isinstance(row, dict) and row.get("itemId"):
-                row["itemIcon"] = svc.item_info(int(row["itemId"]))["icon"]
+            if not isinstance(row, dict) or row.get("tipo") in ("pokemon", "deposito", "saque"):
+                continue
+            row["itemIcon"] = (svc.item_info(int(row["itemId"]))["icon"] if row.get("itemId")
+                               else svc.icon_by_name(row.get("descricao")))
         return res
 
     @app.get("/api/market/sales")

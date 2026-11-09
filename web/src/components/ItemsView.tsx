@@ -169,7 +169,7 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
       for (const i of a.inventory.items)
         if (i.qty > 0) add(`i${i.id}`, i.name, groupOf(i.category ?? "loot"), !!i.rare, i.icon, i.qty, id);
     }
-    for (const r of map.values()) if (r.key.startsWith("i")) r.unit = valuation?.items[r.key.slice(1)]?.gems;
+    for (const r of map.values()) if (r.key.startsWith("i")) r.unit = r.rare ? valuation?.items[r.key.slice(1)]?.gems : undefined;
     return [...map.values()];
   }, [accounts, ids, account, valuation]);
 

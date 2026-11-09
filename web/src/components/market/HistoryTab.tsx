@@ -48,7 +48,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
       <span className="grid size-10 shrink-0 place-items-center">
-        {r.tipo === "pokemon" ? <PokemonSprite looktype={f?.looktype} size={40} /> : <ItemSprite icon={r.itemIcon} size={36} alt="" />}
+        {r.tipo === "pokemon" ? <PokemonSprite looktype={f?.looktype} size={40} /> : r.itemIcon ? <ItemSprite icon={r.itemIcon} size={36} alt="" /> : <span className="text-2xl" aria-hidden>📦</span>}
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-bold">

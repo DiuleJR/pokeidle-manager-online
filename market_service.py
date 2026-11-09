@@ -20,7 +20,9 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from game_data import item_icon_path, item_meta, item_name
+import re
+
+from game_data import ITEM_NAMES, item_icon_path, item_meta, item_name
 from market import MarketError
 from notify import BLUE, GOLD, GREEN, RED
 
@@ -123,6 +125,7 @@ class MarketService:
         self._tasks: set[asyncio.Task] = set()
         self._warned_budget: set[int] = set()
         self._usd_per_gem: tuple[float, float | None] = (0.0, None)
+        self._name_ids: tuple[float, dict[str, int]] = (0.0, {})
         self._shiny_cache: dict[str, tuple[float, float | None]] = {}
 
     # ------------------------------------------------------------ contas
@@ -157,6 +160,33 @@ class MarketService:
                         "category": nos.get("category") or "special", "icon": self._abs(nos.get("icon"))}
         return {"id": iid, "name": PT_NAMES.get(iid) or item_name(iid), "category": item_meta(iid)[0],
                 "icon": self._abs(item_icon_path(iid))}
+
+    def _ids_by_name(self) -> dict[str, int]:
+        """nome (minúsculo, em inglês ou português) -> id do item, para achar o ícone de uma linha do histórico."""
+        ts, cached = self._name_ids
+        if cached and time.time() - ts < 600:
+            return cached
+        m: dict[str, int] = {}
+        for iid, nm in ITEM_NAMES.items():
+            m[str(nm).lower()] = int(iid)
+        for iid, nm in PT_NAMES.items():
+            m[nm.lower()] = iid
+        for c in self.manager.connections():
+            for it in (c.mercado_cfg.get("catalogo") or []):
+                if isinstance(it, dict) and it.get("nome") and it.get("id"):
+                    m[str(it["nome"]).lower()] = int(it["id"])
+            for iid, nos in c.itens_nossos.items():
+                if nos.get("name"):
+                    m[str(nos["name"]).lower()] = int(iid)
+        self._name_ids = (time.time(), m)
+        return m
+
+    def icon_by_name(self, desc: str | None) -> str | None:
+        """Ícone a partir de uma descrição como "13× Cocoon Stone" ou "Common Bicycle #001050"."""
+        n = re.sub(r"^\s*[\d.,]+\s*[×x]\s*", "", desc or "")
+        n = re.sub(r"\s*#\d+\s*$", "", n).strip().lower()
+        iid = self._ids_by_name().get(n)
+        return self.item_info(iid)["icon"] if iid else None
 
     @staticmethod
     def _abs(path: str | None) -> str | None:
@@ -216,7 +246,8 @@ class MarketService:
                 row[f"avg{key}"] = m.get("media")
                 row[f"sold{key}"] = m.get("unidades")
                 p, a = row.get(f"min{key}"), m.get("media")
-                row[f"deal{key}"] = (None if not p or not a else
+                # preço de fachada (menos de 10% da média, ex.: anúncio de 2 Gemas para vender a si mesmo) não é oferta
+                row[f"deal{key}"] = (None if not p or not a or p < a * 0.1 else
                                      "barato" if p <= a * 0.85 else "caro" if p >= a * 1.15 else "justo")
             items.append(row)
         return {"ts": int(time.time() * 1000), "days": self._medias_dias, "items": items,

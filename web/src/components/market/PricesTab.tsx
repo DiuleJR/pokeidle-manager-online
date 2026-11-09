@@ -7,7 +7,7 @@ import { type Deal, type Listing, type MarketItem, type Moeda, dealLabel, market
 import { fmtInt } from "@/lib/utils";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
-import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, fmtCountdown, useAsync, useTick } from "./shared";
+import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, type MoedaSel, fmtCountdown, useAsync, useTick } from "./shared";
 
 const SORTS = [
   { id: "discount", label: "Maior desconto" },
@@ -68,7 +68,7 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <CurrencyToggle value={moeda} onChange={setMoeda} />
+        <CurrencyToggle value={moeda} onChange={(m) => setMoeda(m as Moeda)} />
         <div className="flex gap-1.5">
           <button className="btn" onClick={() => setRule("alert")}>
             <Bell className="size-4" /> Avisar
@@ -138,7 +138,7 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
 }
 
 export function PricesTab() {
-  const [moeda, setMoeda] = useState<Moeda>("gold");
+  const [moeda, setMoeda] = useState<MoedaSel>("gold");
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [onlyFav, setOnlyFav] = useState(false);
@@ -150,14 +150,12 @@ export function PricesTab() {
   const items = useMemo(() => (ov.data?.items ?? []).map((i) => (i.id in favs ? { ...i, fav: favs[i.id] } : i)), [ov.data, favs]);
   const cats = useMemo(() => Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort(), [items]);
 
-  const price = (i: MarketItem) => (moeda === "orb" ? i.minOrb : i.minGold);
+  const price = (i: MarketItem) => (moeda === "orb" ? i.minOrb : moeda === "gold" ? i.minGold : (i.minGold ?? i.minOrb));
   const avg = (i: MarketItem) => (moeda === "orb" ? i.avgOrb : i.avgGold);
-  const deal = (i: MarketItem) => (moeda === "orb" ? i.dealOrb : i.dealGold);
-  const discount = (i: MarketItem) => {
-    const p = price(i);
-    const a = avg(i);
-    return p && a ? (a - p) / a : -1;
-  };
+  const deal = (i: MarketItem): Deal | undefined => (moeda === "orb" ? i.dealOrb : moeda === "gold" ? i.dealGold : i.dealGold === "barato" || i.dealOrb === "barato" ? "barato" : (i.dealGold ?? i.dealOrb));
+  const disc = (p: number | null | undefined, a: number | null | undefined) => (p && a && p >= a * 0.1 ? (a - p) / a : -1); // < 10% da média = preço de fachada
+  const discount = (i: MarketItem) =>
+    moeda === "all" ? Math.max(disc(i.minGold, i.avgGold), disc(i.minOrb, i.avgOrb)) : disc(price(i), avg(i));
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -185,7 +183,7 @@ export function PricesTab() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <input className="field min-w-0 flex-1 sm:max-w-xs" type="search" placeholder="Buscar item…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar item" />
-        <CurrencyToggle value={moeda} onChange={setMoeda} />
+        <CurrencyToggle value={moeda} onChange={setMoeda} allowAll />
         <button className="btn" data-active={onlyFav} aria-pressed={onlyFav} onClick={() => setOnlyFav(!onlyFav)} title="Só favoritos" aria-label="Só favoritos">
           <Star className={`size-4 ${onlyFav ? "fill-poke-gold" : ""}`} />
         </button>
@@ -219,6 +217,7 @@ export function PricesTab() {
             const p = price(i);
             const a = avg(i);
             const d = discount(i);
+            const both = moeda === "all";
             return (
               <li key={i.id}>
                 <div className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
@@ -234,15 +233,22 @@ export function PricesTab() {
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-0.5">
-                      <Money v={p} moeda={moeda} className="font-bold" />
+                      {both ? (
+                        <>
+                          {i.minGold != null && <Money v={i.minGold} moeda="gold" className="font-bold" />}
+                          {i.minOrb != null && <Money v={i.minOrb} moeda="orb" className="font-bold" />}
+                        </>
+                      ) : (
+                        <Money v={p} moeda={moeda as Moeda} className="font-bold" />
+                      )}
                       <span className="flex items-center gap-1.5 text-xs text-mute">
-                        {a ? (
+                        {!both && a ? (
                           <>
-                            méd. <Money v={a} moeda={moeda} short />
+                            méd. <Money v={a} moeda={moeda as Moeda} short />
                           </>
-                        ) : (
+                        ) : !both ? (
                           "sem média"
-                        )}
+                        ) : null}
                         {d > 0.001 && <span className="tnum text-poke-green">−{Math.round(d * 100)}%</span>}
                       </span>
                     </span>
@@ -262,7 +268,7 @@ export function PricesTab() {
           <ItemDetail
             key={open.id}
             item={items.find((x) => x.id === open.id) ?? open}
-            moeda={moeda}
+            moeda={moeda === "all" ? "gold" : moeda}
             account={undefined}
             onClose={() => setOpen(null)}
             onFav={() => void toggleFav(items.find((x) => x.id === open.id) ?? open)}
