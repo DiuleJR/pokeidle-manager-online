@@ -622,91 +622,171 @@ function AccountRow({ acc, onChanged }: { acc: AdminAccount; onChanged: () => vo
 }
 
 // ------------------------------------------------------------------ configurações globais
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+/** Bloco com título e, à direita, um selo de estado opcional. */
+function Group({ title, badge, children }: { title: string; badge?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-mute">{title}</h3>
+        {badge}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function GlobalForm() {
   const [s, setS] = useState<GlobalSettings | null>(null);
-  const [form, setForm] = useState({ ws_url: "", webhook: "", report_hour: "0", report_tz: "", public_url: "" });
-  const [clearHook, setClearHook] = useState(false);
+  const [form, setForm] = useState({ ws_url: "", report_hour: 0, report_tz: "", public_url: "" });
+  const [hook, setHook] = useState<string | null>(null); // null = não está editando o webhook
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const fill = (g: GlobalSettings) => {
     setS(g);
-    setForm({ ws_url: g.ws_url, webhook: "", report_hour: String(g.report_hour), report_tz: g.report_tz, public_url: g.public_url });
-    setClearHook(false);
+    setForm({ ws_url: g.ws_url, report_hour: g.report_hour, report_tz: g.report_tz, public_url: g.public_url });
   };
   useEffect(() => {
     admin.settings().then(fill).catch((e) => setMsg({ ok: false, text: errMsg(e) }));
   }, []);
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(null), 5000);
+    return () => clearTimeout(t);
+  }, [msg]);
 
-  const save = async () => {
+  const run = async (fn: () => Promise<void>, okText: string) => {
     setBusy(true);
     setMsg(null);
     try {
-      const body: Record<string, unknown> = {
-        ws_url: form.ws_url,
-        report_hour: Number(form.report_hour),
-        report_tz: form.report_tz,
-        public_url: form.public_url,
-      };
-      if (clearHook) body.discord_webhook = "";
-      else if (form.webhook.trim()) body.discord_webhook = form.webhook.trim();
-      fill(await admin.saveSettings(body));
-      setMsg({ ok: true, text: "Configurações salvas." });
+      await fn();
+      setMsg({ ok: true, text: okText });
     } catch (e) {
       setMsg({ ok: false, text: errMsg(e) });
     } finally {
       setBusy(false);
     }
   };
-  const testHook = async () => {
-    setMsg(null);
-    try {
-      await admin.testWebhook();
-      setMsg({ ok: true, text: "Mensagem de teste enviada ao Discord." });
-    } catch (e) {
-      setMsg({ ok: false, text: errMsg(e) });
-    }
-  };
+
   if (!s) return <p className="text-mute">Carregando…</p>;
 
+  const dirty =
+    form.ws_url !== s.ws_url || form.report_hour !== s.report_hour || form.report_tz !== s.report_tz || form.public_url !== s.public_url;
+
   return (
-    <div className="space-y-3">
-      <Labeled label="Webhook do Discord (opcional)" hint={s.hasWebhook && !clearHook ? `Configurado (${s.webhookHint}). Deixe em branco para manter.` : "Alertas de queda/volta, itens raros e relatório diário."}>
-        <input className="field w-full" type="password" value={form.webhook} onChange={(e) => setForm({ ...form, webhook: e.target.value })} placeholder="https://discord.com/api/webhooks/…" autoComplete="off" disabled={clearHook} />
-      </Labeled>
-      <div className="flex flex-wrap gap-2">
-        {s.hasWebhook && (
-          <button className="btn" type="button" onClick={testHook}>
-            Enviar teste
-          </button>
+    <div className="space-y-5">
+      <Group title="Discord" badge={<Chip on={s.hasWebhook} label={s.hasWebhook ? "Ativo" : "Desligado"} />}>
+        {hook === null ? (
+          <div className="flex flex-wrap gap-1.5">
+            <button className="btn" onClick={() => setHook("")}>
+              {s.hasWebhook ? "Trocar webhook" : "Configurar webhook"}
+            </button>
+            {s.hasWebhook && (
+              <>
+                <button className="btn" disabled={busy} onClick={() => run(() => admin.testWebhook().then(() => undefined), "Mensagem de teste enviada ao Discord.")}>
+                  Enviar teste
+                </button>
+                <button className="btn" onClick={() => setConfirmRemove(true)}>
+                  Remover
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <input
+              className="field w-full"
+              type="password"
+              value={hook}
+              onChange={(e) => setHook(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/…"
+              autoComplete="off"
+              autoFocus
+            />
+            <div className="flex gap-1.5">
+              <button
+                className="btn border-0 bg-poke-gold font-bold text-void hover:bg-[#f6ca5e]"
+                disabled={busy || !hook.trim()}
+                onClick={() =>
+                  run(async () => {
+                    fill(await admin.saveSettings({ discord_webhook: hook.trim() }));
+                    setHook(null);
+                  }, "Webhook salvo.")
+                }
+              >
+                Salvar
+              </button>
+              <button className="btn" onClick={() => setHook(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
         )}
-        {s.hasWebhook && <Check2 checked={clearHook} onChange={setClearHook}>Remover webhook</Check2>}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Labeled label="Hora em que o dia vira (0–23)">
-          <input className="field w-full" inputMode="numeric" value={form.report_hour} onChange={(e) => setForm({ ...form, report_hour: e.target.value.replace(/\D/g, "") })} />
-        </Labeled>
-        <Labeled label="Fuso horário">
-          <input className="field w-full" value={form.report_tz} onChange={(e) => setForm({ ...form, report_tz: e.target.value })} placeholder="America/Sao_Paulo" />
-        </Labeled>
-      </div>
-      <Labeled label="URL pública do painel (opcional)" hint="Só serve para mostrar o ícone do item raro no Discord, e precisa estar acessível pela internet. Quem roda só na rede local pode deixar vazio.">
-        <input className="field w-full" value={form.public_url} onChange={(e) => setForm({ ...form, public_url: e.target.value })} placeholder="https://meu-dominio.exemplo" />
-      </Labeled>
-      <details className="rounded-lg border border-line p-3">
-        <summary className="cursor-pointer text-sm font-semibold">Avançado</summary>
-        <div className="mt-3">
-          <Labeled label="Endereço do servidor do jogo (WebSocket)" hint={`Padrão: ${s.defaultWsUrl}. Mudar reinicia todas as contas.`}>
+        <p className="text-xs text-mute">Avisa quando uma conta cai ou volta, quando cai item raro e envia o relatório do dia.</p>
+      </Group>
+
+      <Group title="Relatório diário">
+        <label className="flex items-center justify-between gap-3 text-sm">
+          O dia vira às
+          <select className="field" value={form.report_hour} onChange={(e) => setForm({ ...form, report_hour: Number(e.target.value) })}>
+            {HOURS.map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, "0")}:00
+              </option>
+            ))}
+          </select>
+        </label>
+      </Group>
+
+      <details className="group rounded-lg border border-line px-3 py-2.5">
+        <summary className="cursor-pointer text-sm font-semibold text-mute">Avançado</summary>
+        <div className="mt-3 space-y-3">
+          <Labeled label="Fuso horário">
+            <input className="field w-full" value={form.report_tz} onChange={(e) => setForm({ ...form, report_tz: e.target.value })} placeholder="America/Sao_Paulo" />
+          </Labeled>
+          <Labeled label="URL pública do painel" hint="Opcional. Só para mostrar o ícone do item raro no Discord.">
+            <input className="field w-full" value={form.public_url} onChange={(e) => setForm({ ...form, public_url: e.target.value })} placeholder="https://meu-dominio.exemplo" />
+          </Labeled>
+          <Labeled label="Servidor do jogo (WebSocket)" hint={`Padrão: ${s.defaultWsUrl}. Mudar reinicia as contas.`}>
             <input className="field w-full" value={form.ws_url} onChange={(e) => setForm({ ...form, ws_url: e.target.value })} />
           </Labeled>
         </div>
       </details>
+
       {msg && <Notice tone={msg.ok ? "ok" : "error"}>{msg.text}</Notice>}
-      <div className="flex justify-end">
-        <button className="btn border-0 bg-poke-gold font-bold text-void hover:bg-[#f6ca5e]" onClick={save} disabled={busy}>
-          {busy ? "Salvando…" : "Salvar configurações"}
-        </button>
-      </div>
+
+      {dirty && (
+        <div className="flex justify-end gap-1.5">
+          <button className="btn" disabled={busy} onClick={() => fill(s)}>
+            Descartar
+          </button>
+          <button
+            className="btn border-0 bg-poke-gold font-bold text-void hover:bg-[#f6ca5e]"
+            disabled={busy}
+            onClick={() => run(async () => fill(await admin.saveSettings(form)), "Configurações salvas.")}
+          >
+            {busy ? "Salvando…" : "Salvar alterações"}
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remover o webhook?"
+        message="O bot deixa de enviar avisos ao Discord. Para voltar, será preciso colar a URL do webhook de novo."
+        confirmLabel="Remover"
+        busy={busy}
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() =>
+          run(async () => {
+            fill(await admin.saveSettings({ discord_webhook: "" }));
+            setConfirmRemove(false);
+          }, "Webhook removido.")
+        }
+      />
     </div>
   );
 }
