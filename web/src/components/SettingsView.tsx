@@ -138,6 +138,21 @@ function Check2({ checked, onChange, children }: { checked: boolean; onChange: (
   );
 }
 
+/** Selo pequeno: aceso (verde) = ativo; apagado = inativo. Mesmo visual do selo de status. */
+function Chip({ on, label }: { on: boolean; label: string }) {
+  return (
+    <span
+      title={`${label}: ${on ? "ativo" : "desativado"}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+        on ? "border-[#2f6b3a] bg-[#16301c] text-poke-green" : "border-line bg-tile text-mute opacity-50"
+      }`}
+    >
+      <span className={`size-2 rounded-full ${on ? "bg-poke-green" : "bg-mute"}`} />
+      {label}
+    </span>
+  );
+}
+
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false);
   return (
@@ -548,23 +563,22 @@ function AccountRow({ acc, onChanged }: { acc: AdminAccount; onChanged: () => vo
           <div className="flex items-center gap-2.5">
             <StatusPill status={status} />
             <span className="truncate text-base font-extrabold sm:text-lg">{acc.nick}</span>
+            <Chip on={!!acc.proxy} label="Proxy" />
           </div>
-          <p className="mt-1 break-words text-sm text-mute">
-            {text} · token {acc.tokenHint} · {acc.proxy ? `proxy ${acc.proxy.host}:${acc.proxy.port}` : "sem proxy"}
-          </p>
+          {status !== "online" && <p className="mt-1 break-words text-sm text-mute">{text}</p>}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <button className="btn" disabled={busy} onClick={() => run(() => admin.patch(acc.numericId, { enabled: !acc.enabled }))} title={acc.enabled ? "Desligar" : "Ligar"}>
+          <button className="btn" disabled={busy} onClick={() => run(() => admin.patch(acc.numericId, { enabled: !acc.enabled }))} title={acc.enabled ? "Desligar" : "Ligar"} aria-label={acc.enabled ? "Desligar" : "Ligar"}>
             <Power className="size-4" aria-hidden />
-            {acc.enabled ? "Desligar" : "Ligar"}
+            <span className="hidden sm:inline">{acc.enabled ? "Desligar" : "Ligar"}</span>
           </button>
-          <button className="btn" disabled={busy || !acc.enabled} onClick={() => run(() => admin.restart(acc.numericId))} title="Reiniciar a conexão">
+          <button className="btn" disabled={busy || !acc.enabled} onClick={() => run(() => admin.restart(acc.numericId))} title="Reiniciar a conexão" aria-label="Reiniciar">
             <RefreshCw className="size-4" aria-hidden />
-            Reiniciar
+            <span className="hidden sm:inline">Reiniciar</span>
           </button>
-          <button className="btn" disabled={busy} onClick={() => setEditing(true)}>
+          <button className="btn" disabled={busy} onClick={() => setEditing(true)} title="Editar" aria-label="Editar">
             <Pencil className="size-4" aria-hidden />
-            Editar
+            <span className="hidden sm:inline">Editar</span>
           </button>
           <button className="btn" disabled={busy} onClick={() => setConfirmDelete(true)} aria-label={`Remover ${acc.nick}`}>
             <Trash2 className="size-4" aria-hidden />
