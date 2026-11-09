@@ -175,10 +175,14 @@ class Updater:
                 s.get(self.asset_url, headers={"User-Agent": f"pokeidle-manager/{self.current}"}) as r:
             if r.status != 200:
                 raise UpdateError(f"Não consegui baixar o dashboard (HTTP {r.status}).")
-            data = await r.content.read(MAX_ZIP_BYTES + 1)
-        if len(data) > MAX_ZIP_BYTES:
-            raise UpdateError("O arquivo do dashboard é grande demais.")
-        return data
+            chunks: list[bytes] = []
+            size = 0
+            async for chunk in r.content.iter_chunked(64 * 1024):  # read(n) devolve só o 1º pedaço
+                size += len(chunk)
+                if size > MAX_ZIP_BYTES:
+                    raise UpdateError("O arquivo do dashboard é grande demais.")
+                chunks.append(chunk)
+        return b"".join(chunks)
 
     async def apply(self) -> dict[str, Any]:
         """Aplica a versão nova. Levanta UpdateError com a mensagem para o usuário."""

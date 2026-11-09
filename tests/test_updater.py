@@ -185,3 +185,49 @@ def test_apply_refuses_diverged_copy(repos, monkeypatch):
     with pytest.raises(up.UpdateError, match="Não consegui aplicar"):
         asyncio.run(u.apply())
     assert (work / "app.txt").read_text() == "v1"
+
+
+# ---------------------------------------------------------------- download do dashboard (servidor de verdade)
+def _serve_zip(payload: bytes, chunk=8192):
+    from aiohttp import web
+
+    async def handler(request):
+        resp = web.StreamResponse()
+        await resp.prepare(request)
+        for i in range(0, len(payload), chunk):  # em pedaços, como a rede de verdade
+            await resp.write(payload[i:i + chunk])
+            await asyncio.sleep(0.001)
+        return resp
+
+    app = web.Application()
+    app.router.add_get("/web_dist.zip", handler)
+    return app
+
+
+def _download(payload, monkeypatch, max_bytes=None):
+    from aiohttp.test_utils import TestServer
+
+    async def go():
+        async with TestServer(_serve_zip(payload)) as srv:
+            base = str(srv.make_url("/"))
+            monkeypatch.setattr(up, "ASSET_PREFIX", base)
+            if max_bytes:
+                monkeypatch.setattr(up, "MAX_ZIP_BYTES", max_bytes)
+            u = up.Updater(current="1.0.0")
+            u.asset_url = base + "web_dist.zip"
+            return await u._download_dashboard()
+
+    return asyncio.run(go())
+
+
+def test_download_reads_whole_file_not_just_first_chunk(monkeypatch):
+    import random
+    rnd = random.Random(1)
+    big = zip_bytes({"index.html": "<html>", "assets/app.js": "".join(chr(rnd.randrange(97, 123)) for _ in range(400_000))})
+    assert len(big) > 150_000
+    assert _download(big, monkeypatch) == big
+
+
+def test_download_rejects_too_big(monkeypatch):
+    with pytest.raises(up.UpdateError, match="grande demais"):
+        _download(b"x" * 50_000, monkeypatch, max_bytes=10_000)
