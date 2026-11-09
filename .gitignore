@@ -29,3 +29,7 @@ docs/
 
 # Banco local do painel (contas e tokens)
 data/
+
+# Ferramentas locais de IA (nao fazem parte do bot)
+skills-lock.json
+CLAUDE.local.md
