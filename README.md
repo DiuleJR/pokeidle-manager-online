@@ -45,7 +45,7 @@ navegador), com um painel web para acompanhar e configurar tudo.
 
 ## Instalação
 
-Guia completo, passo a passo (Windows, Linux/macOS e VPS), com solução dos problemas
+Guia completo, passo a passo (Windows, Linux/macOS, Android/Termux e VPS), com solução dos problemas
 comuns: **[INSTALACAO.md](INSTALACAO.md)**.
 
 Resumo rápido (precisa de Git, Python 3.12+ e, no Debian/Ubuntu, `python3-venv`; o Node 18+ é

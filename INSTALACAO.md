@@ -150,6 +150,45 @@ tokens.
   Para abrir o painel de fora da VPS, **não exponha a porta direto em HTTP**: use um túnel SSH
   (`ssh -L 8080:localhost:8080 usuario@seu-servidor`) ou HTTPS. Veja o [README](README.md).
 
+## Android (Termux)
+
+Testado em um celular Android com o Termux mais recente: instala, abre o painel e conecta a
+conta normalmente. A conta sai pelo IP do próprio celular.
+
+1. Instale o **Termux pelo F-Droid** (a versão da Play Store está desatualizada).
+2. Instale os programas (o `rust` e o `clang` são necessários para compilar algumas
+   bibliotecas Python):
+
+   ```bash
+   pkg update && pkg upgrade
+   pkg install python git clang make rust binutils libffi openssl tmux
+   ```
+
+3. Baixe e inicie (a primeira vez demora, por causa da compilação):
+
+   ```bash
+   git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
+   cd pokeidle
+   ./iniciar.sh
+   ```
+
+4. Abra `http://localhost:8080` no navegador do celular e crie a senha.
+5. **Adicionar conta:** no celular não há F12, então pegue o token no computador (bookmarklet
+   ou snippet do console, como em [Adicionar sua primeira conta](#adicionar-sua-primeira-conta)),
+   envie o texto copiado para o celular (por exemplo, por uma mensagem para você mesmo) e cole
+   no painel.
+
+Para o bot não parar em segundo plano (estas dicas **ainda não foram testadas**; o restante
+acima foi):
+
+- Rode dentro do `tmux` (digite `tmux`, depois `./iniciar.sh`).
+- Use `termux-wake-lock` (ou "Adquirir wake lock" na notificação do Termux).
+- Tire o Termux da otimização de bateria nas configurações do Android.
+
+Cuidados: não rode as mesmas contas no celular e em outro lugar ao mesmo tempo (o jogo derruba
+uma das conexões), e lembre que 4 conexões abertas o tempo todo gastam bateria e dados. Para
+rodar 24 horas por dia, a VPS continua sendo a melhor opção.
+
 ## Docker (opcional, ainda não testado)
 
 ```bash
