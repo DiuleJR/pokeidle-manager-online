@@ -33,10 +33,13 @@ if [ ! -f web_dist/index.html ]; then
     rm -rf web_dist && mkdir -p web_dist && cp -r web/dist/. web_dist/
   else
     echo
-    echo "[aviso] O dashboard ainda nao foi compilado e o Node.js nao esta instalado."
-    echo "        Instale o Node.js 18 ou mais novo (https://nodejs.org) e rode este script de novo."
-    echo "        O bot vai iniciar mesmo assim, mas sem a tela do painel."
-    echo
+    echo "O Node.js nao esta instalado: tentando baixar o dashboard ja compilado..."
+    if ! venv/bin/python scripts/get_dashboard.py; then
+      echo
+      echo "[aviso] Nao consegui obter o dashboard. Instale o Node.js 18 ou mais novo (https://nodejs.org)"
+      echo "        e rode este script de novo. O bot vai iniciar mesmo assim, mas sem a tela do painel."
+      echo
+    fi
   fi
 fi
 

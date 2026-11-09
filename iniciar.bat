@@ -48,9 +48,12 @@ goto :fim
 
 :sem_node
 echo.
-echo [aviso] O dashboard ainda nao foi compilado e o Node.js nao esta instalado.
-echo         Instale o Node.js 18 ou mais novo em https://nodejs.org e rode este arquivo de novo.
-echo         O bot vai iniciar mesmo assim, mas sem a tela do painel.
+echo O Node.js nao esta instalado: tentando baixar o dashboard ja compilado...
+"venv\Scripts\python.exe" scripts\get_dashboard.py
+if not errorlevel 1 goto :rodar
+echo.
+echo [aviso] Nao consegui obter o dashboard. Instale o Node.js 18 ou mais novo em https://nodejs.org
+echo         e rode este arquivo de novo. O bot vai iniciar mesmo assim, mas sem a tela do painel.
 echo.
 goto :rodar
 

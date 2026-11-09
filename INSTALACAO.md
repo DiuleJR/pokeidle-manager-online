@@ -17,7 +17,7 @@ numa **VPS**. Se algo não funcionar, veja [Problemas comuns](#problemas-comuns)
 |---|---|---|
 | Git | qualquer | baixar e atualizar o projeto |
 | Python | 3.12 ou mais novo | rodar o bot (no Windows, marque **"Add python.exe to PATH"** ao instalar) |
-| Node.js | 18 ou mais novo | compilar o dashboard (só na instalação e nas atualizações) |
+| Node.js | 18 ou mais novo | compilar o dashboard (só na instalação e nas atualizações). **Opcional:** sem o Node, o script baixa o dashboard já compilado da página de Releases do projeto |
 
 Confira no terminal (PowerShell no Windows); cada comando deve mostrar uma versão:
 
@@ -172,8 +172,9 @@ Os dados ficam em `./data`. O caminho com Python direto, descrito acima, é o re
 **`python` não é reconhecido (Windows).** Reinstale o Python marcando "Add python.exe to PATH".
 O `iniciar.bat` também reconhece o comando `py`.
 
-**`npm` não é reconhecido.** Instale o Node.js e abra um terminal novo. Sem o Node, o bot
-funciona, mas sem a tela do painel.
+**`npm` não é reconhecido.** Sem o Node.js, o `iniciar.bat`/`iniciar.sh` tenta baixar o
+dashboard já compilado da última Release. Se isso falhar (sem Release publicada ou sem
+internet), instale o Node.js, abra um terminal novo e rode o script de novo.
 
 **Linux: "ensurepip is not available" ao criar o ambiente.** Instale o pacote do venv:
 `sudo apt install python3-venv`.

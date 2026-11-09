@@ -1,0 +1,33 @@
+name: Release do dashboard
+
+# Ao criar uma tag v* (ex.: v1.0.0), compila o dashboard e anexa o web_dist.zip à Release.
+# Quem não tem Node.js baixa esse zip pelo iniciar.bat / iniciar.sh.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Compilar o dashboard
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Empacotar
+        run: cd web/dist && zip -r ../../web_dist.zip .
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: web_dist.zip
+          generate_release_notes: true
