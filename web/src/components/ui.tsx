@@ -27,7 +27,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
   );
   return (
     <div
-      className="relative mx-auto w-full max-w-7xl rounded-2xl border-[3px] border-[#8a5f22] px-2.5 pb-4 pt-3 sm:rounded-[22px] sm:px-8 sm:pb-6 sm:pt-7"
+      className="relative mx-auto w-full max-w-7xl rounded-2xl border-[3px] border-[#8a5f22] px-2.5 pb-4 pt-3 sm:rounded-[22px] sm:px-8 sm:pb-4 sm:pt-5"
       style={{
         background: "linear-gradient(180deg, rgba(36,26,15,.75), rgba(18,12,7,.85))",
         boxShadow: "inset 0 0 0 1px #3b2b17, inset 0 0 60px rgba(0,0,0,.45), 0 20px 60px -20px rgba(0,0,0,.8)",

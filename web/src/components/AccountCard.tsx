@@ -62,7 +62,7 @@ function Tile({
     <motion.div
       title={hint ?? label}
       whileHover={{ y: -2, transition: { duration: 0.18, ease: EASE } }}
-      className={`tile flex min-w-0 items-center gap-1.5 px-2 py-1.5 sm:grid sm:grid-cols-[auto_1fr] sm:grid-rows-[auto_auto] sm:gap-x-3 sm:gap-y-1 sm:px-3 sm:py-2.5 ${className}`}
+      className={`tile flex min-w-0 items-center gap-1.5 px-2 py-1.5 sm:grid sm:grid-cols-[auto_1fr] sm:grid-rows-[auto_auto] sm:gap-x-3 sm:gap-y-0.5 sm:px-3 sm:py-1.5 ${className}`}
     >
       <span className="flex size-5 shrink-0 items-center justify-center sm:row-span-2 sm:size-9">{icon}</span>
       <div className="label hidden sm:block">{label}</div>
@@ -93,7 +93,7 @@ function ResumoBody({ id }: { id: string }) {
   const potion = acc.equipped?.potion;
   const ball = acc.equipped?.ball;
   return (
-    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2.5">
+    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
       <Tile icon={<Coin kind="gold" />} label="Gold" className="order-6 sm:order-none">
         <AnimatedNumber value={acc.gold} />
       </Tile>
@@ -164,13 +164,13 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
       animate={{ opacity: acc.status === "offline" ? 0.62 : 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: EASE, delay: Math.min(index, 6) * 0.07 }}
       whileHover={{ y: -3, transition: { duration: 0.2, ease: EASE } }}
-      className="card p-2.5 sm:p-4"
+      className="card p-2.5 sm:p-3"
     >
       <header className="flex items-center gap-2.5 sm:gap-3.5">
         <motion.div
           whileHover={{ rotate: -4, scale: 1.06 }}
           transition={{ type: "spring", stiffness: 320, damping: 16 }}
-          className="relative flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-edge sm:size-[68px] sm:border-[3px]"
+          className="relative flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-edge sm:size-14 sm:border-[3px]"
           style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)", boxShadow: "0 0 14px -2px rgba(200,146,58,.45)" }}
         >
           <span className="origin-center scale-[.72] sm:scale-100">
@@ -207,7 +207,7 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
         </div>
       </header>
 
-      <div className="mt-2 sm:mt-3.5">
+      <div className="mt-2 sm:mt-2.5">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={mode}
@@ -221,7 +221,7 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
         </AnimatePresence>
       </div>
 
-      <footer className="mt-3.5 hidden flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-3 text-sm text-mute sm:flex">
+      <footer className="mt-2.5 hidden flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-sm text-mute sm:flex">
         <span className="truncate">
           Hunt: <b className="font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
           {acc.hunt && <> · {fmtDuration(acc.hunt.minutes)}</>}

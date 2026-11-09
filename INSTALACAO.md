@@ -126,6 +126,22 @@ O comando de atualizar baixa a versão nova (`git pull`) e recompila o dashboard
 ficam salvas em `data/app.db`: **não publique nem compartilhe essa pasta**, ela guarda os
 tokens.
 
+## Atualização pelo painel
+
+O painel consulta a página de Releases do projeto no GitHub sozinho a cada hora. Quando existe versão
+nova, aparece um aviso no topo com **Ver novidades**, **Atualizar agora** e **Depois**. Em
+**Configurações → Atualizações** há o botão **Verificar atualização**, para checar na hora.
+
+Ao clicar em **Atualizar agora** o bot baixa o dashboard pronto, aplica o código da versão (`git merge`
+da tag), instala as dependências e reinicia sozinho (se você iniciou pelo `iniciar.bat` /
+`iniciar.sh`; senão, feche e abra de novo). As contas desconectam por alguns segundos e voltam
+sozinhas. Se algo falhar no meio, a atualização é desfeita.
+
+- Só funciona em cópias feitas com `git clone` e sem arquivos do projeto alterados. Quem baixou o
+  zip vê o link da Release para baixar a versão nova.
+- Nunca atualiza sem o seu clique. Seus dados (`data/`, `.env`) não são tocados.
+- Para desligar a verificação, coloque `UPDATE_CHECK=0` no `.env`.
+
 ## Deixar rodando o tempo todo
 
 - **No PC:** o bot só roda enquanto a janela estiver aberta e o computador ligado. Minimize a

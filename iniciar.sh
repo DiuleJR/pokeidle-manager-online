@@ -48,4 +48,14 @@ echo "Iniciando. Abra http://localhost:8080 no navegador."
 echo "Na primeira vez, o painel pede para voce criar uma senha."
 echo "Para parar, aperte Ctrl+C."
 echo
-exec venv/bin/python -u main.py
+# O bot sai com o código 75 depois de se atualizar pelo painel: aqui ele sobe de novo.
+export POKEIDLE_SUPERVISED=1
+while true; do
+  code=0
+  venv/bin/python -u main.py || code=$?
+  [ "$code" -eq 75 ] || exit "$code"
+  echo
+  echo "Reiniciando com a versao nova..."
+  echo
+  venv/bin/python -m pip install -q -r requirements.txt || true
+done

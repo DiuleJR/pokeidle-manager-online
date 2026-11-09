@@ -43,7 +43,17 @@ echo Iniciando. Abra http://localhost:8080 no navegador.
 echo Na primeira vez, o painel pede para voce criar uma senha.
 echo Para parar, feche esta janela ou aperte Ctrl+C.
 echo.
+set "POKEIDLE_SUPERVISED=1"
+:loop
 "venv\Scripts\python.exe" -u main.py
+rem O bot sai com o codigo 75 depois de se atualizar pelo painel: aqui ele sobe de novo.
+if %errorlevel%==75 (
+  echo.
+  echo Reiniciando com a versao nova...
+  echo.
+  "venv\Scripts\python.exe" -m pip install -q -r requirements.txt
+  goto :loop
+)
 goto :fim
 
 :sem_node

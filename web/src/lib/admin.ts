@@ -71,6 +71,27 @@ export interface GlobalSettings {
   defaultWsUrl: string;
 }
 
+export interface UpdateState {
+  enabled: boolean;
+  current: string;
+  latest: string | null;
+  available: boolean;
+  notes: string;
+  url: string;
+  checkedAt: number | null;
+  error: string;
+  canApply: boolean;
+  cannotApplyReason: string;
+  supervised: boolean;
+  step: string;
+  doneMessage: string;
+}
+export interface UpdateResult {
+  ok: boolean;
+  restarting: boolean;
+  message: string;
+}
+
 export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const key = panelKey();
   const r = await fetch(`${httpBase()}${path}`, {
@@ -135,6 +156,9 @@ export const admin = {
   settings: () => call<GlobalSettings>("GET", "/api/settings"),
   saveSettings: (b: Record<string, unknown>) => call<GlobalSettings>("PUT", "/api/settings", b),
   testWebhook: () => call<{ ok: boolean }>("POST", "/api/settings/test-webhook"),
+  update: () => call<UpdateState>("GET", "/api/update"),
+  checkUpdate: () => call<UpdateState>("POST", "/api/update/check"),
+  applyUpdate: () => call<UpdateResult>("POST", "/api/update/apply"),
 };
 
 /**

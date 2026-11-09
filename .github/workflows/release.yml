@@ -14,6 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: A tag precisa bater com version.py
+        run: |
+          V=$(python3 -c "from version import VERSION; print(VERSION)")
+          if [ "v$V" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::A tag ${GITHUB_REF_NAME} não bate com version.py (v$V). Atualize version.py e crie a tag de novo."
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 20

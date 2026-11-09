@@ -7,6 +7,8 @@ import { AccountSelect, InventoryView } from "@/components/InventoryView";
 import { MarketView } from "@/components/market/MarketView";
 import { SettingsView } from "@/components/SettingsView";
 import { SummaryBar } from "@/components/SummaryBar";
+import { UpdateBanner } from "@/components/UpdateCard";
+import { SupportPopup, SupportSide, SupportStrip } from "@/components/SupportCard";
 import { Frame } from "@/components/ui";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 
@@ -70,12 +72,12 @@ function Segmented<T extends string>({
 function Dashboard({ mode }: { mode: CardMode }) {
   const ids = useAccountIds();
   return (
-    <div className="space-y-2.5 sm:space-y-5">
+    <div className="space-y-2.5 sm:space-y-3">
       <SummaryBar />
       {ids.length === 0 ? (
         <p className="card p-10 text-center text-mute">Aguardando dados da VPS…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:gap-3 lg:grid-cols-2">
           {ids.map((id, i) => (
             <AccountCard key={id} id={id} mode={mode} index={i} />
           ))}
@@ -99,6 +101,15 @@ export default function App() {
     return () => window.removeEventListener("hashchange", on);
   }, []);
 
+  // Toda troca de aba começa no topo (inclusive voltar/avançar do navegador).
+  const toTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  };
+  useEffect(() => {
+    toTop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   const go = (t: Tab) => {
     location.hash = t === "dashboard" ? "" : t;
     setTab(t);
@@ -106,7 +117,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen px-1.5 py-2 pb-24 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-6 sm:pb-6">
+      <div className="min-h-screen px-1.5 py-2 pb-24 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-4 sm:pb-4">
         <Frame>
           <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2.5 sm:gap-y-4">
             <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
@@ -156,8 +167,9 @@ export default function App() {
             </div>
           </header>
 
-          <main className="mt-3 sm:mt-6">
-            <AnimatePresence mode="wait" initial={false}>
+          <main className="mt-3 sm:mt-4">
+            <UpdateBanner />
+            <AnimatePresence mode="wait" initial={false} onExitComplete={toTop}>
               <motion.div
                 key={tab}
                 initial={{ opacity: 0, y: 12 }}
@@ -170,6 +182,10 @@ export default function App() {
             </AnimatePresence>
           </main>
         </Frame>
+        {tab !== "config" && <SupportStrip />}
+        <SupportSide kind="pix" />
+        <SupportSide kind="usdt" />
+        <SupportPopup disabled={tab === "config"} />
       </div>
 
       <nav

@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
+import { SupportSection } from "@/components/SupportCard";
+import { UpdateSection } from "@/components/UpdateCard";
 import { ConfirmDialog } from "@/components/ui";
 import {
   AuthError,
@@ -921,6 +923,8 @@ export function SettingsView() {
         </Notice>
       )}
 
+      <SupportSection />
+
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-extrabold uppercase tracking-wide">Contas {data && <span className="tnum text-mute">({data.accounts.length}/{data.max})</span>}</h2>
@@ -947,6 +951,8 @@ export function SettingsView() {
           <GlobalForm />
         </div>
       </section>
+
+      <UpdateSection />
 
       <section className="space-y-3">
         <h2 className="text-lg font-extrabold uppercase tracking-wide">Segurança</h2>

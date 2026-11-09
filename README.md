@@ -61,7 +61,9 @@ cd pokeidle
 O script cria o ambiente, instala as dependências, compila o dashboard e inicia o bot.
 Na **primeira vez**, abra `http://localhost:8080` e **crie uma senha** para o painel. Depois vá em
 **Configurações → Adicionar conta**. Para atualizar depois:
-`./iniciar.sh atualizar` (Windows: `.\iniciar.bat atualizar`).
+`./iniciar.sh atualizar` (Windows: `.\iniciar.bat atualizar`). O painel também avisa sozinho quando sai
+versão nova (verifica a cada hora e no botão **Configurações → Verificar atualização**) e atualiza com
+um clique, veja [Atualização pelo painel](INSTALACAO.md#atualização-pelo-painel).
 
 ## Adicionando uma conta
 

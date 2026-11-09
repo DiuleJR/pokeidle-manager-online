@@ -203,6 +203,7 @@ def create_app(
     cors_origins: list[str] | None = None,
     manager=None,
     store=None,
+    updater=None,
 ) -> FastAPI:
     """`conns` pode ser uma lista fixa ou uma função (contas mudam em tempo de execução).
     `auth` (auth.Auth) protege tudo. Com `manager` e `store`, registra as rotas de gestão (admin_api.py)."""
@@ -297,6 +298,9 @@ def create_app(
         register_admin_routes(app, manager, store, auth)
         from market_api import register_market_routes
         register_market_routes(app, manager, store, auth)
+    if updater is not None:
+        from updater import register_update_routes
+        register_update_routes(app, updater, auth)
 
     # Dashboard estático (build do Vite) na raiz; rotas /api e /ws acima têm prioridade.
     web_dir = os.getenv("WEB_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_dist")

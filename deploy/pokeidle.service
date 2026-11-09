@@ -12,6 +12,7 @@ User=pokeidle
 WorkingDirectory=/opt/pokeidle
 ExecStart=/opt/pokeidle/venv/bin/python -u main.py
 Restart=always
+Environment=POKEIDLE_SUPERVISED=1
 RestartSec=5
 # Dados (banco com tokens): visíveis só ao usuário do serviço
 UMask=0077

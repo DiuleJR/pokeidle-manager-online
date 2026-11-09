@@ -20,6 +20,7 @@ from manager import AccountManager
 from notify import DailyStats, Notifier
 from store import Store
 from telemetry import create_app
+from updater import Updater
 
 log = logging.getLogger("main")
 
@@ -44,9 +45,10 @@ async def amain() -> None:
     notify.set_public_url(store.get_setting("public_url"))
     log.info("Webhook Discord: %s", "ligado" if notifier.enabled else "desligado")
     manager = AccountManager(store, notifier, daily)
+    updater = Updater()
 
     app = create_app(manager.connections, auth, interval=interval, cors_origins=origins,
-                     manager=manager, store=store)
+                     manager=manager, store=store, updater=updater)
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
     server.install_signal_handlers = lambda: None  # o asyncio.run/KeyboardInterrupt cuida
 
@@ -65,7 +67,7 @@ async def amain() -> None:
             log.info("Se for criar a senha de outro computador, o código de configuração é: %s", auth.setup_code())
 
     # Falha de uma conta nunca derruba as outras (run_forever captura erros).
-    await asyncio.gather(server.serve(), notifier.run(), daily.run(notifier), manager.run())
+    await asyncio.gather(server.serve(), notifier.run(), daily.run(notifier), manager.run(), updater.run())
 
 
 def reset_password() -> None:

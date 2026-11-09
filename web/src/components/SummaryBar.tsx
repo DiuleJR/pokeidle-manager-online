@@ -33,7 +33,7 @@ export function SummaryBar() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: n * 0.05 }}
-          className="tile flex flex-col px-2 py-1.5 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3"
+          className="tile flex flex-col px-2 py-1.5 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2"
         >
           <span className="hidden size-9 shrink-0 items-center justify-center sm:flex">{i.icon}</span>
           <div className="min-w-0">
