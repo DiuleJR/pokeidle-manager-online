@@ -11,6 +11,7 @@ import logging
 import config
 from config import Settings, build_account_config
 from connection import AccountConnection
+from market_service import MarketService
 from notify import DailyStats, Notifier
 from session_stats import SessionStore
 from store import Store
@@ -30,6 +31,7 @@ class AccountManager:
         self._conns: dict[int, AccountConnection] = {}
         self._tasks: dict[int, asyncio.Task] = {}
         self._codes = config.parse_close_codes()
+        self.market = MarketService(self, store, notifier)
 
     # ------------------------------------------------------------ estado
     def settings(self) -> Settings:
@@ -74,10 +76,13 @@ class AccountManager:
     async def run(self) -> None:
         """Mantém o gerenciador vivo; ao cancelar, derruba as conexões."""
         await self.start_all()
+        market_task = asyncio.create_task(self.market.run(), name="market")
         try:
             while True:
                 await asyncio.sleep(3600)
         finally:
+            market_task.cancel()
+            await asyncio.gather(market_task, return_exceptions=True)
             for acc_id in list(self._tasks):
                 await self._stop(acc_id)
 

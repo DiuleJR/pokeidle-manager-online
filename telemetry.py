@@ -295,6 +295,8 @@ def create_app(
     if manager is not None and store is not None:
         from admin_api import register_admin_routes
         register_admin_routes(app, manager, store, auth)
+        from market_api import register_market_routes
+        register_market_routes(app, manager, store, auth)
 
     # Dashboard estático (build do Vite) na raiz; rotas /api e /ws acima têm prioridade.
     web_dir = os.getenv("WEB_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_dist")

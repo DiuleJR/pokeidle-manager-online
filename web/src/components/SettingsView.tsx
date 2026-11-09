@@ -72,7 +72,7 @@ function parsePaste(text: string): { nick: string; token: string; device: string
   };
 }
 
-function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -104,7 +104,7 @@ function Modal({ title, onClose, children, wide = false }: { title: string; onCl
   );
 }
 
-function Notice({ tone, children }: { tone: "warn" | "error" | "ok"; children: React.ReactNode }) {
+export function Notice({ tone, children }: { tone: "warn" | "error" | "ok"; children: React.ReactNode }) {
   const cls =
     tone === "ok"
       ? "border-[#2f6b3a] bg-[#16301c] text-poke-green"
@@ -119,7 +119,7 @@ function Notice({ tone, children }: { tone: "warn" | "error" | "ok"; children: R
   );
 }
 
-function Labeled({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+export function Labeled({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1.5">
       <span className="label block">{label}</span>
@@ -129,7 +129,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
   );
 }
 
-function Check2({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+export function Check2({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-sm">
       <input type="checkbox" className="size-4 accent-[#f3c04a]" checked={checked} onChange={(e) => onChange(e.target.checked)} />
@@ -139,7 +139,7 @@ function Check2({ checked, onChange, children }: { checked: boolean; onChange: (
 }
 
 /** Selo pequeno: aceso (verde) = ativo; apagado = inativo. Mesmo visual do selo de status. */
-function Chip({ on, label }: { on: boolean; label: string }) {
+export function Chip({ on, label }: { on: boolean; label: string }) {
   return (
     <span
       title={`${label}: ${on ? "ativo" : "desativado"}`}

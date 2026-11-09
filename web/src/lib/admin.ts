@@ -71,7 +71,7 @@ export interface GlobalSettings {
   defaultWsUrl: string;
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const key = panelKey();
   const r = await fetch(`${httpBase()}${path}`, {
     method,

@@ -30,6 +30,7 @@ from balls import BallManager
 from config import AccountConfig, Settings
 from hunt import HuntManager
 from inventory import InventoryView
+from market import MarketClient
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
 from session_stats import ITEM_LABELS, SessionItems, SessionStore
 from shop import AutoRestock, ShopManager, ball_ids_resolver, potion_ids_resolver
@@ -170,6 +171,7 @@ class AccountConnection:
         self._no_proxy = account.proxy is None
         self.estado: dict = {}   # snapshot do welcome, mutado pelo HuntManager
         self.hunts: list = []
+        self.mercado_cfg: dict = {}               # welcome.mercado (catálogo, preços mínimos...)
         self.itens_nossos: dict[int, dict] = {}   # welcome.itensNossos: itens só do servidor (nome/ícone)
         self.session_started: float | None = None  # epoch do 1º ONLINE deste processo
         self.session_items = SessionItems()
@@ -188,6 +190,7 @@ class AccountConnection:
             self.hunt.on_kill = lambda xp, gold: self.daily.add_kill(self.acc.nick, xp, gold)
         self.balls = BallManager(account.name, self.estado, account.ball_priority)
         self.shop = ShopManager(account.name, self.estado)
+        self.market = MarketClient(account.name, self.estado)
         self.restockers: list[AutoRestock] = []
         if account.auto_potion:
             self.restockers.append(AutoRestock(
@@ -305,6 +308,8 @@ class AccountConnection:
                 self.hunts.extend(welcome.get("hunts", []))
                 self.itens_nossos = {int(i["id"]): i for i in welcome.get("itensNossos", [])
                                      if isinstance(i, dict) and "id" in i}
+                m = welcome.get("mercado")  # catálogo da vitrine + limites (preço mínimo, espera de compra)
+                self.mercado_cfg = m if isinstance(m, dict) else {}
                 if self.session_started is None:
                     self.session_started = time.time()
                     self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
@@ -319,6 +324,7 @@ class AccountConnection:
                 self.hunt.bind(ws)
                 self.balls.bind(ws)
                 self.shop.bind(ws)
+                self.market.bind(ws)
                 if self.acc.hunt_slug and self.acc.hunt_slug != self.estado.get("huntSlug"):
                     await self.hunt.select_hunt(self.acc.hunt_slug)
 
@@ -337,6 +343,7 @@ class AccountConnection:
                 try:
                     await recv_task
                 finally:
+                    self.market.unbind()
                     for t in background:
                         t.cancel()
                     await asyncio.gather(*background, return_exceptions=True)
@@ -362,6 +369,7 @@ class AccountConnection:
                 self.hunt.handle_frame(msg)
                 self.balls.handle_frame(msg)
                 self.shop.handle_frame(msg)
+                self.market.handle_frame(msg)
                 before = dict(self.session_items.gained)
                 self.session_items.update(self.estado)
                 if self.session_items.gained != before:

@@ -1,18 +1,20 @@
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { LayoutDashboard, Package, Settings } from "lucide-react";
+import { LayoutDashboard, Package, Settings, Store } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AccountCard, type CardMode } from "@/components/AccountCard";
 import { ConnectionIndicator } from "@/components/ConnectionIndicator";
 import { AccountSelect, InventoryView } from "@/components/InventoryView";
+import { MarketView } from "@/components/market/MarketView";
 import { SettingsView } from "@/components/SettingsView";
 import { SummaryBar } from "@/components/SummaryBar";
 import { Frame } from "@/components/ui";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 
-type Tab = "dashboard" | "inventario" | "config";
+type Tab = "dashboard" | "inventario" | "mercado" | "config";
 const TABS: { id: Tab; label: string; Icon: typeof Package }[] = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { id: "inventario", label: "Inventários", Icon: Package },
+  { id: "mercado", label: "Mercado", Icon: Store },
   { id: "config", label: "Configurações", Icon: Settings },
 ];
 const MODES: { id: CardMode; label: string }[] = [
@@ -21,8 +23,9 @@ const MODES: { id: CardMode; label: string }[] = [
 ];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const readTab = (): Tab => (location.hash === "#inventario" ? "inventario" : location.hash === "#config" ? "config" : "dashboard");
-const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", config: "Configurações" };
+const readTab = (): Tab =>
+  location.hash === "#inventario" ? "inventario" : location.hash === "#mercado" ? "mercado" : location.hash === "#config" ? "config" : "dashboard";
+const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", mercado: "Mercado", config: "Configurações" };
 
 /** Seletor segmentado com "pílula" que desliza entre as opções. */
 function Segmented<T extends string>({
@@ -136,7 +139,7 @@ export default function App() {
               <LayoutGroup id="nav">
                 <Segmented id="tab" className="hidden sm:flex" options={TABS} value={tab} onChange={go} />
                 <AnimatePresence mode="popLayout" initial={false}>
-                  {tab === "config" ? null : tab === "dashboard" ? (
+                  {tab === "config" || tab === "mercado" ? null : tab === "dashboard" ? (
                     <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: EASE }}>
                       <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
                     </motion.div>
@@ -162,7 +165,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25, ease: EASE }}
               >
-                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : <SettingsView />}
+                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : tab === "mercado" ? <MarketView /> : <SettingsView />}
               </motion.div>
             </AnimatePresence>
           </main>

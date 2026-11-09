@@ -35,6 +35,7 @@ navegador), com um painel web para acompanhar e configurar tudo.
 - Reposição automática de Potions e Balls na loja
 - Visão de inventário por conta
 - Alertas no Discord (queda/volta, item raro, relatório diário)
+- **Aba Mercado:** preços e média de 7 dias de todos os itens (com selo "barato"), vitrine de Pokémon com os filtros do jogo, histórico de vendas do servidor, anúncios e carteira de Gemas (somente leitura), calculadora de comissão, alertas no Discord e compra automática (sniper, desligada por padrão)
 - Telemetria via FastAPI (`GET /api/telemetry`, `WS /ws/telemetry`) e dashboard React
 
 ## Requisitos
@@ -137,6 +138,18 @@ linhas do `.env`.
 Em **Configurações → Geral**: webhook do Discord (com botão de teste), hora em que o
 dia vira e fuso do relatório, e a **URL pública** (opcional: só serve para mostrar o
 ícone dos itens raros no Discord; quem roda na rede local deixa vazio).
+
+## Mercado
+
+A aba **Mercado** consulta o mercado do jogo pelas contas que estão online (somente leitura) e permite comprar.
+
+- **Alertas:** avisam no Discord quando um item ou Pokémon aparece abaixo de um preço (ou X% abaixo da média).
+- **Sniper (compra automática):** o jogo permite automação no mercado, e o sorteio entre quem compra junto
+  mantém a disputa justa. Aqui ele nasce **desligado**: é preciso ligar a chave geral e cada regra exige
+  preço máximo, conta e **orçamento diário** (o máximo que ela pode gastar por dia). Nunca compra de si mesmo.
+- **Gemas valem dinheiro real.** O bot só **lê** a carteira. Ele nunca saca Gemas nem envia Coins; depósito e
+  saque são feitos só dentro do jogo.
+- Perder o sorteio da liberação não custa nada.
 
 ## Dados e segurança
 
