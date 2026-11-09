@@ -1,0 +1,20 @@
+# Exemplo de serviço systemd (copie para /etc/systemd/system/pokeidle.service e ajuste).
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pokeidle
+#   journalctl -u pokeidle -f      # a chave do painel aparece aqui na 1ª execução
+[Unit]
+Description=Pokeidle Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pokeidle
+WorkingDirectory=/opt/pokeidle
+ExecStart=/opt/pokeidle/venv/bin/python -u main.py
+Restart=always
+RestartSec=5
+# Dados (banco com tokens): visíveis só ao usuário do serviço
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# Opcional. Uso: docker compose up -d --build
+# A chave do painel aparece em: docker compose logs (1ª execução).
+services:
+  pokeidle:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Só local. Para acessar de fora, prefira túnel SSH ou HTTPS (veja o README).
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      # TELEMETRY_TOKEN: defina para escolher a chave do painel
+      TELEMETRY_TOKEN: ${TELEMETRY_TOKEN:-}
