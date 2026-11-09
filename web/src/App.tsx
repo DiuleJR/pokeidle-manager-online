@@ -149,17 +149,16 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
               <LayoutGroup id="nav">
                 <Segmented id="tab" className="hidden sm:flex" options={TABS} value={tab} onChange={go} />
-                <AnimatePresence mode="popLayout" initial={false}>
-                  {tab === "config" || tab === "mercado" ? null : tab === "dashboard" ? (
-                    <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: EASE }}>
-                      <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
-                    </motion.div>
-                  ) : (
-                    <motion.div key="acc" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: EASE }}>
-                      <AccountSelect value={account} onChange={setAccount} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {/* Sem animação de saída: o elemento que sai (popLayout) ficava preso por cima das abas. */}
+                {tab === "dashboard" ? (
+                  <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
+                    <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
+                  </motion.div>
+                ) : tab === "inventario" ? (
+                  <motion.div key="acc" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
+                    <AccountSelect value={account} onChange={setAccount} />
+                  </motion.div>
+                ) : null}
               </LayoutGroup>
               <div className="hidden sm:block">
                 <ConnectionIndicator />
