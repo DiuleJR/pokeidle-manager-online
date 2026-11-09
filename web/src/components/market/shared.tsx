@@ -130,12 +130,12 @@ export function CoinStack({ size = 18 }: { size?: number }) {
 }
 
 /** Gold | Tudo | Gemas. Sem `allowAll`, só Gold e Gemas. */
-export function CurrencyToggle({ value, onChange, allowAll = false }: { value: MoedaSel; onChange: (m: MoedaSel) => void; allowAll?: boolean }) {
+export function CurrencyToggle({ value, onChange, allowAll = false, className = "w-full sm:w-fit" }: { value: MoedaSel; onChange: (m: MoedaSel) => void; allowAll?: boolean; className?: string }) {
   const opts: MoedaSel[] = allowAll ? ["gold", "all", "orb"] : ["gold", "orb"];
   return (
-    <div className="flex gap-1 rounded-xl border border-line bg-tile p-0.5" role="group" aria-label="Moeda">
+    <div className={`flex gap-1 rounded-xl border border-line bg-tile p-0.5 ${className}`} role="group" aria-label="Moeda">
       {opts.map((m) => (
-        <button key={m} className="btn !border-transparent" data-active={value === m} aria-pressed={value === m} onClick={() => onChange(m)}>
+        <button key={m} className="btn flex-1 !border-transparent sm:flex-none" data-active={value === m} aria-pressed={value === m} onClick={() => onChange(m)}>
           {m === "all" ? <CoinStack size={16} /> : <Coin kind={m === "orb" ? "gem" : "gold"} size={16} />}
           {m === "orb" ? "Gemas" : m === "gold" ? "Gold" : "Tudo"}
         </button>
@@ -224,11 +224,11 @@ export function secondsLabel(sec: number): string {
 }
 
 /** Seletor segmentado simples (poucas opções, uma escolhida). */
-export function Seg<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[]; label: string }) {
+export function Seg<T extends string>({ value, onChange, options, label, className = "w-full sm:w-fit" }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[]; label: string; className?: string }) {
   return (
-    <div className="flex gap-1 rounded-xl border border-line bg-tile p-0.5" role="group" aria-label={label}>
+    <div className={`flex gap-1 rounded-xl border border-line bg-tile p-0.5 ${className}`} role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.id} className="btn !border-transparent" data-active={value === o.id} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+        <button key={o.id} className="btn flex-1 !border-transparent sm:flex-none" data-active={value === o.id} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
           {o.label}
         </button>
       ))}

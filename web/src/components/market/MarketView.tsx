@@ -36,14 +36,14 @@ export function MarketView() {
   const [kind, setKind] = useState<"items" | "pokemon">(() => read("mkt-kind", ["items", "pokemon"] as const, "items"));
 
   return (
-    <div className="space-y-3 sm:space-y-4">
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:gap-2" role="tablist" aria-label="Seção do mercado">
+    <div className="mkt space-y-3 sm:space-y-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2" role="tablist" aria-label="Seção do mercado">
         {SUBS.map((s) => (
           <button
             key={s.id}
             role="tab"
             aria-selected={sub === s.id}
-            className="btn shrink-0"
+            className="btn !px-1 sm:!px-3.5"
             data-active={sub === s.id}
             onClick={() => {
               setSub(s.id);

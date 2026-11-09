@@ -72,18 +72,27 @@ export function PokemonTab() {
   return (
     <div className="space-y-3">
       <form
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(e) => {
           e.preventDefault();
           setApplied(q.trim());
           setPage(0);
         }}
       >
-        <input className="field min-w-0 flex-1 sm:max-w-xs" type="search" placeholder="Nome do Pokémon…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Nome do Pokémon" maxLength={40} />
-        <CurrencyToggle value={moeda} onChange={reset(setMoeda)} allowAll />
-        <button className="btn" type="button" data-active={showFilters || active > 0} onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters}>
-          <SlidersHorizontal className="size-4" /> Filtros{active ? ` (${active})` : ""}
-        </button>
+        <div className="flex gap-2 sm:w-72">
+          <input className="field min-w-0 flex-1" type="search" placeholder="Nome do Pokémon…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Nome do Pokémon" maxLength={40} />
+          <button className="btn shrink-0" type="submit">
+            Buscar
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <CurrencyToggle value={moeda} onChange={reset(setMoeda)} allowAll className="min-w-0 flex-1 sm:flex-none" />
+          <button className="btn shrink-0" type="button" data-active={showFilters || active > 0} onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters} aria-label="Filtros">
+            <SlidersHorizontal className="size-4" />
+            <span className="hidden sm:inline">Filtros</span>
+            {active ? <span className="tnum">({active})</span> : null}
+          </button>
+        </div>
       </form>
 
       {showFilters && (
@@ -135,25 +144,26 @@ export function PokemonTab() {
               const wait = secondsUntil(l.compravelEm, drift);
               const iv = f.ivTotal != null ? Math.round((f.ivTotal / 192) * 100) : null;
               return (
-                <li key={l.id} className="tile flex items-center gap-3 p-2.5">
-                  <PokemonSprite looktype={f.looktype} size={64} />
+                <li key={l.id} className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
+                  <PokemonSprite looktype={f.looktype} size={56} />
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 font-bold">
-                      <span className="truncate">{f.nome ?? "Pokémon"}</span>
+                    <p className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
+                      <span className="break-words text-[15px] font-bold">{f.nome ?? "Pokémon"}</span>
                       {f.shiny && <ShinyMark />}
-                      <span className="shrink-0 font-normal text-mute">nv. {f.level ?? "?"}</span>
+                      <span className="shrink-0 text-xs text-mute">nv. {f.level ?? "?"}</span>
                     </p>
-                    <p className="flex flex-wrap items-center gap-x-2 text-xs text-mute">
-                      {iv != null && <span>IV {iv}%</span>}
-                      {f.potencia != null && <span>P{f.potencia}</span>}
+                    <p className="mt-1 flex items-center gap-x-2 text-xs text-mute">
+                      {iv != null && <span className="shrink-0">IV {iv}%</span>}
+                      {f.potencia != null && <span className="shrink-0">P{f.potencia}</span>}
                       <span className="truncate">{l.vendedor}</span>
                     </p>
-                    {wait > 0 && <p className="tnum text-xs text-poke-gold">libera em {fmtCountdown(wait)}</p>}
+                    {wait > 0 && <p className="tnum mt-0.5 text-xs text-poke-gold">libera em {fmtCountdown(wait)}</p>}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <Money v={l.preco} moeda={l.moeda} className="text-base font-bold" />
-                    <button className="btn" onClick={() => setBuy(l)} aria-label={`Comprar ${f.nome ?? "Pokémon"}`}>
-                      <ShoppingCart className="size-4" /> Comprar
+                    <Money v={l.preco} moeda={l.moeda} short className="text-[15px] font-bold" />
+                    <button className="btn !px-3" onClick={() => setBuy(l)} aria-label={`Comprar ${f.nome ?? "Pokémon"}`}>
+                      <ShoppingCart className="size-4" />
+                      <span className="hidden sm:inline">Comprar</span>
                     </button>
                   </div>
                 </li>

@@ -82,18 +82,20 @@ export function MineTab() {
       ) : (
         <>
           <section className="card space-y-3 p-3 sm:p-4">
-            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-              <div>
-                <p className="label">{all ? "Saldo de todas as contas" : `Saldo — ${targets[0]?.nick ?? ""}`}</p>
-                <p className="flex items-center gap-2 text-3xl font-extrabold tnum">
-                  <Coin kind="gem" size={30} />
+            <p className="label">{all ? "Saldo de todas as contas" : `Saldo — ${targets[0]?.nick ?? ""}`}</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-2xl font-extrabold tnum sm:text-3xl">
+                  <Coin kind="gem" size={26} />
                   {fmtInt(gems)}
                 </p>
                 {rate ? <p className="text-sm font-bold text-poke-green tnum">≈ {fmtUsd(gems * rate)}</p> : null}
               </div>
-              <div className="text-right">
-                <p className="label">Gold</p>
-                <Money v={gold} moeda="gold" className="text-xl font-bold" />
+              <div className="min-w-0">
+                <Money v={gold} moeda="gold" short className="text-2xl font-extrabold sm:text-3xl [&_img]:size-6" />
+                <p className="text-sm text-mute tnum" title={fmtInt(gold)}>
+                  Gold
+                </p>
               </div>
             </div>
 

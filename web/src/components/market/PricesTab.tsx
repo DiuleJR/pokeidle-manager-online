@@ -181,33 +181,35 @@ export function PricesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <input className="field min-w-0 flex-1 sm:max-w-xs" type="search" placeholder="Buscar item…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar item" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex items-center gap-2 sm:w-72">
+          <input className="field min-w-0 flex-1" type="search" placeholder="Buscar item…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar item" />
+          <button className="btn shrink-0 !px-3" data-active={onlyFav} aria-pressed={onlyFav} onClick={() => setOnlyFav(!onlyFav)} title="Só favoritos" aria-label="Só favoritos">
+            <Star className={`size-4 ${onlyFav ? "fill-poke-gold" : ""}`} />
+          </button>
+        </div>
         <CurrencyToggle value={moeda} onChange={setMoeda} allowAll />
-        <button className="btn" data-active={onlyFav} aria-pressed={onlyFav} onClick={() => setOnlyFav(!onlyFav)} title="Só favoritos" aria-label="Só favoritos">
-          <Star className={`size-4 ${onlyFav ? "fill-poke-gold" : ""}`} />
-        </button>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <select className="field min-w-0" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Categoria">
+            <option value="">Categorias</option>
+            {cats.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABEL[c] ?? c}
+              </option>
+            ))}
+          </select>
+          <select className="field min-w-0" value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Ordenar">
+            {SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <select className="field" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Categoria">
-          <option value="">Todas as categorias</option>
-          {cats.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABEL[c] ?? c}
-            </option>
-          ))}
-        </select>
-        <select className="field" value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Ordenar">
-          {SORTS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs text-mute">
-          {rows.length} itens · <span className="text-poke-green">Barato</span> = 15% ou mais abaixo da média de {ov.data?.days ?? 7} dias
-        </span>
-      </div>
+      <p className="text-xs text-mute">
+        {rows.length} itens · <span className="text-poke-green">Barato</span> = 15% ou mais abaixo da média de {ov.data?.days ?? 7} dias
+      </p>
 
       {rows.length === 0 ? (
         <p className="card p-8 text-center text-sm text-mute">Nenhum item com esses filtros.</p>
@@ -220,41 +222,38 @@ export function PricesTab() {
             const both = moeda === "all";
             return (
               <li key={i.id}>
-                <div className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
+                <div className="tile flex items-center gap-1 p-2 sm:gap-3 sm:p-2.5">
                   <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3" onClick={() => setOpen(i)}>
                     <ItemSprite icon={i.icon} size={36} alt="" />
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate font-bold">{i.name}</span>
+                      <span className="line-clamp-2 break-words text-[15px] font-bold leading-tight">{i.name}</span>
+                      <span className="mt-1 flex items-center gap-1.5 text-xs text-mute">
                         <DealBadge d={deal(i)} />
-                      </span>
-                      <span className="block truncate text-xs text-mute">
-                        {i.ads} anúncios · {fmtInt(i.units)} un.
+                        <span className="truncate">{i.ads} anúncios</span>
+                        <span className="hidden sm:inline">· {fmtInt(i.units)} un.</span>
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-0.5">
                       {both ? (
                         <>
-                          {i.minGold != null && <Money v={i.minGold} moeda="gold" className="font-bold" />}
-                          {i.minOrb != null && <Money v={i.minOrb} moeda="orb" className="font-bold" />}
+                          {i.minGold != null && <Money v={i.minGold} moeda="gold" short className="font-bold" />}
+                          {i.minOrb != null && <Money v={i.minOrb} moeda="orb" short className="font-bold" />}
                         </>
                       ) : (
-                        <Money v={p} moeda={moeda as Moeda} className="font-bold" />
+                        <Money v={p} moeda={moeda as Moeda} short className="font-bold" />
                       )}
                       <span className="flex items-center gap-1.5 text-xs text-mute">
                         {!both && a ? (
-                          <>
+                          <span className="hidden items-center gap-1 sm:inline-flex">
                             méd. <Money v={a} moeda={moeda as Moeda} short />
-                          </>
-                        ) : !both ? (
-                          "sem média"
+                          </span>
                         ) : null}
                         {d > 0.001 && <span className="tnum text-poke-green">−{Math.round(d * 100)}%</span>}
                       </span>
                     </span>
                   </button>
-                  <button className="btn shrink-0" onClick={() => void toggleFav(i)} aria-pressed={i.fav} aria-label={i.fav ? "Tirar dos favoritos" : "Favoritar"}>
-                    <Star className={`size-4 ${i.fav ? "fill-poke-gold text-poke-gold" : ""}`} />
+                  <button className="grid size-10 shrink-0 place-items-center rounded-lg text-mute transition-colors hover:text-fg" onClick={() => void toggleFav(i)} aria-pressed={i.fav} aria-label={i.fav ? "Tirar dos favoritos" : "Favoritar"}>
+                    <Star className={`size-[18px] ${i.fav ? "fill-poke-gold text-poke-gold" : ""}`} />
                   </button>
                 </div>
               </li>

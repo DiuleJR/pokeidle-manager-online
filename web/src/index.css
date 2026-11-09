@@ -97,6 +97,14 @@
   }
 }
 
+/* Mercado no celular: alvos de toque de pelo menos 40px (só em tela de toque, só nesta aba). */
+@media (pointer: coarse) {
+  .mkt .btn,
+  .mkt .field {
+    min-height: 2.5rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
