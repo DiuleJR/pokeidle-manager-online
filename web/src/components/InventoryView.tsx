@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Reveal } from "@/components/ui";
 import { ItemsView } from "@/components/ItemsView";
 import { PokemonsView } from "@/components/PokemonsView";
 import { ValueCard } from "@/components/ValueCard";
@@ -14,7 +15,10 @@ export function InventoryView({ account }: { account: string }) {
 
   return (
     <div className="space-y-2.5 sm:space-y-4">
-      <ValueCard account={selected} valuation={val.data} error={val.error} />
+      <Reveal index={0}>
+        <ValueCard account={selected} valuation={val.data} error={val.error} />
+      </Reveal>
+      <Reveal index={1}>
       <div className="flex gap-1.5 sm:gap-2" role="tablist" aria-label="Seção">
         <button role="tab" aria-selected={sub === "items"} className="btn" data-active={sub === "items"} onClick={() => setSub("items")}>
           Itens
@@ -23,7 +27,10 @@ export function InventoryView({ account }: { account: string }) {
           Pokémon
         </button>
       </div>
-      {sub === "items" ? <ItemsView account={selected} valuation={val.data} /> : <PokemonsView account={selected} valuation={val.data} />}
+      </Reveal>
+      <Reveal key={sub} index={2}>
+        {sub === "items" ? <ItemsView account={selected} valuation={val.data} /> : <PokemonsView account={selected} valuation={val.data} />}
+      </Reveal>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { SupportSection } from "@/components/SupportCard";
 import { UpdateSection } from "@/components/UpdateCard";
-import { ConfirmDialog } from "@/components/ui";
+import { ConfirmDialog, Reveal } from "@/components/ui";
 import {
   AuthError,
   BOOKMARKLET,
@@ -923,9 +923,11 @@ export function SettingsView() {
         </Notice>
       )}
 
-      <SupportSection />
+      <Reveal index={0}>
+        <SupportSection />
+      </Reveal>
 
-      <section className="space-y-3">
+      <Reveal as="section" index={1} className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-extrabold uppercase tracking-wide">Contas {data && <span className="tnum text-mute">({data.accounts.length}/{data.max})</span>}</h2>
           <button className="btn" data-active="true" onClick={() => setAdding(true)} disabled={full}>
@@ -939,27 +941,31 @@ export function SettingsView() {
           <div className="card p-8 text-center text-mute">Nenhuma conta ainda. Clique em <b>Adicionar conta</b> para começar.</div>
         )}
         <div className="space-y-2.5">
-          {data?.accounts.map((a) => (
-            <AccountRow key={a.id} acc={a} onChanged={load} />
+          {data?.accounts.map((a, n) => (
+            <Reveal key={a.id} index={n + 2} step={0.06}>
+              <AccountRow acc={a} onChanged={load} />
+            </Reveal>
           ))}
         </div>
-      </section>
+      </Reveal>
 
-      <section className="space-y-3">
+      <Reveal as="section" index={4} className="space-y-3">
         <h2 className="text-lg font-extrabold uppercase tracking-wide">Geral</h2>
         <div className="tile p-3 sm:p-4">
           <GlobalForm />
         </div>
-      </section>
+      </Reveal>
 
-      <UpdateSection />
+      <Reveal index={5}>
+        <UpdateSection />
+      </Reveal>
 
-      <section className="space-y-3">
+      <Reveal as="section" index={6} className="space-y-3">
         <h2 className="text-lg font-extrabold uppercase tracking-wide">Segurança</h2>
         <div className="tile p-3 sm:p-4">
           <SecurityGroup />
         </div>
-      </section>
+      </Reveal>
 
       <AnimatePresence>{adding && <AddAccountDialog onClose={() => setAdding(false)} onDone={load} />}</AnimatePresence>
     </div>

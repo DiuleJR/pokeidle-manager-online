@@ -39,7 +39,7 @@ interface Row {
  * - Item em várias contas: passar o mouse (ou tocar, no celular) vira o bloco numa lista com a quantidade de cada conta.
  * - Item em uma conta só: o nome da conta aparece embaixo da quantidade.
  */
-function ItemTile({ row, showAccounts, index }: { row: Row; showAccounts: boolean; index: number }) {
+function ItemTile({ row, showAccounts, index, settled }: { row: Row; showAccounts: boolean; index: number; settled: boolean }) {
   const multi = showAccounts && row.per.length > 1;
   const single = showAccounts && row.per.length === 1 ? row.per[0] : null;
   const [hover, setHover] = useState(false);
@@ -63,7 +63,7 @@ function ItemTile({ row, showAccounts, index }: { row: Row; showAccounts: boolea
   return (
     <motion.li
       ref={ref}
-      layout
+      layout={settled ? "position" : false}
       initial={{ opacity: 0, y: 14, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
@@ -181,6 +181,12 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
   }, [rows, query, onlyRare, group]);
 
   const showAccounts = account === "all";
+  // Reordenar com animação só depois da entrada: durante ela o layout lia a posição errada e os cards caíam do topo.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), 900);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div className="card p-2.5 sm:p-4">
@@ -210,7 +216,7 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
           <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 xl:grid-cols-7">
             <AnimatePresence mode="popLayout" initial>
               {shown.map((r, i) => (
-                <ItemTile key={r.key} row={r} showAccounts={showAccounts} index={i} />
+                <ItemTile key={r.key} row={r} showAccounts={showAccounts} index={i} settled={settled} />
               ))}
             </AnimatePresence>
           </ul>

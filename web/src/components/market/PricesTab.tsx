@@ -1,4 +1,5 @@
 import { AnimatePresence } from "framer-motion";
+import { Reveal } from "@/components/ui";
 import { Bell, Crosshair, ShoppingCart, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/SettingsView";
@@ -242,13 +243,13 @@ export function PricesTab() {
         <p className="card p-8 text-center text-sm text-mute">Nenhum item com esses filtros.</p>
       ) : (
         <ul className="space-y-1.5">
-          {rows.map((i) => {
+          {rows.map((i, n) => {
             const p = price(i);
             const a = avg(i);
             const d = discount(i);
             const both = moeda === "all";
             return (
-              <li key={i.id}>
+              <Reveal as="li" key={i.id} index={n} step={0.025} max={14}>
                 <div className="tile flex items-center gap-1 p-2 sm:gap-3 sm:p-2.5">
                   <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3" onClick={() => setOpen(i)}>
                     <ItemSprite icon={i.icon} size={36} alt="" />
@@ -283,7 +284,7 @@ export function PricesTab() {
                     <Star className={`size-[18px] ${i.fav ? "fill-poke-gold text-poke-gold" : ""}`} />
                   </button>
                 </div>
-              </li>
+              </Reveal>
             );
           })}
         </ul>

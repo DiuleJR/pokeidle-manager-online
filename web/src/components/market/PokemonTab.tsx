@@ -1,4 +1,5 @@
 import { AnimatePresence } from "framer-motion";
+import { Reveal } from "@/components/ui";
 import { Bell, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Check2 } from "@/components/SettingsView";
@@ -139,12 +140,12 @@ export function PokemonTab() {
         <>
           {res.data?.total != null && <p className="text-xs text-mute">{fmtInt(res.data.total)} anúncios</p>}
           <ul className="grid grid-cols-1 gap-1.5 lg:grid-cols-2">
-            {rows.map((l) => {
+            {rows.map((l, n) => {
               const f = l.ficha ?? {};
               const wait = secondsUntil(l.compravelEm, drift);
               const iv = f.ivTotal != null ? Math.round((f.ivTotal / 192) * 100) : null;
               return (
-                <li key={l.id} className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
+                <Reveal as="li" key={l.id} index={n} step={0.025} max={14} className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
                   <PokemonSprite looktype={f.looktype} size={56} />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
@@ -166,7 +167,7 @@ export function PokemonTab() {
                       <span className="hidden sm:inline">Comprar</span>
                     </button>
                   </div>
-                </li>
+                </Reveal>
               );
             })}
           </ul>

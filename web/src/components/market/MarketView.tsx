@@ -4,6 +4,7 @@ import { MineTab } from "./MineTab";
 import { PokemonTab } from "./PokemonTab";
 import { PricesTab } from "./PricesTab";
 import { RulesTab } from "./RulesTab";
+import { Reveal } from "@/components/ui";
 import { Seg } from "./shared";
 
 type Sub = "buy" | "sales" | "auto" | "mine";
@@ -37,6 +38,7 @@ export function MarketView() {
 
   return (
     <div className="mkt space-y-3 sm:space-y-4">
+      <Reveal index={0}>
       <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2" role="tablist" aria-label="Seção do mercado">
         {SUBS.map((s) => (
           <button
@@ -54,9 +56,11 @@ export function MarketView() {
           </button>
         ))}
       </div>
+      </Reveal>
 
+      <Reveal key={sub} index={1}>
       {sub === "buy" && (
-        <>
+        <div className="space-y-3 sm:space-y-4">
           <Seg
             label="O que comprar"
             value={kind}
@@ -70,11 +74,12 @@ export function MarketView() {
             ]}
           />
           {kind === "items" ? <PricesTab /> : <PokemonTab />}
-        </>
+        </div>
       )}
       {sub === "sales" && <HistoryTab />}
       {sub === "auto" && <RulesTab />}
       {sub === "mine" && <MineTab />}
+      </Reveal>
     </div>
   );
 }

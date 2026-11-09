@@ -146,3 +146,32 @@ export function GoldPerHourIcon({ size }: { size?: number }) {
     </span>
   );
 }
+
+/** Entrada padrão dos blocos de cada aba: sobe e aparece, escalonada por `index` (o resto da lista entra junto). */
+export function Reveal({
+  index = 0,
+  step = 0.05,
+  max = 9,
+  as = "div",
+  className,
+  children,
+}: {
+  index?: number;
+  step?: number;
+  max?: number;
+  as?: "div" | "li" | "section";
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const Tag = motion[as];
+  return (
+    <Tag
+      className={className}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: EASE, delay: Math.min(index, max) * step }}
+    >
+      {children}
+    </Tag>
+  );
+}
