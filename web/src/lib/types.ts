@@ -3,7 +3,7 @@
  *   WS   /ws/telemetry  -> { type:"snapshot", ts, accounts: AccountSnapshot[] }
  *   GET  /api/pokemons  -> { ts, pokemons: PokemonRow[] }   (sob demanda; lista grande)
  */
-export type AccountStatus = "online" | "paused_cooldown" | "offline";
+export type AccountStatus = "online" | "paused_cooldown" | "blocked" | "offline";
 
 export interface ActivePokemon {
   name: string;
@@ -41,6 +41,8 @@ export interface AccountSnapshot {
   level: number;
   status: AccountStatus;
   state?: string;
+  blocked?: { kind: string; detail: string } | null;
+  lastReason?: string;
   vip?: boolean;
   session?: SessionInfo;
   pokemon: ActivePokemon | null;

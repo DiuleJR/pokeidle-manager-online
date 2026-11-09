@@ -19,7 +19,22 @@ function pageToken(): string | null {
     return null;
   }
 }
-const PAGE_TOKEN = pageToken();
+let PAGE_TOKEN = pageToken();
+
+/** Chave do painel (a mesma usada nas rotas de leitura e de gestão). */
+export const panelKey = () => PAGE_TOKEN;
+/** Guarda a chave do painel neste navegador (localStorage). */
+export function savePanelKey(key: string) {
+  PAGE_TOKEN = key.trim() || null;
+  try {
+    if (PAGE_TOKEN) localStorage.setItem("pokeidle-token", PAGE_TOKEN);
+    else localStorage.removeItem("pokeidle-token");
+  } catch {
+    /* sem localStorage: a chave vale só até recarregar */
+  }
+}
+/** Origem HTTP do backend (para as rotas de gestão, que enviam a chave em header). */
+export const httpBase = () => parts().http;
 
 function parts() {
   const explicit = import.meta.env.VITE_TELEMETRY_URL as string | undefined;

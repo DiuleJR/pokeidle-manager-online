@@ -1,17 +1,19 @@
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { LayoutDashboard, Package } from "lucide-react";
+import { LayoutDashboard, Package, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AccountCard, type CardMode } from "@/components/AccountCard";
 import { ConnectionIndicator } from "@/components/ConnectionIndicator";
 import { AccountSelect, InventoryView } from "@/components/InventoryView";
+import { SettingsView } from "@/components/SettingsView";
 import { SummaryBar } from "@/components/SummaryBar";
 import { Frame } from "@/components/ui";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 
-type Tab = "dashboard" | "inventario";
+type Tab = "dashboard" | "inventario" | "config";
 const TABS: { id: Tab; label: string; Icon: typeof Package }[] = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { id: "inventario", label: "Inventários", Icon: Package },
+  { id: "config", label: "Configurações", Icon: Settings },
 ];
 const MODES: { id: CardMode; label: string }[] = [
   { id: "resumo", label: "Resumo" },
@@ -19,7 +21,8 @@ const MODES: { id: CardMode; label: string }[] = [
 ];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const readTab = (): Tab => (location.hash === "#inventario" ? "inventario" : "dashboard");
+const readTab = (): Tab => (location.hash === "#inventario" ? "inventario" : location.hash === "#config" ? "config" : "dashboard");
+const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", config: "Configurações" };
 
 /** Seletor segmentado com "pílula" que desliza entre as opções. */
 function Segmented<T extends string>({
@@ -114,7 +117,7 @@ export default function App() {
               />
               <div>
                 <h1 className="text-base font-extrabold uppercase leading-none tracking-wide sm:text-3xl">
-                  {tab === "dashboard" ? "Painel de Contas" : "Inventários"}
+                  {TITLES[tab]}
                 </h1>
                 <p className="mt-1 text-xs text-mute sm:mt-1.5 sm:text-sm">
                   <span className="tnum">
@@ -133,7 +136,7 @@ export default function App() {
               <LayoutGroup id="nav">
                 <Segmented id="tab" className="hidden sm:flex" options={TABS} value={tab} onChange={go} />
                 <AnimatePresence mode="popLayout" initial={false}>
-                  {tab === "dashboard" ? (
+                  {tab === "config" ? null : tab === "dashboard" ? (
                     <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: EASE }}>
                       <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
                     </motion.div>
@@ -159,7 +162,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25, ease: EASE }}
               >
-                {tab === "dashboard" ? <Dashboard mode={mode} /> : <InventoryView account={account} />}
+                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : <SettingsView />}
               </motion.div>
             </AnimatePresence>
           </main>

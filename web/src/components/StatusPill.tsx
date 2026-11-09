@@ -3,6 +3,7 @@ import type { AccountStatus } from "@/lib/types";
 const MAP: Record<AccountStatus, { label: string; box: string; dot: string; pulse: boolean }> = {
   online: { label: "Conectado", box: "sm:border-[#2f6b3a] sm:bg-[#16301c] text-poke-green", dot: "bg-poke-green", pulse: true },
   paused_cooldown: { label: "Pausado", box: "sm:border-[#7a5a1c] sm:bg-[#33260e] text-poke-gold", dot: "bg-poke-gold", pulse: false },
+  blocked: { label: "Ação necessária", box: "sm:border-[#7a2f27] sm:bg-[#32140f] text-poke-red", dot: "bg-poke-red", pulse: true },
   offline: { label: "Offline", box: "sm:border-[#7a2f27] sm:bg-[#32140f] text-poke-red", dot: "bg-poke-red", pulse: false },
 };
 
