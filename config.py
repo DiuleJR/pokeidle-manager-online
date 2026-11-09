@@ -1,10 +1,14 @@
-"""Carregamento de configuração (.env) para até 4 contas.
+"""Configuração: modelos de conta/proxy e leitura do .env.
 
-Variáveis globais:
-    WS_URL                  URL wss:// do servidor do jogo (NÃO consta na spec; obrigatória)
+As contas e as configurações do painel vivem no banco (store.py). O .env só é
+lido para (a) o bootstrap do servidor (host/porta/token do painel) e (b) importar
+as contas ACCn_* na primeira execução, para quem já usava o formato antigo.
+
+Variáveis globais (opcionais):
+    WS_URL                  URL wss:// do servidor do jogo (padrão: wss://pokeidle.io)
     EXTERNAL_LOGIN_CLOSE_CODES  close codes que indicam login externo (default: 4001,4003,1008)
 
-Variáveis por conta (N = 1..4). Conta só é ativada se ACCn_TOKEN existir:
+Variáveis por conta (N = 1..4). Conta só é importada se ACCn_TOKEN existir:
     ACCn_NICK, ACCn_TOKEN, ACCn_DEVICE_ID
     ACCn_PROXY_SCHEME  (http | socks5 | socks5h)
     ACCn_PROXY_HOST, ACCn_PROXY_PORT, ACCn_PROXY_USER, ACCn_PROXY_PASS
@@ -18,6 +22,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 MAX_ACCOUNTS = 4
+DEFAULT_WS_URL = "wss://pokeidle.io"
 
 # Parâmetros de protocolo (spec: spec do protocolo + requisitos do usuário)
 WELCOME_TIMEOUT = 15      # s esperando 'welcome' após 'hello'
@@ -101,7 +106,54 @@ class Settings:
     accounts: list[AccountConfig]
 
 
-def _load_account(i: int) -> AccountConfig | None:
+# Opções por conta (guardadas no banco como JSON) e seus padrões.
+OPTION_DEFAULTS: dict = {
+    "hunt_slug": "",
+    "auto_catch": True,
+    "ball_priority": list(DEFAULT_BALL_PRIORITY),
+    "auto_potion": True,
+    "potion_id": None,
+    "potion_restock_threshold": DEFAULT_POTION_RESTOCK_THRESHOLD,
+    "potion_restock_qty": DEFAULT_POTION_RESTOCK_QTY,
+    "auto_ball_restock": True,
+    "ball_id": None,
+    "ball_restock_threshold": DEFAULT_BALL_RESTOCK_THRESHOLD,
+    "ball_restock_qty": DEFAULT_BALL_RESTOCK_QTY,
+}
+
+
+def build_account_config(d: dict) -> AccountConfig:
+    """Monta o AccountConfig de runtime a partir de um dict de conta (formato do store)."""
+    proxy: ProxyConfig | None = None
+    p = d.get("proxy") or {}
+    if p.get("host"):
+        scheme = (p.get("scheme") or "socks5").strip().lower()
+        if scheme not in VALID_SCHEMES:
+            raise ValueError(f"proxy: esquema inválido {scheme!r} (use {sorted(VALID_SCHEMES)})")
+        proxy = ProxyConfig(scheme=scheme, host=str(p["host"]).strip(), port=int(p["port"]),
+                            username=p.get("username") or "", password=p.get("password") or "")
+    o = {**OPTION_DEFAULTS, **(d.get("options") or {})}
+    prio = o["ball_priority"]
+    if isinstance(prio, str):
+        prio = [x for x in prio.split(",") if x.strip()]
+    return AccountConfig(
+        index=int(d["id"]), nick=d["nick"], token=d["token"], device_id=d["device_id"],
+        proxy=proxy, hunt_slug=(o["hunt_slug"] or None),
+        auto_catch=bool(o["auto_catch"]),
+        ball_priority=tuple(int(x) for x in prio) or tuple(DEFAULT_BALL_PRIORITY),
+        auto_potion=bool(o["auto_potion"]),
+        potion_id=int(o["potion_id"]) if o["potion_id"] not in (None, "") else None,
+        potion_restock_threshold=int(o["potion_restock_threshold"]),
+        potion_restock_qty=int(o["potion_restock_qty"]),
+        auto_ball_restock=bool(o["auto_ball_restock"]),
+        ball_id=int(o["ball_id"]) if o["ball_id"] not in (None, "") else None,
+        ball_restock_threshold=int(o["ball_restock_threshold"]),
+        ball_restock_qty=int(o["ball_restock_qty"]),
+    )
+
+
+def _env_account(i: int) -> dict | None:
+    """Lê ACCi_* do ambiente no formato de dict do store. None = slot vazio."""
     p = f"ACC{i}_"
     token = os.getenv(p + "TOKEN", "").strip()
     if not token:
@@ -113,60 +165,45 @@ def _load_account(i: int) -> AccountConfig | None:
             raise ValueError(f"Variável obrigatória ausente: {p}{key}")
         return val
 
-    proxy_host = os.getenv(p + "PROXY_HOST", "").strip()
-    proxy: ProxyConfig | None = None
-    if proxy_host:
-        scheme = os.getenv(p + "PROXY_SCHEME", "socks5").strip().lower()
-        if scheme not in VALID_SCHEMES:
-            raise ValueError(f"{p}PROXY_SCHEME inválido: {scheme} (use {sorted(VALID_SCHEMES)})")
-        proxy = ProxyConfig(
-            scheme=scheme,
-            host=proxy_host,
-            port=int(req("PROXY_PORT")),
-            username=os.getenv(p + "PROXY_USER", ""),
-            password=os.getenv(p + "PROXY_PASS", ""),
-        )
-    hunt_slug = os.getenv(p + "HUNT_SLUG", "").strip() or None
+    def num(key: str) -> int | None:
+        val = os.getenv(p + key, "").strip()
+        return int(val) if val else None
 
     def flag(key: str, default: bool) -> bool:
         val = os.getenv(p + key, "").strip().lower()
         return default if not val else val in ("1", "true", "yes", "on")
 
-    ball_priority_raw = os.getenv(p + "BALL_PRIORITY", "").strip()
-    ball_priority = (tuple(int(x) for x in ball_priority_raw.split(",") if x.strip())
-                     if ball_priority_raw else tuple(DEFAULT_BALL_PRIORITY))
+    proxy = None
+    host = os.getenv(p + "PROXY_HOST", "").strip()
+    if host:
+        proxy = {"scheme": os.getenv(p + "PROXY_SCHEME", "socks5").strip().lower(),
+                 "host": host, "port": int(req("PROXY_PORT")),
+                 "username": os.getenv(p + "PROXY_USER", ""),
+                 "password": os.getenv(p + "PROXY_PASS", "")}
+    prio_raw = os.getenv(p + "BALL_PRIORITY", "").strip()
+    options = {
+        "hunt_slug": os.getenv(p + "HUNT_SLUG", "").strip(),
+        "auto_catch": flag("AUTO_CATCH", True),
+        "ball_priority": ([int(x) for x in prio_raw.split(",") if x.strip()]
+                          if prio_raw else list(DEFAULT_BALL_PRIORITY)),
+        "auto_potion": flag("AUTO_POTION", True),
+        "potion_id": num("POTION_ID"),
+        "potion_restock_threshold": num("POTION_RESTOCK_THRESHOLD") or DEFAULT_POTION_RESTOCK_THRESHOLD,
+        "potion_restock_qty": num("POTION_RESTOCK_QTY") or DEFAULT_POTION_RESTOCK_QTY,
+        "auto_ball_restock": flag("AUTO_BALL_RESTOCK", True),
+        "ball_id": num("BALL_ID"),
+        "ball_restock_threshold": num("BALL_RESTOCK_THRESHOLD") or DEFAULT_BALL_RESTOCK_THRESHOLD,
+        "ball_restock_qty": num("BALL_RESTOCK_QTY") or DEFAULT_BALL_RESTOCK_QTY,
+    }
+    return {"id": i, "nick": req("NICK"), "token": token, "device_id": req("DEVICE_ID"),
+            "proxy": proxy, "options": options}
 
-    return AccountConfig(
-        i, req("NICK"), token, req("DEVICE_ID"), proxy, hunt_slug,
-        auto_catch=flag("AUTO_CATCH", True),
-        ball_priority=ball_priority,
-        auto_potion=flag("AUTO_POTION", True),
-        potion_id=(int(os.getenv(p + "POTION_ID", "").strip())
-                  if os.getenv(p + "POTION_ID", "").strip() else None),
-        potion_restock_threshold=int(os.getenv(p + "POTION_RESTOCK_THRESHOLD",
-                                                str(DEFAULT_POTION_RESTOCK_THRESHOLD))),
-        potion_restock_qty=int(os.getenv(p + "POTION_RESTOCK_QTY",
-                                         str(DEFAULT_POTION_RESTOCK_QTY))),
-        auto_ball_restock=flag("AUTO_BALL_RESTOCK", True),
-        ball_id=(int(os.getenv(p + "BALL_ID", "").strip())
-                 if os.getenv(p + "BALL_ID", "").strip() else None),
-        ball_restock_threshold=int(os.getenv(p + "BALL_RESTOCK_THRESHOLD",
-                                             str(DEFAULT_BALL_RESTOCK_THRESHOLD))),
-        ball_restock_qty=int(os.getenv(p + "BALL_RESTOCK_QTY",
-                                       str(DEFAULT_BALL_RESTOCK_QTY))),
-    )
+
+def load_env_accounts() -> list[dict]:
+    """Contas ACC1..ACC4 do ambiente (formato antigo), para importar no banco."""
+    return [a for i in range(1, MAX_ACCOUNTS + 1) if (a := _env_account(i))]
 
 
-def load_settings(env_file: str | None = None) -> Settings:
-    load_dotenv(env_file)
-    ws_url = os.getenv("WS_URL", "").strip()
-    if not ws_url.startswith(("ws://", "wss://")):
-        raise ValueError("WS_URL ausente ou inválida (deve começar com ws:// ou wss://)")
-
+def parse_close_codes() -> frozenset[int]:
     codes = os.getenv("EXTERNAL_LOGIN_CLOSE_CODES", "4001,4003,1008")
-    code_set = frozenset(int(c) for c in codes.split(",") if c.strip())
-
-    accounts = [a for i in range(1, MAX_ACCOUNTS + 1) if (a := _load_account(i))]
-    if not accounts:
-        raise ValueError("Nenhuma conta configurada (defina ACC1_TOKEN, ...)")
-    return Settings(ws_url, code_set, accounts)
+    return frozenset(int(c) for c in codes.split(",") if c.strip())

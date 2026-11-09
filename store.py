@@ -1,0 +1,229 @@
+"""Persistência em SQLite: contas e configurações globais do painel.
+
+Arquivo: $DATA_DIR/app.db (padrão: ./data/app.db ao lado do código). Guarda tokens e
+senhas de proxy em texto puro, então o arquivo é criado com permissão restrita
+(0600 em Linux/macOS). Não exponha a pasta de dados nem faça commit dela.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import secrets
+import sqlite3
+import threading
+import time
+
+import config
+
+log = logging.getLogger("store")
+
+DEVICE_ID_RE = re.compile(r"^[a-zA-Z0-9-]{8,64}$")  # mesmo formato aceito pelo jogo
+
+# Configurações globais: chave -> (padrão, é segredo)
+SETTING_DEFAULTS: dict[str, str] = {
+    "ws_url": config.DEFAULT_WS_URL,
+    "discord_webhook": "",
+    "report_hour": "0",
+    "report_tz": "America/Sao_Paulo",
+    "public_url": "",
+}
+SECRET_SETTINGS = {"discord_webhook"}
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nick TEXT NOT NULL,
+    token TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    proxy_scheme TEXT, proxy_host TEXT, proxy_port INTEGER,
+    proxy_user TEXT, proxy_pass TEXT,
+    opts TEXT NOT NULL DEFAULT '{}',
+    token_status TEXT NOT NULL DEFAULT 'unknown',
+    token_detail TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
+
+def data_dir() -> str:
+    d = os.getenv("DATA_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def new_device_id() -> str:
+    import uuid
+    return str(uuid.uuid4())
+
+
+def mask(secret: str, keep: int = 4) -> str:
+    """'abcdef123456' -> '…3456' (nunca devolve o segredo inteiro)."""
+    if not secret:
+        return ""
+    return "…" + secret[-keep:] if len(secret) > keep * 2 else "…"
+
+
+class Store:
+    def __init__(self, path: str | None = None) -> None:
+        self.path = path or os.path.join(data_dir(), "app.db")
+        new = not os.path.exists(self.path)
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._db.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        with self._lock:
+            self._db.executescript(_SCHEMA)
+            self._db.commit()
+        if new:
+            try:
+                os.chmod(self.path, 0o600)  # no Windows é ignorado
+            except OSError:
+                pass
+
+    # ----------------------------------------------------------- contas
+    @staticmethod
+    def _row(r: sqlite3.Row) -> dict:
+        proxy = None
+        if r["proxy_host"]:
+            proxy = {"scheme": r["proxy_scheme"] or "socks5", "host": r["proxy_host"],
+                     "port": r["proxy_port"], "username": r["proxy_user"] or "",
+                     "password": r["proxy_pass"] or ""}
+        try:
+            options = json.loads(r["opts"] or "{}")
+        except ValueError:
+            options = {}
+        return {"id": r["id"], "nick": r["nick"], "token": r["token"], "device_id": r["device_id"],
+                "enabled": bool(r["enabled"]), "proxy": proxy, "options": options,
+                "token_status": r["token_status"], "token_detail": r["token_detail"],
+                "created_at": r["created_at"]}
+
+    def list_accounts(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM accounts ORDER BY id").fetchall()
+        return [self._row(r) for r in rows]
+
+    def get_account(self, acc_id: int) -> dict | None:
+        with self._lock:
+            r = self._db.execute("SELECT * FROM accounts WHERE id=?", (acc_id,)).fetchone()
+        return self._row(r) if r else None
+
+    def count_accounts(self) -> int:
+        with self._lock:
+            return self._db.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
+
+    def add_account(self, d: dict, acc_id: int | None = None) -> int:
+        p = d.get("proxy") or {}
+        with self._lock:
+            cur = self._db.execute(
+                "INSERT INTO accounts (id, nick, token, device_id, enabled, proxy_scheme, proxy_host,"
+                " proxy_port, proxy_user, proxy_pass, opts, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (acc_id, d["nick"], d["token"], d["device_id"], 1 if d.get("enabled", True) else 0,
+                 p.get("scheme"), p.get("host"), p.get("port"), p.get("username"), p.get("password"),
+                 json.dumps(d.get("options") or {}), time.time()))
+            self._db.commit()
+            return int(cur.lastrowid)
+
+    def update_account(self, acc_id: int, changes: dict) -> None:
+        """Atualiza só as chaves presentes: nick, token, device_id, enabled, proxy (None limpa), options (mescla)."""
+        cols: list[str] = []
+        vals: list = []
+        for k in ("nick", "token", "device_id"):
+            if k in changes:
+                cols.append(f"{k}=?")
+                vals.append(changes[k])
+        if "enabled" in changes:
+            cols.append("enabled=?")
+            vals.append(1 if changes["enabled"] else 0)
+        if "proxy" in changes:
+            p = changes["proxy"] or {}
+            for col, key in (("proxy_scheme", "scheme"), ("proxy_host", "host"), ("proxy_port", "port"),
+                             ("proxy_user", "username"), ("proxy_pass", "password")):
+                cols.append(f"{col}=?")
+                vals.append(p.get(key))
+        if "options" in changes:
+            cur = self.get_account(acc_id)
+            merged = {**(cur["options"] if cur else {}), **(changes["options"] or {})}
+            cols.append("opts=?")
+            vals.append(json.dumps(merged))
+        if "token" in changes or "nick" in changes:
+            cols += ["token_status=?", "token_detail=?"]
+            vals += ["unknown", ""]
+        if not cols:
+            return
+        with self._lock:
+            self._db.execute(f"UPDATE accounts SET {', '.join(cols)} WHERE id=?", (*vals, acc_id))
+            self._db.commit()
+
+    def set_token(self, acc_id: int, token: str) -> None:
+        """Token renovado pelo servidor (sessao.renovada): não zera o status."""
+        with self._lock:
+            self._db.execute("UPDATE accounts SET token=? WHERE id=?", (token, acc_id))
+            self._db.commit()
+
+    def set_token_status(self, acc_id: int, status: str, detail: str = "") -> None:
+        with self._lock:
+            self._db.execute("UPDATE accounts SET token_status=?, token_detail=? WHERE id=?",
+                             (status, detail, acc_id))
+            self._db.commit()
+
+    def delete_account(self, acc_id: int) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM accounts WHERE id=?", (acc_id,))
+            self._db.commit()
+
+    # ----------------------------------------------------------- configurações
+    def get_setting(self, key: str) -> str:
+        with self._lock:
+            r = self._db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return r["value"] if r else SETTING_DEFAULTS.get(key, "")
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock:
+            self._db.execute("INSERT INTO settings(key, value) VALUES(?, ?) "
+                             "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+            self._db.commit()
+
+    def all_settings(self) -> dict[str, str]:
+        return {k: self.get_setting(k) for k in SETTING_DEFAULTS}
+
+    # ----------------------------------------------------------- chave do painel
+    def admin_key(self) -> str:
+        """Chave do painel: TELEMETRY_TOKEN do ambiente, ou uma chave gerada na 1ª execução."""
+        env = os.getenv("TELEMETRY_TOKEN", "").strip()
+        if env:
+            return env
+        key = self.get_setting("admin_key")
+        if not key:
+            key = secrets.token_urlsafe(18)
+            self.set_setting("admin_key", key)
+            self.generated_key_now = True
+        return key
+
+    generated_key_now = False
+
+    # ----------------------------------------------------------- migração do .env
+    def import_env_once(self) -> int:
+        """Na 1ª execução com banco vazio, importa ACC1..ACC4 e WS_URL/webhook/etc. do ambiente."""
+        if self.get_setting("env_imported") == "1":
+            return 0
+        n = 0
+        if self.count_accounts() == 0:
+            for acc in config.load_env_accounts():
+                self.add_account(acc, acc_id=acc["id"])  # preserva o id (acc1..acc4)
+                n += 1
+        for env_key, key in (("WS_URL", "ws_url"), ("DISCORD_WEBHOOK_URL", "discord_webhook"),
+                             ("DAILY_REPORT_HOUR", "report_hour"), ("REPORT_TZ", "report_tz"),
+                             ("PUBLIC_URL", "public_url")):
+            val = os.getenv(env_key, "").strip()
+            if val and not val.startswith("wss://CHANGE_ME"):
+                self.set_setting(key, val.rstrip("/") if key == "public_url" else val)
+        self.set_setting("env_imported", "1")
+        if n:
+            log.info("%d conta(s) importada(s) do .env para o banco", n)
+        return n

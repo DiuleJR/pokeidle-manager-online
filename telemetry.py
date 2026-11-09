@@ -8,7 +8,7 @@ Endpoints:
 Auth opcional (TELEMETRY_TOKEN): HTTP via `Authorization: Bearer <token>` ou
 `?token=`; WebSocket via `?token=` (browsers não enviam headers no WS).
 
-Somente leitura: nunca expõe token/proxy/device_id das contas.
+Nunca expõe token/proxy/device_id das contas. As rotas de gestão ficam em admin_api.py.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import hmac
 import json
 import os
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 _STATUS = {
     State.ONLINE: "online",
     State.PAUSED_COOLDOWN: "paused_cooldown",
+    State.BLOCKED: "blocked",
 }  # o resto (DISCONNECTED/CONNECTING/AUTHENTICATING) -> "offline"
 
 
@@ -148,6 +149,8 @@ def account_snapshot(c: "AccountConnection") -> dict:
         "level": est.get("level") or 0,
         "status": _STATUS.get(c.state, "offline"),
         "state": c.state.value,  # estado detalhado, p/ debug
+        "blocked": c.block,      # {kind, detail} quando o jogo recusou a conta
+        "lastReason": c.last_reason,
         "pokemon": {
             "name": pk.get("nome", "?"),
             "hp": pk.get("hp", 0),
@@ -195,15 +198,22 @@ def build_snapshot(conns: "list[AccountConnection]") -> dict:
 
 
 def create_app(
-    conns: "list[AccountConnection]",
+    conns: "list[AccountConnection] | Callable[[], list[AccountConnection]]",
     token: str = "",
     interval: float = 1.0,
     cors_origins: list[str] | None = None,
+    manager=None,
+    store=None,
+    admin_key: str = "",
 ) -> FastAPI:
+    """`conns` pode ser uma lista fixa ou uma função (contas mudam em tempo de execução).
+    Com `manager`/`store`/`admin_key`, registra também as rotas de gestão (admin_api.py)."""
+    get_conns = conns if callable(conns) else (lambda: conns)
     app = FastAPI(title="Pokeidle Manager Telemetry", docs_url=None, redoc_url=None)
     if cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=cors_origins,
-                           allow_methods=["GET", "POST"], allow_headers=["Authorization"])
+                           allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
+                           allow_headers=["Authorization", "Content-Type"])
 
     def authorized(supplied: str | None) -> bool:
         return not token or (supplied is not None and hmac.compare_digest(supplied, token))
@@ -218,7 +228,7 @@ def create_app(
         supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
         if not authorized(supplied):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        return build_snapshot(conns)
+        return build_snapshot(get_conns())
 
     atlas_cache: dict = {}
 
@@ -246,7 +256,7 @@ def create_app(
         if not authorized(supplied):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         rows: list[dict] = []
-        for c in conns:
+        for c in get_conns():
             if account in (None, "", f"acc{c.acc.index}"):
                 rows.extend(pokemon_rows(c))
         return {"ts": int(time.time() * 1000), "pokemons": rows}
@@ -261,7 +271,7 @@ def create_app(
         supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
         if not authorized(supplied):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        targets = [c for c in conns if account in (None, "", f"acc{c.acc.index}")]
+        targets = [c for c in get_conns() if account in (None, "", f"acc{c.acc.index}")]
         if not targets:
             return JSONResponse({"error": "conta não encontrada"}, status_code=404)
 
@@ -284,10 +294,14 @@ def create_app(
         await ws.accept()
         try:
             while True:
-                await ws.send_json(build_snapshot(conns))
+                await ws.send_json(build_snapshot(get_conns()))
                 await asyncio.sleep(interval)
         except (WebSocketDisconnect, RuntimeError):
             pass
+
+    if manager is not None and store is not None and admin_key:
+        from admin_api import register_admin_routes
+        register_admin_routes(app, manager, store, admin_key)
 
     # Dashboard estático (build do Vite) na raiz; rotas /api e /ws acima têm prioridade.
     web_dir = os.getenv("WEB_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_dist")

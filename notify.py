@@ -1,9 +1,8 @@
 """Notificações para um webhook do Discord + estatísticas diárias.
 
-Variáveis (.env):
-    DISCORD_WEBHOOK_URL   URL do webhook (vazia = notificações desligadas)
-    DAILY_REPORT_HOUR     hora local (0-23) em que o dia "vira" e o relatório sai (padrão 0)
-    REPORT_TZ             fuso horário (padrão America/Sao_Paulo)
+Webhook, hora da virada do dia e fuso são configurados no painel (aba Configurações).
+As variáveis DISCORD_WEBHOOK_URL, DAILY_REPORT_HOUR e REPORT_TZ do .env só são lidas
+como padrão inicial (e importadas para o banco na 1ª execução).
 
 O envio é assíncrono por uma fila: nunca bloqueia o bot e respeita o rate limit (429).
 """
@@ -31,6 +30,12 @@ BOT_NAME = "Link Kun"
 # montar a URL do ícone (thumbnail) nos embeds — ex.: item raro obtido. Sem ela,
 # os embeds saem sem thumbnail (nada quebra, só fica sem o ícone).
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
+
+
+def set_public_url(url: str) -> None:
+    """Define a URL pública do dashboard (configurável no painel)."""
+    global PUBLIC_URL
+    PUBLIC_URL = (url or "").strip().rstrip("/")
 
 
 def rare_icon_url(key: str) -> str | None:
@@ -82,13 +87,14 @@ class Notifier:
             log.warning("fila de notificações cheia; mensagem descartada")
 
     async def run(self) -> None:
-        """Worker: esvazia a fila para sempre (rodar em paralelo com o bot)."""
-        if not self.enabled:
-            return
+        """Worker: esvazia a fila para sempre (rodar em paralelo com o bot).
+        Fica de pé mesmo com o webhook vazio: ele pode ser definido depois, pelo painel."""
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             while True:
                 payload = await self._queue.get()
+                if not self.enabled:
+                    continue
                 for attempt in range(4):
                     try:
                         async with session.post(self.url, json=payload) as r:
@@ -132,6 +138,11 @@ class DailyStats:
             pass
         except (OSError, ValueError) as e:
             log.warning("daily_state ilegível (%s); começando do zero", e)
+
+    def set_schedule(self, report_hour: int, tz_name: str) -> None:
+        """Muda hora de virada do dia e fuso (painel). O período corrente é recalculado no próximo ciclo."""
+        self.report_hour = int(report_hour) % 24
+        self.tz = _load_tz(tz_name or "America/Sao_Paulo")
 
     # --- período
     def current_period(self) -> str:

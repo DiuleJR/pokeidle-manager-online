@@ -26,3 +26,6 @@ daily_state.json
 
 # Documentação local do protocolo (não publicada)
 docs/
+
+# Banco local do painel (contas e tokens)
+data/

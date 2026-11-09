@@ -15,6 +15,7 @@ import json
 import logging
 import ssl
 import time
+from dataclasses import replace
 from urllib.parse import urlparse
 
 import aiohttp
@@ -42,10 +43,112 @@ class State(enum.Enum):
     AUTHENTICATING = "AUTHENTICATING"
     ONLINE = "ONLINE"
     PAUSED_COOLDOWN = "PAUSED_COOLDOWN"
+    BLOCKED = "BLOCKED"   # precisa de ação do usuário (token inválido, ban...): não reconecta sozinho
 
 
 class AuthRejected(Exception):
     """Servidor rejeitou credenciais (401/403) ou sessão tomada por login externo."""
+
+
+class AccountBlocked(Exception):
+    """O jogo recusou a conta por um motivo que não some sozinho (token inválido, ban...)."""
+
+    def __init__(self, kind: str, detail: str) -> None:
+        super().__init__(detail)
+        self.kind = kind
+        self.detail = detail
+
+
+class NetworkFull(Exception):
+    """Rede/IP no limite de contas online: tentar de novo em instantes."""
+
+
+# Frames {t:'erro', chave:...} do jogo que significam "esta conta/rede não entra".
+# Chaves observadas no cliente web (ALERTAS_DO_SOCKET).
+BLOCKING_KEYS: dict[str, tuple[str, str]] = {
+    "auth.sessaoInvalida": ("invalid", "Sessão inválida ou expirada: reimporte a conta"),
+    "auth.precisaLogin": ("invalid", "Sessão inválida ou expirada: reimporte a conta"),
+    "auth.contaBanida": ("banned", "Conta banida pelo jogo"),
+    "auth.ipBanido": ("net_banned", "Rede (IP) banida pelo jogo"),
+    "auth.provedorBanido": ("net_banned", "Provedor de rede banido pelo jogo"),
+    "auth.contaExcluida": ("deleted", "Conta excluída"),
+    "login.precisaNick": ("needs_nick", "A conta precisa escolher um nick dentro do jogo"),
+}
+NETWORK_FULL_KEYS = {"login.limiteOnlineIp", "login.limiteOnlineIpLista"}
+NETWORK_FULL_RETRY_S = 30
+
+
+def build_hello(acc: AccountConfig) -> str:
+    return json.dumps({
+        "t": "hello",
+        "nick": acc.nick,
+        "token": acc.token,
+        "delta": 1,                    # função desconhecida; valor observado
+        "dispositivo": acc.device_id,
+    })
+
+
+async def open_tunnel(acc: AccountConfig, ws_url: str):
+    """Abre socket TCP até o servidor do jogo via proxy da conta (só quando há proxy)."""
+    u = urlparse(ws_url)
+    port = u.port or (443 if u.scheme == "wss" else 80)
+    proxy = Proxy.from_url(acc.proxy.url)
+    return await proxy.connect(dest_host=u.hostname, dest_port=port, timeout=20)
+
+
+async def probe_exit_ip(acc_proxy) -> str:
+    """IP de saída real (via proxy, ou direto se proxy=None)."""
+    connector = ProxyConnector.from_url(acc_proxy.url) if acc_proxy is not None else None
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as s:
+        async with s.get("https://api.ipify.org") as r:
+            return (await r.text()).strip()
+
+
+async def probe_account(acc: AccountConfig, ws_url: str, timeout: float = 25.0) -> dict:
+    """Testa uma conta: hello -> welcome. Devolve {ok, kind, detail, nick?, level?, hunts?}.
+
+    ATENÇÃO: conecta de verdade com o token. Se o mesmo token estiver aberto em outro
+    lugar (navegador, outro bot), o jogo derruba o outro (close 4001)."""
+    u = urlparse(ws_url)
+    ssl_ctx = ssl.create_default_context() if u.scheme == "wss" else None
+    kwargs: dict = {}
+    try:
+        if acc.proxy is not None:
+            sock = await open_tunnel(acc, ws_url)
+            kwargs = {"sock": sock, "server_hostname": u.hostname if ssl_ctx else None}
+        async with connect(ws_url, ssl=ssl_ctx, max_size=None, open_timeout=20, **kwargs) as ws:
+            await ws.send(build_hello(acc))
+
+            async def _wait() -> dict:
+                async for raw in ws:
+                    msg = _parse(raw)
+                    if msg.get("t") == "welcome":
+                        est = msg.get("estado") or {}
+                        return {"ok": True, "kind": "ok", "detail": "", "nick": est.get("nick"),
+                                "level": est.get("level"),
+                                "hunts": [h.get("slug") for h in msg.get("hunts", []) if isinstance(h, dict)]}
+                    if msg.get("t") == "erro":
+                        chave = msg.get("chave") or ""
+                        if chave in BLOCKING_KEYS:
+                            kind, detail = BLOCKING_KEYS[chave]
+                            return {"ok": False, "kind": kind, "detail": detail}
+                        if chave in NETWORK_FULL_KEYS:
+                            return {"ok": False, "kind": "net_full",
+                                    "detail": "Rede no limite de contas online: tente de novo em instantes"}
+                return {"ok": False, "kind": "closed", "detail": "O servidor fechou a conexão sem welcome"}
+
+            try:
+                return await asyncio.wait_for(_wait(), timeout)
+            except asyncio.TimeoutError:
+                return {"ok": False, "kind": "timeout", "detail": f"welcome não recebido em {timeout:.0f}s"}
+    except ConnectionClosed as e:
+        code = e.rcvd.code if e.rcvd else None
+        return {"ok": False, "kind": "closed", "detail": f"Conexão fechada (code {code})"}
+    except InvalidStatus as e:
+        return {"ok": False, "kind": "http", "detail": f"HTTP {e.response.status_code} no upgrade"}
+    except (ProxyError, OSError, aiohttp.ClientError) as e:
+        return {"ok": False, "kind": "network", "detail": f"Falha de proxy/rede: {type(e).__name__}"}
 
 
 class AccountConnection:
@@ -59,6 +162,10 @@ class AccountConnection:
         self._down_since: float | None = None
         self._down_alerted = False
         self.state = State.DISCONNECTED
+        self.block: dict | None = None    # {kind, detail} quando BLOCKED
+        self.last_reason = ""             # último motivo de queda/pausa, para o painel
+        self.on_auth_status = None        # callback(acc_id, status, detail): painel/banco
+        self.on_token_renewed = None      # callback(acc_id, novo_token)
         self.exit_ip = "?"
         self._no_proxy = account.proxy is None
         self.estado: dict = {}   # snapshot do welcome, mutado pelo HuntManager
@@ -113,7 +220,7 @@ class AccountConnection:
                     self.acc.nick, "🟢 Voltou ao ar.", GREEN,
                     [("Tempo fora", fmt_duration(time.time() - self._down_since), True)])
             self._was_online, self._down_since, self._down_alerted = True, None, False
-        elif state in (State.DISCONNECTED, State.PAUSED_COOLDOWN) and self._was_online:
+        elif state in (State.DISCONNECTED, State.PAUSED_COOLDOWN, State.BLOCKED) and self._was_online:
             if self._down_since is None:
                 self._down_since = time.time()
             if not self._down_alerted:
@@ -124,34 +231,36 @@ class AccountConnection:
     # ----------------------------------------------------------- proxy utils
     async def _probe_exit_ip(self) -> str:
         """Descobre o IP de saída real (via proxy, ou direto se não configurado)."""
-        connector = ProxyConnector.from_url(self.acc.proxy.url) if not self._no_proxy else None
-        timeout = aiohttp.ClientTimeout(total=15)
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as s:
-            async with s.get("https://api.ipify.org") as r:
-                return (await r.text()).strip()
+        return await probe_exit_ip(None if self._no_proxy else self.acc.proxy)
 
     async def _open_tunnel(self):
         """Abre socket TCP até o servidor do jogo via proxy. Só chamada quando há proxy."""
-        u = urlparse(self.settings.ws_url)
-        port = u.port or (443 if u.scheme == "wss" else 80)
-        proxy = Proxy.from_url(self.acc.proxy.url)
-        return await proxy.connect(dest_host=u.hostname, dest_port=port, timeout=20)
+        return await open_tunnel(self.acc, self.settings.ws_url)
 
     # ----------------------------------------------------------- handshake
     def _hello(self) -> str:
-        return json.dumps({
-            "t": "hello",
-            "nick": self.acc.nick,
-            "token": self.acc.token,
-            "delta": 1,                    # ❓ função desconhecida; valor observado
-            "dispositivo": self.acc.device_id,
-        })
+        return build_hello(self.acc)
+
+    def _check_erro(self, msg: dict) -> None:
+        """Transforma frames de recusa do jogo em exceções: o bot para (ou espera) em vez de
+        ficar reconectando sem adiantar. Não loga o token."""
+        if msg.get("t") != "erro":
+            return
+        chave = msg.get("chave") or ""
+        if chave in BLOCKING_KEYS:
+            kind, detail = BLOCKING_KEYS[chave]
+            if kind == "banned" and msg.get("motivoBan"):
+                detail = f"{detail}: {msg['motivoBan']}"
+            raise AccountBlocked(kind, detail)
+        if chave in NETWORK_FULL_KEYS:
+            raise NetworkFull(chave)
 
     async def _wait_welcome(self, ws) -> dict:
         """Aguarda 'welcome' por até 15s; ignora frames de outro tipo antes dele."""
         async def _loop():
             async for raw in ws:
                 msg = _parse(raw)
+                self._check_erro(msg)
                 if msg.get("t") == "welcome":
                     return msg
         try:
@@ -200,7 +309,11 @@ class AccountConnection:
                     self.session_started = time.time()
                     self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
                 self.session_items.reset(self.estado)
+                self.block = None
+                self.last_reason = ""
                 self._set(State.ONLINE, f"welcome ok level={self.estado.get('level')}")
+                if self.on_auth_status:
+                    self.on_auth_status(self.acc.index, "ok", "")
 
                 self.hunt.on_welcome()
                 self.hunt.bind(ws)
@@ -239,6 +352,13 @@ class AccountConnection:
         try:
             async for raw in ws:
                 msg = _parse(raw)
+                self._check_erro(msg)
+                if msg.get("t") == "sessao.renovada" and msg.get("token"):
+                    # O jogo renova o token da sessão; sem guardar o novo, o antigo vence.
+                    self.acc = replace(self.acc, token=str(msg["token"]))
+                    if self.on_token_renewed:
+                        self.on_token_renewed(self.acc.index, self.acc.token)
+                    continue
                 self.hunt.handle_frame(msg)
                 self.balls.handle_frame(msg)
                 self.shop.handle_frame(msg)
@@ -304,7 +424,22 @@ class AccountConnection:
             try:
                 await self._session()
                 self._set(State.DISCONNECTED, "sessão encerrada", "servidor encerrou a sessão")
+            except AccountBlocked as e:
+                self.block = {"kind": e.kind, "detail": e.detail}
+                self.last_reason = e.detail
+                self._set(State.BLOCKED, e.detail, e.detail)
+                if self.on_auth_status:
+                    self.on_auth_status(self.acc.index, e.kind, e.detail)
+                while True:  # só o painel (editar/reiniciar a conta) tira daqui, cancelando a task
+                    await asyncio.sleep(3600)
+            except NetworkFull:
+                self.last_reason = "rede no limite de contas online"
+                self._set(State.DISCONNECTED, f"rede cheia; nova tentativa em {NETWORK_FULL_RETRY_S}s",
+                          "rede no limite de contas online")
+                await asyncio.sleep(NETWORK_FULL_RETRY_S)
+                continue
             except AuthRejected as e:
+                self.last_reason = str(e)
                 self._set(State.PAUSED_COOLDOWN,
                           f"{e}; aguardando {config.COOLDOWN_SECONDS}s",
                           f"{e}; nova tentativa em {config.COOLDOWN_SECONDS // 60}min")

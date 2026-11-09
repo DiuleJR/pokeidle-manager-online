@@ -91,8 +91,15 @@ class SessionStore:
         v = self._data.get(key)
         return v if isinstance(v, dict) else None
 
+    def delete(self, key: str) -> None:
+        if self._data.pop(key, None) is not None:
+            self._write()
+
     def save(self, key: str, started_at: float | None, gained: dict[str, int]) -> None:
         self._data[key] = {"started_at": started_at, "gained": dict(gained)}
+        self._write()
+
+    def _write(self) -> None:
         try:
             fd, tmp = tempfile.mkstemp(dir=os.path.dirname(self.path), suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf8") as fh:
