@@ -160,6 +160,30 @@ A aba **Mercado** consulta o mercado do jogo pelas contas que estão online (som
   num cookie HttpOnly; há limite de tentativas erradas. Esqueceu a senha? Rode
   `python main.py --reset-password` no computador do bot e crie outra.
 
+## Apoie o projeto
+
+O projeto é gratuito e open source. Se ele te ajudou e você quiser retribuir, qualquer valor
+ajuda a manter o desenvolvimento. Não é obrigatório e não libera nenhum recurso extra.
+
+**Pix** (copia e cola, ou aponte a câmera do banco para o QR):
+
+<img src="assets/pix-qr.png" alt="QR Code do Pix" width="200">
+
+```text
+00020126580014br.gov.bcb.pix0136d786a417-fce5-4167-9b5f-23614c67b6b25204000053039865802BR5912Diule Junior6009Sao Paulo62230519daqr7556502974044716304D7EB
+```
+
+**USDT (somente rede Solana)** — o mesmo tipo de saque do jogo:
+
+```text
+EEJYeV16B3Znwy31s66iYzRg6PninPDyLP9eQWnEDa8u
+```
+
+> Envie apenas USDT pela rede **Solana**. Tokens de outras redes enviados para esse
+> endereço podem ser perdidos.
+
+Outra forma de ajudar: deixar uma estrela no repositório, relatar bugs e compartilhar com quem joga.
+
 ## Licença
 
 [GNU AGPL-3.0](LICENSE). Se você rodar uma versão modificada como serviço de rede,
