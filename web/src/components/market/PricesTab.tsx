@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/SettingsView";
 import { ItemSprite } from "@/components/Sprites";
 import { type Deal, type Listing, type MarketItem, type Moeda, dealLabel, marketApi, secondsUntil } from "@/lib/market";
-import { fmtInt } from "@/lib/utils";
+import { fmtInt, fmtShort } from "@/lib/utils";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
 import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, type MoedaSel, fmtCountdown, useAsync, useTick } from "./shared";
@@ -54,12 +54,12 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
         <ItemSprite icon={item.icon} size={44} alt="" />
         <div className="min-w-0 flex-1">
           <p className="text-sm text-mute">
-            {item.ads} anúncios · {fmtInt(item.units)} unidades
+            {item.ads} anúncios · {fmtShort(item.units)} un.
           </p>
           <p className="flex flex-wrap items-center gap-2 text-sm">
-            Média de 7 dias: <Money v={moeda === "orb" ? item.avgOrb : item.avgGold} moeda={moeda} />
-            {moeda === "orb" && item.soldOrb ? <span className="text-xs text-mute">({fmtInt(item.soldOrb)} vendidos)</span> : null}
-            {moeda === "gold" && item.soldGold ? <span className="text-xs text-mute">({fmtInt(item.soldGold)} vendidos)</span> : null}
+            Média 7 dias: <Money v={moeda === "orb" ? item.avgOrb : item.avgGold} moeda={moeda} short />
+            {moeda === "orb" && item.soldOrb ? <span className="text-xs text-mute">({fmtShort(item.soldOrb)} vendidos)</span> : null}
+            {moeda === "gold" && item.soldGold ? <span className="text-xs text-mute">({fmtShort(item.soldGold)} vendidos)</span> : null}
           </p>
         </div>
         <button className="btn" onClick={onFav} aria-pressed={item.fav} title={item.fav ? "Tirar dos favoritos" : "Favoritar"}>
@@ -67,9 +67,9 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CurrencyToggle value={moeda} onChange={(m) => setMoeda(m as Moeda)} />
-        <div className="flex gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5 sm:flex">
           <button className="btn" onClick={() => setRule("alert")}>
             <Bell className="size-4" /> Avisar
           </button>
@@ -86,20 +86,34 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
         ) : sales.error ? (
           <p className="text-sm text-mute">{sales.error}</p>
         ) : (
-          <>
-            <LineChart
-              series={[
-                { name: "Venda média", color: "#f3c04a", points: (sales.data?.sales ?? []).map((s) => ({ x: s.day, y: s.avg })) },
-                {
-                  name: "Menor preço anunciado",
-                  color: "#5cc8e8",
-                  points: (sales.data?.floor ?? [])
-                    .filter((f) => (moeda === "orb" ? f.minOrb : f.minGold) != null)
-                    .map((f) => ({ x: new Date(f.ts).toISOString().slice(0, 10), y: (moeda === "orb" ? f.minOrb : f.minGold) as number })),
-                },
-              ].filter((s) => s.points.length > 0)}
-            />
-          </>
+          (() => {
+            const sold = (sales.data?.sales ?? []).map((x) => ({ x: x.day, y: x.avg }));
+            const lowest = new Map<string, number>();
+            for (const f of sales.data?.floor ?? []) {
+              const v = moeda === "orb" ? f.minOrb : f.minGold;
+              if (v == null) continue;
+              const day = new Date(f.ts).toISOString().slice(0, 10);
+              lowest.set(day, Math.min(lowest.get(day) ?? Infinity, v));
+            }
+            const floor = [...lowest].sort().map(([x, y]) => ({ x, y }));
+            const days = new Set([...sold, ...floor].map((p) => p.x));
+            if (days.size < 2) {
+              return (
+                <p className="text-sm text-mute">
+                  O gráfico aparece quando houver pelo menos 2 dias de dados.
+                  {sold[0] ? ` Média de venda hoje: ${fmtInt(sold[0].y)}.` : ""}
+                </p>
+              );
+            }
+            return (
+              <LineChart
+                series={[
+                  { name: "Venda média", color: "#f3c04a", points: sold },
+                  { name: "Menor preço anunciado", color: "#5cc8e8", points: floor },
+                ].filter((x) => x.points.length > 0)}
+              />
+            );
+          })()
         )}
       </div>
 
@@ -114,14 +128,27 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
           {rows.slice(0, 60).map((l) => {
             const wait = secondsUntil(l.compravelEm, drift);
             return (
-              <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-                <Money v={l.preco} moeda={l.moeda} className="font-bold" />
-                {best && l.preco > best && <span className="text-xs text-mute">+{Math.round(((l.preco - best) / best) * 100)}%</span>}
-                <span className="tnum text-mute">{fmtInt(l.qtd)}×</span>
-                <span className="min-w-0 flex-1 truncate text-mute">{l.vendedor}</span>
-                {wait > 0 ? <span className="tnum text-xs text-poke-gold">libera em {fmtCountdown(wait)}</span> : null}
-                <button className="btn" onClick={() => setBuy(l)} aria-label={`Comprar de ${l.vendedor}`}>
-                  <ShoppingCart className="size-4" /> Comprar
+              <li key={l.id} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-baseline gap-2">
+                    <Money v={l.preco} moeda={l.moeda} className="text-[15px] font-bold" />
+                    {best && l.preco > best ? <span className="text-xs text-mute">+{Math.round(((l.preco - best) / best) * 100)}%</span> : null}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-x-2 text-xs text-mute">
+                    <span className="tnum shrink-0">{fmtInt(l.qtd)}×</span>
+                    <span className="truncate">{l.vendedor}</span>
+                    {wait > 0 ? <span className="tnum shrink-0 text-poke-gold">libera em {fmtCountdown(wait)}</span> : null}
+                  </p>
+                </div>
+                <button
+                  className="btn shrink-0 !px-3"
+                  onClick={() => setBuy(l)}
+                  disabled={wait > 0}
+                  title={wait > 0 ? "Ainda não liberado para compra" : undefined}
+                  aria-label={wait > 0 ? `Comprar de ${l.vendedor} (libera em ${fmtCountdown(wait)})` : `Comprar de ${l.vendedor}`}
+                >
+                  <ShoppingCart className="size-4" />
+                  <span className="hidden sm:inline">Comprar</span>
                 </button>
               </li>
             );

@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Notice } from "@/components/SettingsView";
 import { Coin } from "@/components/ui";
@@ -28,6 +28,21 @@ const SAQUE_STATUS: Record<string, string> = {
   falhou: "Falhou (tenta de novo sozinho)",
   cancelado: "Cancelado",
 };
+
+/** Bloco recolhido por padrão; só abre ao tocar no título (setinha). A lista dentro rola a partir de 5 linhas. */
+function Fold({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  return (
+    <details className="card group overflow-hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="font-bold">
+          {title} <span className="ml-1 text-sm font-normal text-mute">({count})</span>
+        </span>
+        <ChevronDown className="size-5 text-mute transition-transform duration-200 group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-line">{children}</div>
+    </details>
+  );
+}
 
 interface Mine {
   account: number;
@@ -126,53 +141,6 @@ export function MineTab() {
             </p>
           </section>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <section className="flex flex-col gap-1.5">
-              <h2 className="label px-1">Saques</h2>
-              {withdrawals.length === 0 ? (
-                <p className="card flex-1 p-4 text-center text-sm text-mute">Nenhum saque.</p>
-              ) : (
-                <ul className="card max-h-[28rem] flex-1 divide-y divide-line overflow-y-auto">
-                  {withdrawals.slice(0, 12).map((s, i) => (
-                    <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="tnum">
-                        −{fmtInt(s.orbs)} <span className="text-mute">· {fmtUsd(s.usdt)}</span>
-                        {all && <span className="ml-2 text-xs text-mute">{s.nick}</span>}
-                      </span>
-                      <span className={`text-xs font-bold ${s.status === "confirmado" ? "text-poke-green" : s.status === "falhou" || s.status === "cancelado" ? "text-poke-red" : "text-poke-gold"}`}>
-                        {s.recusado ? "Recusado" : (SAQUE_STATUS[s.status] ?? s.status)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <section className="flex flex-col gap-1.5">
-              <h2 className="label px-1">Extrato</h2>
-              {ledger.length === 0 ? (
-                <p className="card flex-1 p-4 text-center text-sm text-mute">Sem movimento.</p>
-              ) : (
-                <ul className="card max-h-[28rem] flex-1 divide-y divide-line overflow-y-auto">
-                  {ledger.slice(0, 60).map((l, i) => (
-                    <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate">
-                        {MOTIVO[l.motivo] ?? l.motivo}
-                        <span className="ml-2 text-xs text-mute">
-                          {fmtWhen(l.em ?? l.ts)}
-                          {all ? ` · ${l.nick}` : ""}
-                        </span>
-                      </span>
-                      <span className={`tnum shrink-0 font-bold ${l.delta > 0 ? "text-poke-green" : "text-poke-red"}`}>
-                        {l.delta > 0 ? "+" : ""}
-                        {fmtInt(l.delta)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-
           <section className="space-y-1.5">
             <h2 className="label px-1">Meus anúncios {mine.length ? `(${mine.length})` : ""}</h2>
             {mine.length === 0 ? (
@@ -199,6 +167,53 @@ export function MineTab() {
       )}
 
       <CalcCard />
+
+      {data.data && (
+        <div className="space-y-2">
+          <Fold title="Saques" count={withdrawals.length}>
+            {withdrawals.length === 0 ? (
+              <p className="p-4 text-center text-sm text-mute">Nenhum saque.</p>
+            ) : (
+              <ul className="max-h-[13rem] divide-y divide-line overflow-y-auto overscroll-contain">
+                {withdrawals.map((s, i) => (
+                  <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                    <span className="tnum">
+                      −{fmtInt(s.orbs)} <span className="text-mute">· {fmtUsd(s.usdt)}</span>
+                      {all && <span className="ml-2 text-xs text-mute">{s.nick}</span>}
+                    </span>
+                    <span className={`text-xs font-bold ${s.status === "confirmado" ? "text-poke-green" : s.status === "falhou" || s.status === "cancelado" ? "text-poke-red" : "text-poke-gold"}`}>
+                      {s.recusado ? "Recusado" : (SAQUE_STATUS[s.status] ?? s.status)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Fold>
+          <Fold title="Extrato" count={ledger.length}>
+            {ledger.length === 0 ? (
+              <p className="p-4 text-center text-sm text-mute">Sem movimento.</p>
+            ) : (
+              <ul className="max-h-[13rem] divide-y divide-line overflow-y-auto overscroll-contain">
+                {ledger.slice(0, 100).map((l, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                    <span className="min-w-0 truncate">
+                      {MOTIVO[l.motivo] ?? l.motivo}
+                      <span className="ml-2 text-xs text-mute">
+                        {fmtWhen(l.em ?? l.ts)}
+                        {all ? ` · ${l.nick}` : ""}
+                      </span>
+                    </span>
+                    <span className={`tnum shrink-0 font-bold ${l.delta > 0 ? "text-poke-green" : "text-poke-red"}`}>
+                      {l.delta > 0 ? "+" : ""}
+                      {fmtInt(l.delta)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Fold>
+        </div>
+      )}
     </div>
   );
 }

@@ -70,3 +70,23 @@ def test_error_frame_after_welcome_blocks(conn):
 def test_hello_shape():
     h = json.loads(connection.build_hello(ACC))
     assert h == {"t": "hello", "nick": "Ash", "token": ACC.token, "delta": 1, "dispositivo": "dev-12345678"}
+
+
+def test_server_rare_item_notifies_once_per_gain(conn):
+    sent = []
+    conn.notifier = type("N", (), {"send": lambda self, *a, **k: sent.append((a, k))})()
+    conn.itens_nossos = {70091: {"name": "Mystery Egg P2", "rare": True, "category": "special", "icon": "/img/egg.png"},
+                         70050: {"name": "Pedra comum", "rare": True, "category": "stone"}}
+    conn.estado["items"] = {"70091": 5, "70050": 1, "70000": 3}      # 70000 = Boss Token (não avisa)
+    conn._rare_last = conn._rare_counts()
+    conn._check_server_rares()
+    assert sent == []                                                  # sem aumento: nada
+    conn.estado["items"] = {"70091": 6, "70050": 9, "70000": 4}
+    conn._check_server_rares()
+    assert len(sent) == 1 and "1× Mystery Egg P2" in sent[0][0][1]
+    assert sent[0][1]["thumbnail"].endswith("/img/egg.png")
+    conn._check_server_rares()                                         # mesmo estado: não repete
+    assert len(sent) == 1
+    conn.estado["items"]["70091"] = 3                                  # gastar não avisa
+    conn._check_server_rares()
+    assert len(sent) == 1

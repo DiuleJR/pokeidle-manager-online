@@ -32,7 +32,8 @@ from hunt import HuntManager
 from inventory import InventoryView
 from market import MarketClient
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
-from session_stats import ITEM_LABELS, SessionItems, SessionStore
+from game_data import item_name
+from session_stats import ITEM_LABELS, TRACKED, SessionItems, SessionStore
 from shop import AutoRestock, ShopManager, ball_ids_resolver, potion_ids_resolver
 
 log = logging.getLogger("conn")
@@ -172,6 +173,7 @@ class AccountConnection:
         self.estado: dict = {}   # snapshot do welcome, mutado pelo HuntManager
         self.hunts: list = []
         self.mercado_cfg: dict = {}               # welcome.mercado (catálogo, preços mínimos...)
+        self._rare_last: dict[int, int] | None = None   # baseline dos itens raros do servidor (ids >= 70000)
         self.itens_nossos: dict[int, dict] = {}   # welcome.itensNossos: itens só do servidor (nome/ícone)
         self.session_started: float | None = None  # epoch do 1º ONLINE deste processo
         self.session_items = SessionItems()
@@ -314,6 +316,7 @@ class AccountConnection:
                     self.session_started = time.time()
                     self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
                 self.session_items.reset(self.estado)
+                self._rare_last = self._rare_counts()
                 self.block = None
                 self.last_reason = ""
                 self._set(State.ONLINE, f"welcome ok level={self.estado.get('level')}")
@@ -370,6 +373,7 @@ class AccountConnection:
                 self.balls.handle_frame(msg)
                 self.shop.handle_frame(msg)
                 self.market.handle_frame(msg)
+                self._check_server_rares()
                 before = dict(self.session_items.gained)
                 self.session_items.update(self.estado)
                 if self.session_items.gained != before:
@@ -384,6 +388,47 @@ class AccountConnection:
                 sufixo = " (login externo)" if code == 4001 else ""
                 raise AuthRejected(f"close code {code}{sufixo}") from e
             raise
+
+    # Itens raros do próprio servidor (Mystery Egg, fichas novas...): ids >= 70000 marcados como raros no
+    # `welcome.itensNossos`. Os 4 acompanhados em session_stats têm tratamento próprio; o Boss Token não avisa.
+    _NOT_RARE_CATEGORIES = frozenset({"stone", "heal", "revive"})
+
+    def _rare_counts(self) -> dict[int, int]:
+        skip = {i for ids in TRACKED.values() for i in ids}
+        out: dict[int, int] = {}
+        for raw_id, qty in (self.estado.get("items") or {}).items():
+            try:
+                iid, qty = int(raw_id), int(qty)
+            except (TypeError, ValueError):
+                continue
+            if iid < 70000 or iid in skip:
+                continue
+            nos = self.itens_nossos.get(iid) or {}
+            if nos.get("rare") is False or nos.get("category") in self._NOT_RARE_CATEGORIES:
+                continue
+            out[iid] = qty
+        return out
+
+    def _check_server_rares(self) -> None:
+        if self._rare_last is None:
+            return
+        now = self._rare_counts()
+        for iid, qty in now.items():
+            n = qty - self._rare_last.get(iid, 0)
+            if n <= 0:
+                continue
+            nos = self.itens_nossos.get(iid) or {}
+            label = nos.get("name") or item_name(iid)
+            key = f"i{iid}"
+            ITEM_LABELS[key] = label
+            total = self.daily.add_item(self.acc.nick, key, n) if self.daily else n
+            icon = nos.get("icon")
+            thumb = None
+            if icon:
+                thumb = "https://pokeidle.io" + (icon if str(icon).startswith("/") else f"/assets/{icon}")
+            self.notifier.send(self.acc.nick, f"💎 pegou **{n}× {label}**", GOLD,
+                               [("Total no dia", str(total), True)], thumbnail=thumb)
+        self._rare_last = now
 
     def _on_rare_items(self, before: dict[str, int]) -> None:
         """Avisa no Discord cada item raro novo da sessão, exceto o Boss Token
