@@ -1,6 +1,6 @@
 # Instalação passo a passo
 
-Este guia leva você do zero até o painel funcionando, no **Windows**, **Linux/macOS** ou
+Este guia leva você do zero até o painel funcionando, no **Windows**, no **Linux/macOS** ou
 numa **VPS**. Se algo não funcionar, veja [Problemas comuns](#problemas-comuns) no final.
 
 ## Antes de começar
@@ -15,58 +15,73 @@ numa **VPS**. Se algo não funcionar, veja [Problemas comuns](#problemas-comuns)
 
 | Programa | Versão | Para quê |
 |---|---|---|
-| Git | qualquer | baixar o projeto |
+| Git | qualquer | baixar e atualizar o projeto |
 | Python | 3.12 ou mais novo | rodar o bot (no Windows, marque **"Add python.exe to PATH"** ao instalar) |
 | Node.js | 18 ou mais novo | compilar o dashboard (só na instalação e nas atualizações) |
 
-Confira no terminal; cada comando deve mostrar uma versão:
+Confira no terminal (PowerShell no Windows); cada comando deve mostrar uma versão:
 
 ```
 git --version
-python --version
+python --version        # no Linux/macOS: python3 --version
 node --version
 ```
 
-## Windows (PowerShell)
+## Instalação rápida (recomendada)
 
-**1. Baixar o projeto**
+Um script faz tudo: cria o ambiente, instala as dependências, compila o dashboard e inicia o
+bot. Na primeira vez leva alguns minutos; depois inicia na hora.
+
+### Windows
+
+1. Baixe o projeto (PowerShell):
+
+   ```powershell
+   cd C:\
+   git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
+   ```
+
+2. Abra a pasta `C:\pokeidle` e dê **dois cliques em `iniciar.bat`**.
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
+cd pokeidle
+./iniciar.sh
+```
+
+### O que acontece em seguida
+
+Na **primeira vez**, abra `http://localhost:8080` e **crie uma senha** para o painel (mínimo de 8
+caracteres). Depois siga para
+[Adicionar sua primeira conta](#adicionar-sua-primeira-conta).
+
+## Instalação manual (passo a passo, sem o script)
+
+Faz exatamente o mesmo que o script, passo a passo. Útil para entender o que acontece ou se
+o script falhar.
+
+### Windows (PowerShell)
 
 ```powershell
 cd C:\
 git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
 cd pokeidle
-```
 
-**2. Criar o ambiente Python e instalar as dependências**
-
-```powershell
 python -m venv venv
 venv\Scripts\python -m pip install -r requirements.txt
-```
 
-**3. Compilar o dashboard** (leva 1 a 2 minutos)
-
-```powershell
 cd web
 npm ci
 npm run build
 cd ..
 Copy-Item web\dist web_dist -Recurse
-```
 
-**4. Iniciar**
-
-```powershell
 venv\Scripts\python main.py
 ```
 
-Na primeira vez, o console mostra a linha **"CHAVE DO PAINEL"**. Copie e guarde essa chave.
-
-**5. Abrir o painel**
-
-Acesse `http://localhost:8080`, cole a chave e siga para [Adicionar sua primeira conta](#adicionar-sua-primeira-conta).
-
-## Linux / macOS
+### Linux / macOS
 
 ```bash
 git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
@@ -80,8 +95,6 @@ mkdir -p web_dist && cp -r web/dist/. web_dist/
 
 venv/bin/python main.py
 ```
-
-Depois, abra `http://localhost:8080` e use a chave mostrada no console.
 
 ## Adicionar sua primeira conta
 
@@ -101,28 +114,32 @@ aparecer como **"Ação necessária"**, abra **Editar → Reimportar token** e r
 
 ## Usar no dia a dia
 
-| Quero… | Faça |
-|---|---|
-| Parar o bot | `Ctrl+C` no console |
-| Iniciar de novo | na pasta do projeto: `venv\Scripts\python main.py` (Windows) ou `venv/bin/python main.py` (Linux/macOS) |
-| Atualizar o projeto | `git pull`; se algo em `web/` mudou, refaça o passo de compilar o dashboard |
-| Fazer backup | copie a pasta `data/` (o arquivo `app.db` guarda as contas e os tokens) |
+| Quero… | Windows | Linux / macOS |
+|---|---|---|
+| Iniciar | dois cliques em `iniciar.bat` | `./iniciar.sh` |
+| Parar | feche a janela ou `Ctrl+C` | `Ctrl+C` |
+| Atualizar o projeto | no PowerShell, na pasta: `.\iniciar.bat atualizar` | `./iniciar.sh atualizar` |
+| Fazer backup | copie a pasta `data\` | copie a pasta `data/` |
 
-As contas ficam salvas em `data/app.db`. **Não publique nem compartilhe essa pasta.**
+O comando de atualizar baixa a versão nova (`git pull`) e recompila o dashboard. As contas
+ficam salvas em `data/app.db`: **não publique nem compartilhe essa pasta**, ela guarda os
+tokens.
 
 ## Deixar rodando o tempo todo
 
-- **No PC:** o bot só roda enquanto a janela estiver aberta. Para não fechar sem querer,
-  minimize a janela ou use o Agendador de Tarefas do Windows.
+- **No PC:** o bot só roda enquanto a janela estiver aberta e o computador ligado. Minimize a
+  janela para não fechá-la sem querer. Para iniciar junto com o Windows, use o Agendador de
+  Tarefas apontando para o `iniciar.bat`.
 - **Numa VPS Linux** (recomendado para 24 horas por dia): instale como no bloco Linux acima
-  e use o serviço systemd de exemplo em [`deploy/pokeidle.service`](deploy/pokeidle.service):
+  (o `./iniciar.sh` serve para a primeira vez) e use o serviço systemd de exemplo em
+  [`deploy/pokeidle.service`](deploy/pokeidle.service):
 
   ```bash
   sudo cp deploy/pokeidle.service /etc/systemd/system/pokeidle.service
   # ajuste User, WorkingDirectory e ExecStart se sua pasta for outra
   sudo systemctl daemon-reload
   sudo systemctl enable --now pokeidle
-  journalctl -u pokeidle -f        # a chave do painel aparece aqui na primeira vez
+  journalctl -u pokeidle -f        # se for criar a senha de fora da VPS, o código de configuração aparece aqui
   ```
 
   Para abrir o painel de fora da VPS, **não exponha a porta direto em HTTP**: use um túnel SSH
@@ -132,22 +149,34 @@ As contas ficam salvas em `data/app.db`. **Não publique nem compartilhe essa pa
 
 ```bash
 docker compose up -d --build
-docker compose logs          # chave do painel na primeira execução
+docker compose logs          # código de configuração, se for criar a senha de fora
 ```
 
 Os dados ficam em `./data`. O caminho com Python direto, descrito acima, é o recomendado.
 
 ## Problemas comuns
 
-**Perdi a chave do painel.** Crie um arquivo `.env` na pasta do projeto com a linha
-`TELEMETRY_TOKEN=uma-chave-que-voce-escolher` e reinicie. Esse valor passa a valer.
+**Esqueci a senha do painel.** No computador onde o bot roda, na pasta do projeto, rode
+`venv\Scripts\python main.py --reset-password` (Windows) ou `venv/bin/python main.py --reset-password`
+(Linux/macOS) e abra o painel para criar uma senha nova. As contas continuam salvas.
+
+**Quero criar a senha de outro computador (por exemplo, o painel numa VPS).** O painel pede o
+**código de configuração**, que aparece no console do bot (na VPS: `journalctl -u pokeidle`).
 
 **A porta 8080 já está em uso.** No mesmo `.env`, coloque `TELEMETRY_PORT=8081` (ou outro número).
 
-**`python` não é reconhecido (Windows).** Reinstale o Python marcando "Add python.exe to PATH",
-ou use `py -3` no lugar de `python`.
+**O `iniciar.bat` fecha rápido demais / mostra erro.** Abra o PowerShell na pasta e rode
+`.\iniciar.bat` para ler a mensagem. As causas mais comuns são Python ou Node não instalados
+(veja os [Requisitos](#requisitos)).
 
-**`npm` não é reconhecido.** Instale o Node.js e abra um terminal novo.
+**`python` não é reconhecido (Windows).** Reinstale o Python marcando "Add python.exe to PATH".
+O `iniciar.bat` também reconhece o comando `py`.
+
+**`npm` não é reconhecido.** Instale o Node.js e abra um terminal novo. Sem o Node, o bot
+funciona, mas sem a tela do painel.
+
+**Linux: "ensurepip is not available" ao criar o ambiente.** Instale o pacote do venv:
+`sudo apt install python3-venv`.
 
 **A conta fica "Pausada" com "login externo".** Alguém usa a conta em outro lugar (jogo aberto
 no navegador, app no celular ou outro bot). Feche essa sessão; o bot tenta de novo a cada

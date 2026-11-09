@@ -42,7 +42,7 @@ fi
 
 echo
 echo "Iniciando. Abra http://localhost:8080 no navegador."
-echo "Na primeira vez, guarde a CHAVE DO PAINEL que aparece abaixo."
+echo "Na primeira vez, o painel pede para voce criar uma senha."
 echo "Para parar, aperte Ctrl+C."
 echo
 exec venv/bin/python -u main.py

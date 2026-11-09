@@ -1,5 +1,6 @@
 # Opcional. Uso: docker compose up -d --build
-# A chave do painel aparece em: docker compose logs (1ª execução).
+# Abra http://localhost:8080 e crie a senha. Se for criar de fora, o código de configuração
+# aparece em: docker compose logs
 services:
   pokeidle:
     build: .
@@ -10,5 +11,5 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # TELEMETRY_TOKEN: defina para escolher a chave do painel
+      # TELEMETRY_TOKEN: opcional; chave de acesso para scripts (também vale como senha)
       TELEMETRY_TOKEN: ${TELEMETRY_TOKEN:-}

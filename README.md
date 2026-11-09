@@ -26,7 +26,7 @@ navegador), com um painel web para acompanhar e configurar tudo.
 ## Recursos
 
 - Conexão WebSocket por conta (handshake, heartbeat, reconexão automática)
-- **Adicionar e configurar contas pelo painel**, sem editar arquivos
+- **Adicionar e configurar contas pelo painel**, sem editar arquivos, com login por senha
 - Proxy (SOCKS5/HTTP) individual por conta, com botão de testar
 - Cooldown ao detectar login externo (close code `4001`)
 - Detecção de token vencido/conta banida, com aviso no painel (o bot não fica reconectando à toa)
@@ -48,20 +48,18 @@ navegador), com um painel web para acompanhar e configurar tudo.
 Guia completo, passo a passo (Windows, Linux/macOS e VPS), com solução dos problemas
 comuns: **[INSTALACAO.md](INSTALACAO.md)**.
 
-Resumo rápido:
+Resumo rápido (precisa de Git, Python 3.12+ e Node 18+):
 
 ```bash
-git clone https://github.com/DiuleJR/pokeidle-manager-online.git
-cd pokeidle-manager-online
-python -m venv venv
-venv/bin/python -m pip install -r requirements.txt     # Windows: venv\Scripts\python
-cd web && npm ci && npm run build && cd ..
-mkdir -p web_dist && cp -r web/dist/. web_dist/         # Windows: Copy-Item web\dist web_dist -Recurse
-venv/bin/python main.py
+git clone https://github.com/DiuleJR/pokeidle-manager-online.git pokeidle
+cd pokeidle
+./iniciar.sh          # Windows: dois cliques em iniciar.bat
 ```
 
-Na **primeira execução** o console mostra a **chave do painel**. Abra `http://localhost:8080`,
-cole a chave e vá em **Configurações → Adicionar conta**.
+O script cria o ambiente, instala as dependências, compila o dashboard e inicia o bot.
+Na **primeira vez**, abra `http://localhost:8080` e **crie uma senha** para o painel. Depois vá em
+**Configurações → Adicionar conta**. Para atualizar depois:
+`./iniciar.sh atualizar` (Windows: `.\iniciar.bat atualizar`).
 
 ## Adicionando uma conta
 
@@ -101,10 +99,11 @@ O painel guarda tokens das suas contas, então proteja o acesso:
 - **Túnel SSH (mais simples, nada a configurar no servidor):**
   `ssh -L 8080:localhost:8080 usuario@seu-servidor` e abra `http://localhost:8080`.
 - **HTTPS com proxy reverso** (Caddy/nginx) se quiser acessar de qualquer lugar.
-  Em HTTP puro fora do localhost a chave trafega sem criptografia (o painel avisa).
+  Em HTTP puro fora do localhost a senha trafega sem criptografia (o painel avisa).
 
-Por padrão o painel escuta só em `127.0.0.1`. Se mudar `TELEMETRY_HOST` para expor,
-a chave passa a ser exigida em tudo.
+Por padrão o painel escuta só em `127.0.0.1`. Se mudar `TELEMETRY_HOST` para expor, o login
+passa a ser exigido em tudo, e criar a senha de fora do computador do bot exige o **código de
+configuração** mostrado no console (`journalctl -u pokeidle` na VPS).
 
 ### Rodando como serviço (systemd)
 
@@ -119,7 +118,7 @@ VPS=usuario@meu-servidor VPS_KEY=~/.ssh/minha_chave ./deploy.sh "mensagem"
 
 ```bash
 docker compose up -d --build
-docker compose logs        # chave do painel na 1ª execução
+docker compose logs        # código de configuração, se for criar a senha de fora
 ```
 
 Os dados ficam em `./data` (monte como volume). Nunca faça commit dessa pasta.
@@ -143,7 +142,9 @@ dia vira e fuso do relatório, e a **URL pública** (opcional: só serve para mo
 - Contas e tokens ficam em `data/app.db` (SQLite, permissão restrita). Faça backup
   e **não publique** essa pasta.
 - A API nunca devolve o token nem a senha de proxy (só os últimos caracteres).
-- Rotas de gestão exigem sempre a chave do painel; há limite de tentativas erradas.
+- O painel pede uma senha, criada no primeiro acesso. Ela é guardada com hash (scrypt) e a sessão fica
+  num cookie HttpOnly; há limite de tentativas erradas. Esqueceu a senha? Rode
+  `python main.py --reset-password` no computador do bot e crie outra.
 
 ## Licença
 
