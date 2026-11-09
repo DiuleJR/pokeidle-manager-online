@@ -1,0 +1,3 @@
+# Scripts: terminadores de linha corretos em qualquer sistema
+*.bat text eol=crlf
+*.sh text eol=lf
