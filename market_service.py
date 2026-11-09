@@ -122,6 +122,8 @@ class MarketService:
         self._buy_locks: dict[int, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
         self._warned_budget: set[int] = set()
+        self._usd_per_gem: tuple[float, float | None] = (0.0, None)
+        self._shiny_cache: dict[str, tuple[float, float | None]] = {}
 
     # ------------------------------------------------------------ contas
     def online(self):
@@ -281,6 +283,69 @@ class MarketService:
             out.append({"day": day, "avg": round(sum(p * q for p, q in vals) / max(units, 1), 2),
                         "units": units, "sales": len(vals)})
         return out
+
+    # ------------------------------------------------------------ valor do inventário
+    SHINY_TTL_S = 3600
+    SHINY_PER_CALL = 6
+
+    async def usd_per_gem(self) -> float | None:
+        """US$ por Gema no saque (do painel de Gemas do jogo), em cache por 30 min."""
+        ts, val = self._usd_per_gem
+        if time.time() - ts < 1800 and val:
+            return val
+        try:
+            w = await self.wallet()
+            val = float((w.get("prices") or {}).get("saque") or 0) or None
+        except MarketError:
+            val = val or None
+        self._usd_per_gem = (time.time(), val)
+        return val
+
+    async def _shiny_price(self, name: str) -> float | None:
+        """Mediana das vendas recentes (em Gemas) de um Pokémon shiny dessa espécie."""
+        hit = self._shiny_cache.get(name)
+        if hit and time.time() - hit[0] < self.SHINY_TTL_S:
+            return hit[1]
+        val = None
+        try:
+            res = await self._need().market.historico(
+                "global", 0, {"tipo": "pokemon", "moeda": "orb", "busca": name, "soShiny": 1})
+            prices = sorted(float(r["bruto"]) for r in (res.get("linhas") or [])
+                            if isinstance(r, dict) and isinstance(r.get("bruto"), (int, float)) and r.get("moeda") in (None, "orb"))
+            if prices:
+                val = prices[len(prices) // 2]
+        except MarketError:
+            return None   # sem conta online agora: não grava no cache
+        self._shiny_cache[name] = (time.time(), val)
+        return val
+
+    async def valuation(self) -> dict:
+        """Preço estimado (em Gemas) dos itens e dos Pokémon shiny das contas, e quanto vale 1 Gema em US$.
+        Item = média de venda dos últimos 7 dias em Gemas. Shiny = mediana das últimas vendas da espécie."""
+        await self.refresh_itens(120)
+        await self.refresh_medias()
+        items = {}
+        for sid, m in self._medias.items():
+            o = (m or {}).get("orb") or {}
+            avg = o.get("media")
+            if isinstance(avg, (int, float)) and avg > 0:
+                items[sid] = {"gems": float(avg), "sold": o.get("unidades")}
+        shinies = []
+        names: list[str] = []
+        for c in self.manager.connections():
+            for p in c.inventory.pokemons():
+                if p.get("shiny"):
+                    shinies.append({"account": c.acc.index, "id": p.get("id"), "name": p.get("nome") or "?"})
+                    if p.get("nome") and p["nome"] not in names:
+                        names.append(p["nome"])
+        todo = [n for n in names if not (n in self._shiny_cache and time.time() - self._shiny_cache[n][0] < self.SHINY_TTL_S)]
+        for n in todo[: self.SHINY_PER_CALL]:
+            await self._shiny_price(n)
+        pending = max(0, len(todo) - self.SHINY_PER_CALL)
+        for s in shinies:
+            s["gems"] = (self._shiny_cache.get(s["name"]) or (0, None))[1]
+        return {"usdPerGem": await self.usd_per_gem(), "days": self._medias_dias, "items": items,
+                "shinies": shinies, "pending": pending}
 
     # ------------------------------------------------------------ histórico de preços (local)
     async def snapshot_if_due(self) -> None:

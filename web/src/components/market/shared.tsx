@@ -90,16 +90,19 @@ export function useOnlineAccounts() {
     .map((i) => ({ id: Number(i.replace(/\D/g, "")), key: i, nick: map[i]?.nick ?? i, gold: map[i]?.gold ?? 0, gems: map[i]?.gems ?? 0 }));
 }
 
-export function AccountPicker({ value, onChange, label = "Conta" }: { value: number | undefined; onChange: (v: number | undefined) => void; label?: string }) {
+/** Escolhe a conta. Com `allowAll`, o valor 0 significa "todas as contas". */
+export function AccountPicker({ value, onChange, label = "Conta", allowAll = false }: { value: number | undefined; onChange: (v: number | undefined) => void; label?: string; allowAll?: boolean }) {
   const accs = useOnlineAccounts();
   useEffect(() => {
-    if (accs.length && (value === undefined || !accs.some((a) => a.id === value))) onChange(accs[0].id);
-  }, [accs, value, onChange]);
+    if (value === undefined && accs.length) onChange(allowAll ? 0 : accs[0].id);
+    else if (value !== undefined && value !== 0 && accs.length && !accs.some((a) => a.id === value)) onChange(accs[0].id);
+  }, [accs, value, onChange, allowAll]);
   if (!accs.length) return <span className="text-sm text-mute">Nenhuma conta online</span>;
   return (
     <label className="flex items-center gap-2">
-      <span className="text-sm font-semibold text-mute">{label}</span>
-      <select className="field" value={value ?? ""} onChange={(e) => onChange(Number(e.target.value))}>
+      {label && <span className="text-sm font-semibold text-mute">{label}</span>}
+      <select className="field" value={value ?? ""} onChange={(e) => onChange(Number(e.target.value))} aria-label={label || "Conta"}>
+        {allowAll && <option value={0}>Todas as contas</option>}
         {accs.map((a) => (
           <option key={a.id} value={a.id}>
             {a.nick}
@@ -112,9 +115,9 @@ export function AccountPicker({ value, onChange, label = "Conta" }: { value: num
 
 export function CurrencyToggle({ value, onChange }: { value: Moeda; onChange: (m: Moeda) => void }) {
   return (
-    <div className="flex gap-1.5" role="group" aria-label="Moeda">
+    <div className="flex gap-1 rounded-xl border border-line bg-tile p-0.5" role="group" aria-label="Moeda">
       {(["gold", "orb"] as Moeda[]).map((m) => (
-        <button key={m} className="btn" data-active={value === m} aria-pressed={value === m} onClick={() => onChange(m)}>
+        <button key={m} className="btn !border-transparent" data-active={value === m} aria-pressed={value === m} onClick={() => onChange(m)}>
           <Coin kind={m === "orb" ? "gem" : "gold"} size={16} />
           {m === "orb" ? "Gemas" : "Gold"}
         </button>
@@ -201,3 +204,25 @@ export function secondsLabel(sec: number): string {
   const m = Math.floor((sec % 3600) / 60);
   return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
 }
+
+/** Seletor segmentado simples (poucas opções, uma escolhida). */
+export function Seg<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[]; label: string }) {
+  return (
+    <div className="flex gap-1 rounded-xl border border-line bg-tile p-0.5" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} className="btn !border-transparent" data-active={value === o.id} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Hoje", "Ontem" ou 08/11 — cabeçalho de dia para listas. */
+export function dayHeading(ms: number): string {
+  const d = new Date(ms);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+  return diff === 0 ? "Hoje" : diff === 1 ? "Ontem" : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+export const fmtTime = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });

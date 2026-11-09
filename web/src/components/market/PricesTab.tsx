@@ -7,7 +7,7 @@ import { type Deal, type Listing, type MarketItem, type Moeda, dealLabel, market
 import { fmtInt } from "@/lib/utils";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
-import { AccountPicker, CurrencyToggle, ErrorBox, LineChart, Loading, Money, fmtCountdown, useAsync, useTick } from "./shared";
+import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, fmtCountdown, useAsync, useTick } from "./shared";
 
 const SORTS = [
   { id: "discount", label: "Maior desconto" },
@@ -23,7 +23,7 @@ const DEAL_CLS: Record<string, string> = {
   justo: "border-line bg-tile text-mute",
 };
 export function DealBadge({ d }: { d?: Deal }) {
-  if (!d) return null;
+  if (d !== "barato") return null; // só destaca o que vale a pena; o resto é ruído
   return <span className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-bold uppercase ${DEAL_CLS[d]}`}>{dealLabel(d)}</span>;
 }
 
@@ -71,10 +71,10 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
         <CurrencyToggle value={moeda} onChange={setMoeda} />
         <div className="flex gap-1.5">
           <button className="btn" onClick={() => setRule("alert")}>
-            <Bell className="size-4" /> Criar alerta
+            <Bell className="size-4" /> Avisar
           </button>
           <button className="btn" onClick={() => setRule("snipe")}>
-            <Crosshair className="size-4" /> Sniper
+            <Crosshair className="size-4" /> Comprar sozinho
           </button>
         </div>
       </div>
@@ -137,12 +137,11 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
   );
 }
 
-export function PricesTab({ account, onAccount }: { account: number | undefined; onAccount: (a: number | undefined) => void }) {
+export function PricesTab() {
   const [moeda, setMoeda] = useState<Moeda>("gold");
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [onlyFav, setOnlyFav] = useState(false);
-  const [onlyCheap, setOnlyCheap] = useState(false);
   const [sort, setSort] = useState<SortId>("discount");
   const [open, setOpen] = useState<MarketItem | null>(null);
   const ov = useAsync(() => marketApi.overview(), [], { every: 30000 });
@@ -162,13 +161,13 @@ export function PricesTab({ account, onAccount }: { account: number | undefined;
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const out = items.filter((i) => price(i) != null && (!t || i.name.toLowerCase().includes(t)) && (!cat || i.category === cat) && (!onlyFav || i.fav) && (!onlyCheap || deal(i) === "barato"));
+    const out = items.filter((i) => price(i) != null && (!t || i.name.toLowerCase().includes(t)) && (!cat || i.category === cat) && (!onlyFav || i.fav));
     out.sort((a, b) =>
       sort === "discount" ? discount(b) - discount(a) : sort === "cheap" ? (price(a) ?? 0) - (price(b) ?? 0) : sort === "supply" ? b.units - a.units : a.name.localeCompare(b.name),
     );
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, cat, onlyFav, onlyCheap, sort, moeda]);
+  }, [items, q, cat, onlyFav, sort, moeda]);
 
   const toggleFav = async (i: MarketItem) => {
     setFavs((f) => ({ ...f, [i.id]: !i.fav }));
@@ -187,35 +186,30 @@ export function PricesTab({ account, onAccount }: { account: number | undefined;
       <div className="flex flex-wrap items-center gap-2">
         <input className="field min-w-0 flex-1 sm:max-w-xs" type="search" placeholder="Buscar item…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar item" />
         <CurrencyToggle value={moeda} onChange={setMoeda} />
-        <AccountPicker value={account} onChange={onAccount} label="Consultar com" />
+        <button className="btn" data-active={onlyFav} aria-pressed={onlyFav} onClick={() => setOnlyFav(!onlyFav)} title="Só favoritos" aria-label="Só favoritos">
+          <Star className={`size-4 ${onlyFav ? "fill-poke-gold" : ""}`} />
+        </button>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button className="btn" data-active={!cat} onClick={() => setCat("")}>
-          Tudo
-        </button>
-        {cats.map((c) => (
-          <button key={c} className="btn" data-active={cat === c} onClick={() => setCat(cat === c ? "" : c)}>
-            {CATEGORY_LABEL[c] ?? c}
-          </button>
-        ))}
-        <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
-        <button className="btn" data-active={onlyFav} onClick={() => setOnlyFav(!onlyFav)}>
-          <Star className="size-4" /> Favoritos
-        </button>
-        <button className="btn" data-active={onlyCheap} onClick={() => setOnlyCheap(!onlyCheap)}>
-          Só baratos
-        </button>
-        <select className="field ml-auto" value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Ordenar">
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="field" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Categoria">
+          <option value="">Todas as categorias</option>
+          {cats.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABEL[c] ?? c}
+            </option>
+          ))}
+        </select>
+        <select className="field" value={sort} onChange={(e) => setSort(e.target.value as SortId)} aria-label="Ordenar">
           {SORTS.map((s) => (
             <option key={s.id} value={s.id}>
               {s.label}
             </option>
           ))}
         </select>
+        <span className="text-xs text-mute">
+          {rows.length} itens · <span className="text-poke-green">Barato</span> = 15% ou mais abaixo da média de {ov.data?.days ?? 7} dias
+        </span>
       </div>
-      <p className="text-xs text-mute">
-        “Barato” = menor preço pelo menos 15% abaixo da média de venda dos últimos {ov.data?.days ?? 7} dias. {rows.length} itens.
-      </p>
 
       {rows.length === 0 ? (
         <p className="card p-8 text-center text-sm text-mute">Nenhum item com esses filtros.</p>
@@ -231,7 +225,10 @@ export function PricesTab({ account, onAccount }: { account: number | undefined;
                   <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3" onClick={() => setOpen(i)}>
                     <ItemSprite icon={i.icon} size={36} alt="" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-bold">{i.name}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="truncate font-bold">{i.name}</span>
+                        <DealBadge d={deal(i)} />
+                      </span>
                       <span className="block truncate text-xs text-mute">
                         {i.ads} anúncios · {fmtInt(i.units)} un.
                       </span>
@@ -248,9 +245,6 @@ export function PricesTab({ account, onAccount }: { account: number | undefined;
                         )}
                         {d > 0.001 && <span className="tnum text-poke-green">−{Math.round(d * 100)}%</span>}
                       </span>
-                    </span>
-                    <span className="hidden w-20 shrink-0 justify-end sm:flex">
-                      <DealBadge d={deal(i)} />
                     </span>
                   </button>
                   <button className="btn shrink-0" onClick={() => void toggleFav(i)} aria-pressed={i.fav} aria-label={i.fav ? "Tirar dos favoritos" : "Favoritar"}>
@@ -269,7 +263,7 @@ export function PricesTab({ account, onAccount }: { account: number | undefined;
             key={open.id}
             item={items.find((x) => x.id === open.id) ?? open}
             moeda={moeda}
-            account={account}
+            account={undefined}
             onClose={() => setOpen(null)}
             onFav={() => void toggleFav(items.find((x) => x.id === open.id) ?? open)}
           />

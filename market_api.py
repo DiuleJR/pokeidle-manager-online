@@ -212,6 +212,16 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
         except MarketError as e:
             return fail(e)
 
+    @app.get("/api/market/valuation")
+    async def valuation(request: Request, tok: str | None = Query(None, alias="token")):
+        """Preço estimado dos itens e dos shiny (em Gemas) e US$ por Gema, para o valor do inventário."""
+        if (r := guard(request, tok)):
+            return r
+        try:
+            return await svc.valuation()
+        except MarketError as e:
+            return fail(e)
+
     @app.get("/api/market/log")
     async def mlog(request: Request, tok: str | None = Query(None, alias="token")):
         if (r := guard(request, tok)):

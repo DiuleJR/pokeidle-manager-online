@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { ItemsView } from "@/components/ItemsView";
 import { PokemonsView } from "@/components/PokemonsView";
+import { ValueCard } from "@/components/ValueCard";
+import { useValuation } from "@/lib/valuation";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 
 /** Seletor de conta (controlado pelo App, fica no cabeçalho) + abas Itens / Pokémon. */
@@ -8,9 +10,11 @@ export function InventoryView({ account }: { account: string }) {
   const ids = useAccountIds();
   const [sub, setSub] = useState<"items" | "pokemons">("items");
   const selected = account === "all" || ids.includes(account) ? account : "all";
+  const val = useValuation();
 
   return (
     <div className="space-y-2.5 sm:space-y-4">
+      <ValueCard account={selected} valuation={val.data} error={val.error} />
       <div className="flex gap-1.5 sm:gap-2" role="tablist" aria-label="Seção">
         <button role="tab" aria-selected={sub === "items"} className="btn" data-active={sub === "items"} onClick={() => setSub("items")}>
           Itens
@@ -19,7 +23,7 @@ export function InventoryView({ account }: { account: string }) {
           Pokémon
         </button>
       </div>
-      {sub === "items" ? <ItemsView account={selected} /> : <PokemonsView account={selected} />}
+      {sub === "items" ? <ItemsView account={selected} valuation={val.data} /> : <PokemonsView account={selected} valuation={val.data} />}
     </div>
   );
 }

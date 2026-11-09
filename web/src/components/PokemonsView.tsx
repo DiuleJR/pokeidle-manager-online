@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import { PokemonSprite } from "@/components/Sprites";
-import { ConfirmDialog } from "@/components/ui";
+import { PokemonSprite, ShinyMark } from "@/components/Sprites";
+import { Coin, ConfirmDialog } from "@/components/ui";
 import { sellDepot, usePokemons } from "@/lib/api";
 import { useAccountsMap } from "@/lib/telemetry";
 import type { PokemonRow, SellDepotResult } from "@/lib/types";
 import { fmtInt, fmtShort } from "@/lib/utils";
+import type { Valuation } from "@/lib/valuation";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -22,10 +23,22 @@ const SORTS: Record<SortKey, { label: string; fn: (a: PokemonRow, b: PokemonRow)
 };
 
 /** Todos os Pokémons de uma conta ou de todas juntas (lista vinda de /api/pokemons). */
-export function PokemonsView({ account }: { account: string }) {
+/** Valor estimado de um shiny, ao lado do nome. */
+function GemTag({ v }: { v: number }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-mute tnum" title="Valor estimado (mediana das vendas recentes da espécie)">
+      <Coin kind="gem" size={12} />
+      {fmtShort(Math.round(v))}
+    </span>
+  );
+}
+
+export function PokemonsView({ account, valuation }: { account: string; valuation?: Valuation | null }) {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const { rows, error } = usePokemons(account, refreshNonce);
   const accounts = useAccountsMap();
+  const shinyGems = useMemo(() => new Map((valuation?.shinies ?? []).map((v) => [`${v.account}-${v.id}`, v.gems])), [valuation]);
+  const gemsOf = (p: PokemonRow) => (p.shiny ? shinyGems.get(`${Number(p.account.replace(/[^0-9]/g, ""))}-${p.id}`) : null);
   const [query, setQuery] = useState("");
   const [shiny, setShiny] = useState(false);
   const [team, setTeam] = useState(false);
@@ -157,10 +170,12 @@ export function PokemonsView({ account }: { account: string }) {
                   transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: Math.min(i, 12) * 0.02 }}
                   className="tile flex items-center gap-2.5 px-2.5 py-1.5"
                 >
-                  <PokemonSprite looktype={p.looktype} size={36} shiny={p.shiny} />
+                  <PokemonSprite looktype={p.looktype} size={52} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 font-semibold">
                       <span className="truncate">{p.name}</span>
+                      {p.shiny && <ShinyMark />}
+                      {gemsOf(p) ? <GemTag v={gemsOf(p) as number} /> : null}
                       {p.slot !== null && <span className="rounded bg-poke-blue px-1 py-0.5 text-[9px] font-bold leading-none text-void">TIME</span>}
                     </div>
                     <div className="truncate text-xs text-mute">
@@ -192,8 +207,10 @@ export function PokemonsView({ account }: { account: string }) {
                     <tr key={`${p.account}-${p.id}`} className="border-b border-line transition-colors duration-150 hover:bg-tile">
                       <td className="py-1 pr-2">
                         <span className="flex items-center gap-2 font-semibold">
-                          <PokemonSprite looktype={p.looktype} size={36} shiny={p.shiny} />
+                          <PokemonSprite looktype={p.looktype} size={48} />
                           {p.name}
+                          {p.shiny && <ShinyMark />}
+                          {gemsOf(p) ? <GemTag v={gemsOf(p) as number} /> : null}
                           {p.slot !== null && (
                             <span className="rounded bg-poke-blue px-1.5 py-0.5 text-[10px] font-bold leading-none text-void">
                               TIME

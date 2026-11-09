@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, Star } from "lucide-react";
 import { memo, useEffect, useState } from "react";
-import { ItemSprite, PokemonSprite } from "@/components/Sprites";
+import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { StatusPill } from "@/components/StatusPill";
 import { AnimatedNumber, Coin, GoldPerHourIcon } from "@/components/ui";
 import { serverNow, useAccount } from "@/lib/telemetry";
@@ -174,7 +174,7 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
           style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)", boxShadow: "0 0 14px -2px rgba(200,146,58,.45)" }}
         >
           <span className="origin-center scale-[.72] sm:scale-100">
-            <PokemonSprite looktype={pk?.looktype} size={52} shiny={pk?.shiny} />
+            <PokemonSprite looktype={pk?.looktype} size={52} />
           </span>
         </motion.div>
 
@@ -192,6 +192,7 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
             <span className="tnum">Nv. {fmtShort(acc.level)}</span>
             <span aria-hidden>·</span>
             <span className="truncate">{pk?.name ?? "—"}</span>
+            {pk?.shiny && <ShinyMark />}
           </div>
           <div
             className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/50 sm:mt-2 sm:h-1.5"

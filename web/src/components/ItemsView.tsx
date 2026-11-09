@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ItemSprite } from "@/components/Sprites";
-import { AnimatedNumber } from "@/components/ui";
+import { AnimatedNumber, Coin } from "@/components/ui";
+import type { Valuation } from "@/lib/valuation";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { fmtShort } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ interface Row {
   rare: boolean;
   icon?: string | null;
   qty: number;
+  unit?: number;
   per: PerAccount[];
 }
 
@@ -101,6 +103,12 @@ function ItemTile({ row, showAccounts, index }: { row: Row; showAccounts: boolea
       <div className="text-lg font-extrabold leading-none sm:text-2xl">
         <AnimatedNumber value={row.qty} format={fmtShort} />
       </div>
+      {row.unit ? (
+        <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-mute tnum sm:text-xs" title={`≈ ${Math.round(row.unit)} Gemas cada (média de 7 dias)`}>
+          <Coin kind="gem" size={12} />
+          {fmtShort(Math.round(row.qty * row.unit))}
+        </div>
+      ) : null}
       {single && <div className="mt-1 max-w-full truncate text-[11px] font-medium text-mute sm:text-sm">{single.nick}</div>}
 
       <AnimatePresence>
@@ -138,7 +146,7 @@ function ItemTile({ row, showAccounts, index }: { row: Row; showAccounts: boolea
 }
 
 /** Itens (e balls) de uma conta ou de todas juntas, com sprites, filtros e detalhe por conta. */
-export function ItemsView({ account }: { account: string }) {
+export function ItemsView({ account, valuation }: { account: string; valuation?: Valuation | null }) {
   const accounts = useAccountsMap();
   const ids = useAccountIds();
   const [query, setQuery] = useState("");
@@ -161,8 +169,9 @@ export function ItemsView({ account }: { account: string }) {
       for (const i of a.inventory.items)
         if (i.qty > 0) add(`i${i.id}`, i.name, groupOf(i.category ?? "loot"), !!i.rare, i.icon, i.qty, id);
     }
+    for (const r of map.values()) if (r.key.startsWith("i")) r.unit = valuation?.items[r.key.slice(1)]?.gems;
     return [...map.values()];
-  }, [accounts, ids, account]);
+  }, [accounts, ids, account, valuation]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

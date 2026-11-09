@@ -182,6 +182,9 @@ class FakeConn:
         self.acc = type("A", (), {"index": idx, "nick": nick, "name": f"ACC{idx}"})()
         self.mercado_cfg = {"catalogo": [{"id": 23, "nome": "Cocoon Stone", "categoria": "stone"}]}
         self.itens_nossos = {}
+        self.inventory = type("Inv", (), {"pokemons": lambda self_: [
+            {"id": 7, "nome": "Pikachu", "shiny": True}, {"id": 8, "nome": "Pikachu", "shiny": True},
+            {"id": 9, "nome": "Rattata", "shiny": False}]})()
 
 
 @pytest.fixture
@@ -376,3 +379,37 @@ def test_bot_never_sends_withdraw_or_transfer():
         src = inspect.getsource(mod)
         # só pode aparecer em comentário/docstring; nunca como mensagem enviada
         assert '"t": "orbs.sacar"' not in src and '"t": "banco.coins"' not in src
+
+
+def test_valuation_items_and_shiny(env, monkeypatch):
+    monkeypatch.setattr("market.MIN_GAP_S", 0)
+    reqs = []
+
+    def reply(msg):
+        loop = asyncio.get_running_loop()
+        reqs.append(msg["t"])
+        h = env.conn.market.handle_frame
+        if msg["t"] == "market.itens":
+            loop.call_soon(h, {"t": "market", "aba": "itens", "resumo": {"23": {"anuncios": 1, "unidades": 1, "minGold": 5, "minOrb": 2}},
+                               "medias": {"23": {"orb": {"media": 40, "unidades": 9}, "gold": {"media": 100, "unidades": 3}}}})
+        elif msg["t"] == "market.medias":
+            loop.call_soon(h, {"t": "market", "aba": "medias", "dias": 7, "medias": {"23": {"orb": {"media": 40, "unidades": 9}}}})
+        elif msg["t"] == "market.historicoGlobal":
+            assert msg["tipo"] == "pokemon" and msg["soShiny"] == 1 and msg["moeda"] == "orb" and msg["busca"] == "Pikachu"
+            rows = [{"bruto": b, "moeda": "orb"} for b in (100, 300, 200)]
+            loop.call_soon(h, {"t": "market", "aba": "historicoGlobal", "seq": msg["seq"], "linhas": rows})
+        elif msg["t"] == "orbs.painel":
+            loop.call_soon(h, {"t": "orbs", "saldo": 1, "precos": {"saque": 0.01}, "saques": [], "extrato": []})
+
+    async def go():
+        env.conn.market._ws.on_send = reply
+        v1 = await env.mgr.market.valuation()
+        n_hist = reqs.count("market.historicoGlobal")
+        await env.mgr.market.valuation()          # a espécie já está em cache: não consulta de novo
+        return v1, n_hist, reqs.count("market.historicoGlobal")
+
+    v, first, second = run(go())
+    assert v["items"]["23"]["gems"] == 40 and "gold" not in json.dumps(v["items"])
+    assert v["usdPerGem"] == 0.01
+    assert [s["gems"] for s in v["shinies"]] == [200, 200]          # mediana das vendas; só os shiny contam
+    assert first == 1 and second == 1

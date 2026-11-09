@@ -14,7 +14,17 @@ function Ball({ size }: { size: number }) {
 }
 
 /** Retrato do Pokémon (atlas de marcadores do jogo, indexado por looktype). */
-export function PokemonSprite({ looktype, size = 64, shiny }: { looktype?: number | null; size?: number; shiny?: boolean }) {
+/** O brilho do shiny: vai AO LADO do nome, nunca por cima da sprite (que já é pequena). */
+export function ShinyMark({ className = "" }: { className?: string }) {
+  return (
+    <span className={`shrink-0 ${className}`} title="Shiny" aria-label="Shiny">
+      ✨
+    </span>
+  );
+}
+
+/** Retrato do Pokémon (atlas de marcadores do jogo, indexado por looktype). */
+export function PokemonSprite({ looktype, size = 64 }: { looktype?: number | null; size?: number; shiny?: boolean }) {
   const atlas = useAtlas();
   const slot = looktype != null ? atlas?.slots[String(looktype)] : undefined;
   return (
@@ -34,7 +44,6 @@ export function PokemonSprite({ looktype, size = 64, shiny }: { looktype?: numbe
       ) : (
         <Ball size={size} />
       )}
-      {shiny && <span className="absolute -right-1 -top-1 text-xs" title="Shiny">✨</span>}
     </span>
   );
 }

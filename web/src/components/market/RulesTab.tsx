@@ -6,7 +6,7 @@ import { ConfirmDialog } from "@/components/ui";
 import { MOEDA_LABEL, type Moeda, type Rule, type RuleSpec, marketApi } from "@/lib/market";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { fmtInt } from "@/lib/utils";
-import { CurrencyToggle, ErrorBox, Loading, errMsg, fmtWhen, useAsync } from "./shared";
+import { CurrencyToggle, ErrorBox, Loading, Seg, errMsg, fmtWhen, useAsync } from "./shared";
 
 const ELEMENTS = ["", "NORMAL", "FIRE", "WATER", "GRASS", "ELECTRIC", "ICE", "FIGHTING", "POISON", "GROUND", "FLYING", "PSYCHIC", "BUG", "ROCK", "GHOST", "DRAGON", "DARK", "STEEL", "FAIRY"];
 
@@ -32,7 +32,8 @@ export const emptySpec = (over: Partial<RuleSpec> = {}): RuleSpec => ({
 const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
 
 /** Criar/editar uma regra (alerta no Discord ou compra automática). */
-export function RuleDialog({ kind, rule, preset, onClose, onSaved }: { kind: "alert" | "snipe"; rule?: Rule; preset?: Partial<RuleSpec>; onClose: () => void; onSaved: () => void }) {
+export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }: { kind: "alert" | "snipe"; rule?: Rule; preset?: Partial<RuleSpec>; onClose: () => void; onSaved: () => void }) {
+  const [kind, setKind] = useState<"alert" | "snipe">(initialKind);
   const [spec, setSpec] = useState<RuleSpec>(() => ({ ...emptySpec(preset), ...(rule?.spec ?? {}) }));
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [busy, setBusy] = useState(false);
@@ -75,7 +76,18 @@ export function RuleDialog({ kind, rule, preset, onClose, onSaved }: { kind: "al
     (snipe && (!spec.account_id || !(spec.budget_daily && spec.budget_daily > 0)));
 
   return (
-    <Modal title={`${rule ? "Editar" : "Nova"} ${snipe ? "compra automática (sniper)" : "alerta no Discord"}`} onClose={onClose} wide>
+    <Modal title={rule ? "Editar regra" : "Nova regra"} onClose={onClose} wide>
+      {!rule && (
+        <Seg
+          label="O que a regra faz"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { id: "alert", label: "Avisar no Discord" },
+            { id: "snipe", label: "Comprar sozinho" },
+          ]}
+        />
+      )}
       {snipe ? (
         <Notice tone="warn">
           O sniper <b>gasta de verdade</b>: compra sozinho, na conta escolhida, quando aparece um anúncio dentro do seu teto. Perder o sorteio da liberação não custa nada. Ele só roda com a chave geral
@@ -190,7 +202,7 @@ export function RuleDialog({ kind, rule, preset, onClose, onSaved }: { kind: "al
   );
 }
 
-function RuleRow({ r, onEdit, onChanged }: { r: Rule; onEdit: () => void; onChanged: () => void }) {
+function RuleRow({ r, onEdit, onChanged, accountNick }: { r: Rule; onEdit: () => void; onChanged: () => void; accountNick?: string }) {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const s = r.spec;
@@ -211,7 +223,7 @@ function RuleRow({ r, onEdit, onChanged }: { r: Rule; onEdit: () => void; onChan
       <div className="min-w-0 flex-1">
         <p className="truncate font-bold">{r.label}</p>
         <p className="flex flex-wrap items-center gap-x-2 text-xs text-mute">
-          <span>{r.kind === "snipe" ? "Compra automática" : "Alerta"}</span>
+          <span className="font-semibold text-fg/80">{r.kind === "snipe" ? `Compra com ${accountNick ?? "conta?"}` : "Avisa no Discord"}</span>
           <span>
             {price} {MOEDA_LABEL[s.moeda]}
           </span>
@@ -254,6 +266,7 @@ const STATUS_TONE: Record<string, string> = { comprado: "text-poke-green", perde
 export function RulesTab() {
   const rules = useAsync(() => marketApi.rules(), [], { every: 15000 });
   const log = useAsync(() => marketApi.log(), [], { every: 15000 });
+  const accs = useAccountsMap();
   const [dlg, setDlg] = useState<{ kind: "alert" | "snipe"; rule?: Rule } | null>(null);
   const [switching, setSwitching] = useState(false);
   const [confirmOn, setConfirmOn] = useState(false);
@@ -275,68 +288,78 @@ export function RulesTab() {
       setSwitching(false);
     }
   };
+  const nickOf = (id?: number | null) => (id ? (accs[`acc${id}`]?.nick ?? `conta ${id}`) : undefined);
 
   if (rules.loading && !rules.data) return <Loading />;
   if (rules.error && !rules.data) return <ErrorBox error={rules.error} onRetry={rules.reload} />;
   const list = rules.data?.rules ?? [];
   const on = rules.data?.sniperEnabled ?? false;
+  const buying = list.filter((r) => r.kind === "snipe" && r.enabled);
+  const buyers = Array.from(new Set(buying.map((r) => nickOf(r.spec.account_id)).filter(Boolean)));
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <section className={`card space-y-2 p-3 sm:p-4 ${on ? "" : ""}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
+      <section className="card space-y-2 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-base font-extrabold sm:text-lg">
-              <Crosshair className="size-5 text-poke-gold" aria-hidden /> Chave geral do sniper
+              <Crosshair className="size-5 text-poke-gold" aria-hidden /> Compra automática (sniper)
             </h2>
-            <p className="text-sm text-mute">
-              O jogo permite automação no mercado, e o sorteio entre quem compra junto deixa a disputa justa. Com a chave <b>desligada</b>, nenhuma regra de compra roda (os alertas continuam).
+            <p className="mt-0.5 text-sm">
+              {on ? (
+                buying.length ? (
+                  <>
+                    <span className="font-bold text-poke-green">Ligada.</span> {buying.length} regra{buying.length > 1 ? "s" : ""} comprando com <b>{buyers.join(", ")}</b>.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold text-poke-green">Ligada</span>, mas nenhuma regra de compra está ativa.
+                  </>
+                )
+              ) : (
+                <>
+                  <span className="font-bold text-mute">Desligada.</span> Nada é comprado sozinho; os alertas continuam funcionando.
+                </>
+              )}
             </p>
           </div>
-          <button
-            className="btn"
-            data-active={on}
-            disabled={switching}
-            onClick={() => (on ? void setSniper(false) : setConfirmOn(true))}
-            aria-pressed={on}
-          >
+          <button className="btn" data-active={on} disabled={switching} onClick={() => (on ? void setSniper(false) : setConfirmOn(true))} aria-pressed={on}>
             <span className={`size-2 rounded-full ${on ? "bg-poke-green" : "bg-mute"}`} />
-            {on ? "Sniper LIGADO" : "Sniper desligado"}
+            {on ? "Desligar" : "Ligar"}
           </button>
         </div>
         {err && <Notice tone="error">{err}</Notice>}
       </section>
 
       <section className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-extrabold sm:text-lg">Regras</h2>
-          <div className="flex gap-1.5">
-            <button className="btn" onClick={() => setDlg({ kind: "alert" })}>
-              <Plus className="size-4" /> Alerta
-            </button>
-            <button className="btn" onClick={() => setDlg({ kind: "snipe" })}>
-              <Plus className="size-4" /> Compra automática
-            </button>
-          </div>
+          <button className="btn" data-active="true" onClick={() => setDlg({ kind: "alert" })}>
+            <Plus className="size-4" /> Nova regra
+          </button>
         </div>
         {list.length === 0 ? (
-          <p className="card p-6 text-center text-sm text-mute">Nenhuma regra ainda. Crie um alerta para ser avisado no Discord, ou uma compra automática para pegar ofertas antes dos outros.</p>
+          <p className="card p-6 text-center text-sm text-mute">
+            Nenhuma regra ainda. Crie uma para ser avisado no Discord, ou para comprar sozinho quando o preço estiver bom.
+            <br />
+            Dica: abra um item na aba Comprar e use <b>Avisar</b> ou <b>Comprar sozinho</b>.
+          </p>
         ) : (
           <ul className="space-y-2">
             {list.map((r) => (
-              <RuleRow key={r.id} r={r} onEdit={() => setDlg({ kind: r.kind, rule: r })} onChanged={reload} />
+              <RuleRow key={r.id} r={r} accountNick={nickOf(r.spec.account_id)} onEdit={() => setDlg({ kind: r.kind, rule: r })} onChanged={reload} />
             ))}
           </ul>
         )}
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-base font-extrabold sm:text-lg">Registro de compras</h2>
+        <h2 className="text-base font-extrabold sm:text-lg">Últimas compras</h2>
         {(log.data?.log.length ?? 0) === 0 ? (
           <p className="card p-4 text-center text-sm text-mute">Nada aconteceu ainda.</p>
         ) : (
           <ul className="card divide-y divide-line">
-            {log.data?.log.slice(0, 30).map((l) => (
+            {log.data?.log.slice(0, 20).map((l) => (
               <li key={l.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2 text-sm">
                 <span className="tnum text-xs text-mute">{fmtWhen(l.ts * 1000)}</span>
                 <span className={`text-xs font-bold uppercase ${STATUS_TONE[l.status] ?? "text-mute"}`}>{l.status.replace("_", " ")}</span>
@@ -363,9 +386,9 @@ export function RulesTab() {
       <ConfirmDialog
         open={confirmOn}
         danger={false}
-        title="Ligar o sniper?"
-        message="As regras de compra automática passam a comprar sozinhas, dentro do teto de preço e do orçamento diário de cada uma. Você pode desligar aqui a qualquer momento."
-        confirmLabel="Ligar sniper"
+        title="Ligar a compra automática?"
+        message="As regras de compra passam a comprar sozinhas, dentro do preço máximo e do orçamento diário de cada uma. Perder o sorteio da liberação não custa nada. Você pode desligar aqui a qualquer momento."
+        confirmLabel="Ligar"
         onCancel={() => setConfirmOn(false)}
         onConfirm={() => {
           setConfirmOn(false);
