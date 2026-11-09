@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Copy, KeyRound, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { ConfirmDialog } from "@/components/ui";
@@ -8,12 +8,12 @@ import {
   BOOKMARKLET,
   SNIPPET,
   admin,
+  authApi,
   type AdminAccount,
   type GlobalSettings,
   type ImportResult,
   type ProxyInput,
 } from "@/lib/admin";
-import { savePanelKey } from "@/lib/api";
 import type { AccountStatus } from "@/lib/types";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -811,32 +811,78 @@ function GlobalForm() {
   );
 }
 
-// ------------------------------------------------------------------ chave do painel
-function KeyGate() {
-  const [key, setKey] = useState("");
+// ------------------------------------------------------------------ segurança
+function SecurityGroup() {
+  const [passwordSet, setPasswordSet] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ current: "", next: "", again: "" });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    authApi.status().then((s) => setPasswordSet(s.passwordSet)).catch(() => setPasswordSet(null));
+  }, []);
+
+  const save = async () => {
+    if (f.next.length < 8) return setMsg({ ok: false, text: "A nova senha precisa ter pelo menos 8 caracteres." });
+    if (f.next !== f.again) return setMsg({ ok: false, text: "As senhas não são iguais." });
+    setBusy(true);
+    setMsg(null);
+    try {
+      await authApi.changePassword(passwordSet ? f.current : null, f.next);
+      setPasswordSet(true);
+      setOpen(false);
+      setF({ current: "", next: "", again: "" });
+      setMsg({ ok: true, text: "Senha salva. Os outros aparelhos precisarão entrar de novo." });
+    } catch (e) {
+      setMsg({ ok: false, text: errMsg(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="card mx-auto max-w-md space-y-3 p-5">
-      <h2 className="flex items-center gap-2 text-lg font-extrabold">
-        <KeyRound className="size-5 text-poke-gold" aria-hidden />
-        Chave do painel
-      </h2>
-      <p className="text-sm text-mute">
-        Para gerenciar as contas, informe a chave do painel. Ela foi mostrada no console na primeira execução (ou é o valor de <code>TELEMETRY_TOKEN</code>).
-      </p>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!key.trim()) return;
-          savePanelKey(key);
-          location.reload(); // reabre a telemetria (WebSocket) já com a chave
-        }}
-      >
-        <input className="field min-w-0 flex-1" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Chave" autoComplete="off" autoFocus />
-        <button className="btn" data-active="true" type="submit">
-          Entrar
-        </button>
-      </form>
+    <div className="space-y-2.5">
+      {!open && (
+        <div className="flex flex-wrap gap-1.5">
+          <button className="btn" onClick={() => { setOpen(true); setMsg(null); }}>
+            {passwordSet === false ? "Definir senha" : "Alterar senha"}
+          </button>
+          <button
+            className="btn"
+            onClick={async () => {
+              await authApi.logout().catch(() => undefined);
+              location.reload();
+            }}
+          >
+            Sair
+          </button>
+        </div>
+      )}
+      {open && (
+        <div className="space-y-2.5">
+          {passwordSet && (
+            <Labeled label="Senha atual">
+              <input className="field w-full" type="password" value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} autoComplete="current-password" />
+            </Labeled>
+          )}
+          <Labeled label="Nova senha" hint="Mínimo de 8 caracteres.">
+            <input className="field w-full" type="password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} autoComplete="new-password" />
+          </Labeled>
+          <Labeled label="Repita a nova senha">
+            <input className="field w-full" type="password" value={f.again} onChange={(e) => setF({ ...f, again: e.target.value })} autoComplete="new-password" />
+          </Labeled>
+          <div className="flex gap-1.5">
+            <button className="btn border-0 bg-poke-gold font-bold text-void hover:bg-[#f6ca5e]" disabled={busy} onClick={save}>
+              {busy ? "Salvando…" : "Salvar senha"}
+            </button>
+            <button className="btn" onClick={() => setOpen(false)} disabled={busy}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {msg && <Notice tone={msg.ok ? "ok" : "error"}>{msg.text}</Notice>}
     </div>
   );
 }
@@ -845,17 +891,15 @@ const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
 export function SettingsView() {
   const [data, setData] = useState<{ max: number; accounts: AdminAccount[] } | null>(null);
-  const [needKey, setNeedKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setData(await admin.accounts());
-      setNeedKey(false);
       setError(null);
     } catch (e) {
-      if (e instanceof AuthError) setNeedKey(true);
+      if (e instanceof AuthError) location.reload(); // sessão expirou: volta para a tela de login
       else setError(errMsg(e));
     }
   }, []);
@@ -865,8 +909,6 @@ export function SettingsView() {
     const i = setInterval(() => void load(), 4000);
     return () => clearInterval(i);
   }, [load]);
-
-  if (needKey) return <KeyGate />;
 
   const insecure = location.protocol === "http:" && !LOCAL_HOSTS.includes(location.hostname);
   const full = !!data && data.accounts.length >= data.max;
@@ -903,6 +945,13 @@ export function SettingsView() {
         <h2 className="text-lg font-extrabold uppercase tracking-wide">Geral</h2>
         <div className="tile p-3 sm:p-4">
           <GlobalForm />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-extrabold uppercase tracking-wide">Segurança</h2>
+        <div className="tile p-3 sm:p-4">
+          <SecurityGroup />
         </div>
       </section>
 

@@ -1,15 +1,13 @@
 """Rotas de gestão do painel: contas, importação, testes e configurações.
 
-Toda rota aqui exige a chave do painel (`Authorization: Bearer <chave>` ou `?token=`):
-é o TELEMETRY_TOKEN do ambiente ou a chave gerada na 1ª execução (impressa no console).
+Toda rota aqui exige login no painel (cookie de sessão) ou o TELEMETRY_TOKEN
+(`Authorization: Bearer <token>` ou `?token=`), conforme auth.py.
 Tokens do jogo e senhas de proxy NUNCA saem pela API: só dicas mascaradas.
 """
 from __future__ import annotations
 
-import hmac
 import json
 import re
-import time
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Query, Request
@@ -17,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import config
+from auth import Auth
 from config import ProxyConfig, build_account_config
 from connection import State, probe_account, probe_exit_ip
 from notify import BLUE
@@ -148,24 +147,9 @@ def _options_dict(o: OptionsIn | None) -> dict:
 
 
 # ----------------------------------------------------------------- rotas
-def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store, admin_key: str) -> None:
-    fails: dict[str, list[float]] = {}  # ip -> instantes de falha (janela de 60 s)
-
-    def _denied(request: Request, supplied: str | None) -> JSONResponse | None:
-        ip = request.client.host if request.client else "?"
-        now = time.time()
-        recent = [t for t in fails.get(ip, []) if now - t < 60]
-        if len(recent) >= 10:
-            return JSONResponse({"error": "Muitas tentativas. Aguarde 1 minuto."}, status_code=429)
-        if supplied is not None and hmac.compare_digest(supplied, admin_key):
-            return None
-        fails[ip] = recent + [now]
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-
+def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store, auth: Auth) -> None:
     def guard(request: Request, tok: str | None) -> JSONResponse | None:
-        auth = request.headers.get("authorization", "")
-        supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
-        return _denied(request, supplied)
+        return auth.guard(request, tok)
 
     def _public(row: dict) -> dict:
         conn = manager.get(row["id"])

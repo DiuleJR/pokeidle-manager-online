@@ -87,6 +87,35 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return j as T;
 }
 
+export interface AuthStatus {
+  mode: "setup" | "login";
+  authenticated: boolean;
+  needsCode: boolean;
+  passwordSet: boolean;
+  minPassword: number;
+}
+
+/** Chamadas de autenticação: erros (401/403/429) viram mensagens legíveis, não AuthError. */
+async function authCall<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const r = await fetch(`${httpBase()}${path}`, {
+    method,
+    headers: body !== undefined ? { "content-type": "application/json" } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(j?.error || (Array.isArray(j?.detail) ? "Dados inválidos" : `HTTP ${r.status}`));
+  return j as T;
+}
+
+export const authApi = {
+  status: () => authCall<AuthStatus>("GET", "/api/auth/status"),
+  setup: (password: string, code?: string) => authCall<{ ok: boolean }>("POST", "/api/auth/setup", { password, code: code ?? null }),
+  login: (password: string) => authCall<{ ok: boolean }>("POST", "/api/auth/login", { password }),
+  logout: () => authCall<{ ok: boolean }>("POST", "/api/auth/logout"),
+  changePassword: (current: string | null, next: string) =>
+    authCall<{ ok: boolean }>("POST", "/api/auth/password", { current, new: next }),
+};
+
 export const admin = {
   accounts: () => call<{ max: number; accounts: AdminAccount[] }>("GET", "/api/accounts"),
   importAccount: (b: {

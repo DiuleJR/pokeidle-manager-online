@@ -45,13 +45,18 @@ def test_mask_never_returns_secret():
     assert m == "…cdef" and "0123" not in m
 
 
-def test_admin_key_env_wins_then_generated_and_persisted(store, monkeypatch):
-    monkeypatch.setenv("TELEMETRY_TOKEN", "minha-chave")
-    assert store.admin_key() == "minha-chave"
-    monkeypatch.delenv("TELEMETRY_TOKEN")
-    k1 = store.admin_key()
-    assert len(k1) >= 16 and store.generated_key_now is True
-    assert store.admin_key() == k1
+def test_sessions_expire_and_can_be_cleared(store):
+    import time
+    store.add_session("a" * 64, time.time() + 60)
+    store.add_session("b" * 64, time.time() - 1)  # já vencida
+    assert store.session_valid("a" * 64) is True
+    assert store.session_valid("b" * 64) is False
+    assert store.session_valid("c" * 64) is False
+    store.delete_session("a" * 64)
+    assert store.session_valid("a" * 64) is False
+    store.add_session("d" * 64, time.time() + 60)
+    store.clear_sessions()
+    assert store.session_valid("d" * 64) is False
 
 
 def test_import_env_once(store, monkeypatch):

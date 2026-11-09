@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import secrets
 import sqlite3
 import threading
 import time
@@ -48,6 +47,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires REAL NOT NULL
 );
 """
 
@@ -192,20 +195,28 @@ class Store:
     def all_settings(self) -> dict[str, str]:
         return {k: self.get_setting(k) for k in SETTING_DEFAULTS}
 
-    # ----------------------------------------------------------- chave do painel
-    def admin_key(self) -> str:
-        """Chave do painel: TELEMETRY_TOKEN do ambiente, ou uma chave gerada na 1ª execução."""
-        env = os.getenv("TELEMETRY_TOKEN", "").strip()
-        if env:
-            return env
-        key = self.get_setting("admin_key")
-        if not key:
-            key = secrets.token_urlsafe(18)
-            self.set_setting("admin_key", key)
-            self.generated_key_now = True
-        return key
+    # ----------------------------------------------------------- sessões do painel
+    def add_session(self, token_hash: str, expires: float) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
+            self._db.execute("INSERT OR REPLACE INTO sessions(token_hash, expires) VALUES(?, ?)",
+                             (token_hash, expires))
+            self._db.commit()
 
-    generated_key_now = False
+    def session_valid(self, token_hash: str) -> bool:
+        with self._lock:
+            r = self._db.execute("SELECT expires FROM sessions WHERE token_hash=?", (token_hash,)).fetchone()
+        return bool(r) and r["expires"] > time.time()
+
+    def delete_session(self, token_hash: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
+            self._db.commit()
+
+    def clear_sessions(self) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM sessions")
+            self._db.commit()
 
     # ----------------------------------------------------------- migração do .env
     def import_env_once(self) -> int:

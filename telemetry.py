@@ -5,15 +5,14 @@ Endpoints:
     GET /api/telemetry    snapshot atual (JSON)
     WS  /ws/telemetry     snapshot a cada TELEMETRY_INTERVAL_S segundos
 
-Auth opcional (TELEMETRY_TOKEN): HTTP via `Authorization: Bearer <token>` ou
-`?token=`; WebSocket via `?token=` (browsers não enviam headers no WS).
+Autenticação (auth.py): cookie de sessão (painel) ou TELEMETRY_TOKEN por
+`Authorization: Bearer <token>` / `?token=` (scripts). O WebSocket usa o cookie ou `?token=`.
 
 Nunca expõe token/proxy/device_id das contas. As rotas de gestão ficam em admin_api.py.
 """
 from __future__ import annotations
 
 import asyncio
-import hmac
 import json
 import os
 import time
@@ -199,15 +198,14 @@ def build_snapshot(conns: "list[AccountConnection]") -> dict:
 
 def create_app(
     conns: "list[AccountConnection] | Callable[[], list[AccountConnection]]",
-    token: str = "",
+    auth,
     interval: float = 1.0,
     cors_origins: list[str] | None = None,
     manager=None,
     store=None,
-    admin_key: str = "",
 ) -> FastAPI:
     """`conns` pode ser uma lista fixa ou uma função (contas mudam em tempo de execução).
-    Com `manager`/`store`/`admin_key`, registra também as rotas de gestão (admin_api.py)."""
+    `auth` (auth.Auth) protege tudo. Com `manager` e `store`, registra as rotas de gestão (admin_api.py)."""
     get_conns = conns if callable(conns) else (lambda: conns)
     app = FastAPI(title="Pokeidle Manager Telemetry", docs_url=None, redoc_url=None)
     if cors_origins:
@@ -215,8 +213,9 @@ def create_app(
                            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
                            allow_headers=["Authorization", "Content-Type"])
 
-    def authorized(supplied: str | None) -> bool:
-        return not token or (supplied is not None and hmac.compare_digest(supplied, token))
+    from auth import register_auth_routes
+
+    register_auth_routes(app, auth)
 
     @app.get("/healthz")
     async def healthz():
@@ -224,10 +223,8 @@ def create_app(
 
     @app.get("/api/telemetry")
     async def telemetry(request: Request, tok: str | None = Query(None, alias="token")):
-        auth = request.headers.get("authorization", "")
-        supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
-        if not authorized(supplied):
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if (denied := auth.read_guard(request, tok)):
+            return denied
         return build_snapshot(get_conns())
 
     atlas_cache: dict = {}
@@ -251,10 +248,8 @@ def create_app(
     @app.get("/api/pokemons")
     async def pokemons(request: Request, tok: str | None = Query(None, alias="token"),
                        account: str | None = None):
-        auth = request.headers.get("authorization", "")
-        supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
-        if not authorized(supplied):
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if (denied := auth.read_guard(request, tok)):
+            return denied
         rows: list[dict] = []
         for c in get_conns():
             if account in (None, "", f"acc{c.acc.index}"):
@@ -267,10 +262,8 @@ def create_app(
         """Vende o Depot (shop.sellAllPokemons, spec do protocolo §17) de uma conta
         ou de todas. AÇÃO IRREVERSÍVEL no jogo — a confirmação ao usuário é feita
         no dashboard antes desta chamada; aqui só se executa o comando."""
-        auth = request.headers.get("authorization", "")
-        supplied = auth[7:] if auth.lower().startswith("bearer ") else tok
-        if not authorized(supplied):
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if (denied := auth.guard(request, tok)):  # ação: exige login mesmo sem senha exigida nas leituras
+            return denied
         targets = [c for c in get_conns() if account in (None, "", f"acc{c.acc.index}")]
         if not targets:
             return JSONResponse({"error": "conta não encontrada"}, status_code=404)
@@ -288,7 +281,7 @@ def create_app(
 
     @app.websocket("/ws/telemetry")
     async def ws_telemetry(ws: WebSocket, tok: str | None = Query(None, alias="token")):
-        if not authorized(tok):
+        if auth.required() and not auth.check_ws(ws):
             await ws.close(code=4401)  # antes do accept => HTTP 403 no handshake
             return
         await ws.accept()
@@ -299,9 +292,9 @@ def create_app(
         except (WebSocketDisconnect, RuntimeError):
             pass
 
-    if manager is not None and store is not None and admin_key:
+    if manager is not None and store is not None:
         from admin_api import register_admin_routes
-        register_admin_routes(app, manager, store, admin_key)
+        register_admin_routes(app, manager, store, auth)
 
     # Dashboard estático (build do Vite) na raiz; rotas /api e /ws acima têm prioridade.
     web_dir = os.getenv("WEB_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_dist")

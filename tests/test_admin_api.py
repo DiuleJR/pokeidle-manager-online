@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import admin_api
+from auth import Auth
 from manager import AccountManager
 from notify import DailyStats, Notifier
 from telemetry import create_app
@@ -24,7 +25,7 @@ def client(store, tmp_path, monkeypatch):
     monkeypatch.setattr(admin_api, "probe_account", fake_probe)
     monkeypatch.setattr(AccountManager, "_spawn", lambda self, row: None)  # sem rede
     mgr = AccountManager(store, Notifier(""), DailyStats(path=str(tmp_path / "d.json")))
-    app = create_app(mgr.connections, manager=mgr, store=store, admin_key=KEY)
+    app = create_app(mgr.connections, Auth(store, exposed=False, env_token=KEY), manager=mgr, store=store)
     c = TestClient(app)
     c.store = store
     return c
