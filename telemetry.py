@@ -131,7 +131,26 @@ def equipped_rows(c: "AccountConnection") -> dict:
     if ball_id is not None:
         ball = {"id": ball_id, "name": ball_name(ball_id),
                 "qty": int((est.get("balls") or {}).get(str(ball_id), 0) or 0), "icon": _abs(BALL_ICONS.get(ball_id))}
-    return {"potion": potion, "ball": ball}
+    # Opções do seletor do card (clicar na poção/bola): todas as poções e bolas do jogo, com o estoque da conta.
+    def _potion_opt(i: int) -> dict:
+        nos = c.itens_nossos.get(i) or {}
+        return {"id": i, "name": nos.get("name") or item_name(i),
+                "qty": int((est.get("items") or {}).get(str(i), 0) or 0), "icon": _abs(nos.get("icon") or item_icon_path(i))}
+
+    options = {
+        "potion": [_potion_opt(i) for i in sorted(KNOWN_POTION_IDS)],
+        "ball": [{"id": i, "name": ball_name(i), "qty": int((est.get("balls") or {}).get(str(i), 0) or 0),
+                  "icon": _abs(BALL_ICONS.get(i))} for i in sorted(BALL_ICONS)],
+    }
+    return {"potion": potion, "ball": ball, "options": options}
+
+
+def _pending_hunt(c: "AccountConnection") -> dict | None:
+    slug = c.pending_hunt
+    if not slug:
+        return None
+    name = next((h.get("nome") for h in c.hunts if isinstance(h, dict) and h.get("slug") == slug), None)
+    return {"slug": slug, "name": name or slug}
 
 
 def account_snapshot(c: "AccountConnection") -> dict:
@@ -164,6 +183,9 @@ def account_snapshot(c: "AccountConnection") -> dict:
         "hunt": {"slug": s.slug, "kills": s.kills, "minutes": round(s.elapsed_h * 60, 1)} if s else None,
         "vip": (est.get("loja") or {}).get("vipAte", 0) > (est.get("servidorAgora") or 0),
         "huntName": s.nome if s else None,
+        # Em combate a conta não troca de hunt: tempo restante e a hunt que está na fila (se houver).
+        "combatLockMs": c.combat_lock_ms(),
+        "huntPending": _pending_hunt(c),
         "session": {
             "startedAt": int(c.session_started * 1000) if c.session_started else None,
             "items": dict(c.session_items.gained),
@@ -298,6 +320,8 @@ def create_app(
         register_admin_routes(app, manager, store, auth)
         from market_api import register_market_routes
         register_market_routes(app, manager, store, auth)
+        from actions_api import register_action_routes
+        register_action_routes(app, manager, store, auth)
     if updater is not None:
         from updater import register_update_routes
         register_update_routes(app, updater, auth)

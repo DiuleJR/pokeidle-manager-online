@@ -1,11 +1,13 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { Clock, Star } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
+import { EquipPopover } from "@/components/EquipPopover";
 import { StatusPill } from "@/components/StatusPill";
 import { AnimatedNumber, Coin, GoldPerHourIcon } from "@/components/ui";
 import { serverNow, useAccount } from "@/lib/telemetry";
 import type { EquippedItem } from "@/lib/types";
+import { dragState, justDragged } from "@/lib/useCardOrder";
 import { fmtDuration, fmtShort } from "@/lib/utils";
 
 export type CardMode = "resumo" | "sessao";
@@ -51,18 +53,37 @@ function Tile({
   hint,
   children,
   className = "",
+  onPress,
 }: {
   icon: React.ReactNode;
   label: string;
   hint?: string;
   children: React.ReactNode;
   className?: string;
+  /** Torna o bloco clicável (abre o seletor). Recebe o próprio elemento para ancorar o popover. */
+  onPress?: (el: HTMLElement) => void;
 }) {
+  const press = onPress
+    ? {
+        role: "button" as const,
+        tabIndex: 0,
+        "aria-haspopup": "dialog" as const,
+        onClick: (e: React.MouseEvent<HTMLElement>) => !justDragged() && onPress(e.currentTarget),
+        onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPress(e.currentTarget);
+          }
+        },
+      }
+    : {};
   return (
     <motion.div
       title={hint ?? label}
       whileHover={{ y: -2, transition: { duration: 0.18, ease: EASE } }}
-      className={`tile flex min-w-0 items-center gap-1.5 px-2 py-1.5 sm:grid sm:grid-cols-[auto_1fr] sm:grid-rows-[auto_auto] sm:gap-x-3 sm:gap-y-0.5 sm:px-3 sm:py-1.5 ${className}`}
+      whileTap={onPress ? { scale: 0.98 } : undefined}
+      {...press}
+      className={`${onPress ? "cursor-pointer hover:!border-edge " : ""}tile flex min-w-0 items-center gap-1.5 px-2 py-1.5 sm:grid sm:grid-cols-[auto_1fr] sm:grid-rows-[auto_auto] sm:gap-x-3 sm:gap-y-0.5 sm:px-3 sm:py-1.5 ${className}`}
     >
       <span className="flex size-5 shrink-0 items-center justify-center sm:row-span-2 sm:size-9">{icon}</span>
       <div className="label hidden sm:block">{label}</div>
@@ -92,6 +113,9 @@ function ResumoBody({ id }: { id: string }) {
   if (!acc) return null;
   const potion = acc.equipped?.potion;
   const ball = acc.equipped?.ball;
+  const options = acc.equipped?.options;
+  const [picker, setPicker] = useState<{ kind: "ball" | "potion"; anchor: DOMRect } | null>(null);
+  const open = (kind: "ball" | "potion") => (el: HTMLElement) => setPicker({ kind, anchor: el.getBoundingClientRect() });
   return (
     <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
       <Tile icon={<Coin kind="gold" />} label="Gold" className="order-6 sm:order-none">
@@ -100,10 +124,10 @@ function ResumoBody({ id }: { id: string }) {
       <Tile icon={<Coin kind="gem" />} label="Gemas" className="order-3 sm:order-none">
         <AnimatedNumber value={acc.gems} />
       </Tile>
-      <Tile icon={<ItemSprite icon={potion?.icon} size={32} alt={potion?.name} />} className="order-2 sm:order-none" label="Poção equipada" hint={potion ? `Poção equipada: ${potion.name}` : undefined}>
+      <Tile icon={<ItemSprite icon={potion?.icon} size={32} alt={potion?.name} />} className="order-2 sm:order-none" label="Poção equipada" hint={potion ? `Poção equipada: ${potion.name}. Clique para trocar` : "Clique para escolher a poção"} onPress={options ? open("potion") : undefined}>
         <Equipped item={potion} />
       </Tile>
-      <Tile icon={<ItemSprite icon={ball?.icon} size={32} alt={ball?.name} />} className="order-5 sm:order-none" label="Bola equipada" hint={ball ? `Bola equipada: ${ball.name}` : undefined}>
+      <Tile icon={<ItemSprite icon={ball?.icon} size={32} alt={ball?.name} />} className="order-5 sm:order-none" label="Bola equipada" hint={ball ? `Bola equipada: ${ball.name}. Clique para trocar` : "Clique para escolher a bola"} onPress={options ? open("ball") : undefined}>
         <Equipped item={ball} />
       </Tile>
       <Tile icon={<Star className="size-full fill-poke-gold text-poke-gold" />} label="XP por hora" className="tile-green order-1 sm:order-none">
@@ -122,6 +146,19 @@ function ResumoBody({ id }: { id: string }) {
           <span className="hidden sm:inline"> Ouro/h</span>
         </span>
       </Tile>
+      <AnimatePresence>
+        {picker && options && (
+          <EquipPopover
+            key={picker.kind}
+            kind={picker.kind}
+            accId={id}
+            options={options[picker.kind]}
+            selectedId={(picker.kind === "ball" ? ball : potion)?.id}
+            anchor={picker.anchor}
+            onClose={() => setPicker(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -149,7 +186,13 @@ function SessaoBody({ id }: { id: string }) {
   );
 }
 
-function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; index?: number }) {
+/** Arrastar para trocar de lugar: `canDrag` só no computador; `onDragOver` recebe o ponto do ponteiro. */
+export interface CardDrag {
+  canDrag: boolean;
+  onDragOver: (id: string, point: { x: number; y: number }) => void;
+}
+
+function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: CardMode; index?: number; drag?: CardDrag }) {
   const acc = useAccount(id);
   if (!acc) return null;
 
@@ -160,11 +203,26 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
   return (
     <motion.article
       layout="position"
+      data-card-id={id}
       initial={{ opacity: 0, y: 18, scale: 0.98 }}
       animate={{ opacity: acc.status === "offline" ? 0.62 : 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, ease: EASE, delay: Math.min(index, 6) * 0.07 }}
-      whileHover={{ y: -3, transition: { duration: 0.2, ease: EASE } }}
-      className="card p-2.5 sm:p-3"
+      transition={{
+        duration: 0.5,
+        ease: EASE,
+        delay: Math.min(index, 6) * 0.07,
+        // Troca de lugar: mola rápida, sem o atraso da entrada.
+        layout: { type: "spring", stiffness: 420, damping: 36, delay: 0 },
+      }}
+      drag={drag?.canDrag}
+      dragSnapToOrigin
+      dragMomentum={false}
+      dragElastic={0.14}
+      whileDrag={{ scale: 1.03, zIndex: 40, boxShadow: "0 22px 44px -10px rgba(0,0,0,.75), 0 0 0 2px rgba(243,192,74,.55)" }}
+      onDrag={(_: unknown, info: PanInfo) => drag?.onDragOver(id, info.point)}
+      onDragEnd={() => {
+        dragState.endedAt = performance.now();
+      }}
+      className={`card p-2.5 sm:p-3 ${drag?.canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       <header className="flex items-center gap-2.5 sm:gap-3.5">
         <motion.div
@@ -225,6 +283,7 @@ function AccountCardImpl({ id, mode, index = 0 }: { id: string; mode: CardMode; 
         <span className="truncate">
           Hunt: <b className="font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
           {acc.hunt && <> · {fmtDuration(acc.hunt.minutes)}</>}
+          {acc.huntPending && <span className="ml-1.5 text-poke-gold"> → {acc.huntPending.name} (na fila)</span>}
         </span>
         {acc.captured && (
           <span className="tnum">

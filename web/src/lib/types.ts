@@ -50,12 +50,20 @@ export interface AccountSnapshot {
   goldPerHour: number;
   hunt?: { slug: string | null; kills: number; minutes: number } | null;
   huntName?: string | null;
+  /** Em combate a conta não troca de hunt: tempo (ms) até poder, e a hunt que está esperando na fila. */
+  combatLockMs?: number;
+  huntPending?: { slug: string; name: string } | null;
   gold: number;
   gems: number;
   diamonds?: number;
   potions: number;
   balls: number;
-  equipped?: { potion: EquippedItem | null; ball: EquippedItem | null };
+  equipped?: {
+    potion: EquippedItem | null;
+    ball: EquippedItem | null;
+    /** Tudo que dá para equipar (com o estoque da conta): alimenta o seletor do card. */
+    options?: { potion: EquippedItem[]; ball: EquippedItem[] };
+  };
   captured?: { session: number; failed: number; total: number; shiny: number };
   inventory?: {
     balls: { id: number; name: string; qty: number; icon?: string | null }[];

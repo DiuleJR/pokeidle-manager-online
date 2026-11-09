@@ -193,16 +193,17 @@ class AccountConnection:
         self.balls = BallManager(account.name, self.estado, account.ball_priority)
         self.shop = ShopManager(account.name, self.estado)
         self.market = MarketClient(account.name, self.estado)
+        self.pending_hunt: str | None = None      # hunt pedida no painel, aguardando a trava de combate acabar
         self.restockers: list[AutoRestock] = []
         if account.auto_potion:
             self.restockers.append(AutoRestock(
                 account.name, self.estado, self.shop, kind="item",
-                get_ids=potion_ids_resolver(self.estado, self.hunt.active_pokemon, account.potion_id),
+                get_ids=potion_ids_resolver(self.estado, self.hunt.active_pokemon, lambda: self.acc.potion_id),
                 threshold=account.potion_restock_threshold, qty=account.potion_restock_qty))
         if account.auto_ball_restock:
             self.restockers.append(AutoRestock(
                 account.name, self.estado, self.shop, kind="ball",
-                get_ids=ball_ids_resolver(self.estado, account.ball_priority, account.ball_id),
+                get_ids=ball_ids_resolver(self.estado, account.ball_priority, lambda: self.acc.ball_id),
                 threshold=account.ball_restock_threshold, qty=account.ball_restock_qty))
         self.inventory = InventoryView(self.estado)
         self._log = logging.LoggerAdapter(log, {})
@@ -315,6 +316,8 @@ class AccountConnection:
                 if self.session_started is None:
                     self.session_started = time.time()
                     self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
+                if isinstance(self.estado.get("servidorAgora"), (int, float)):
+                    self.market.clock_offset_ms = int(self.estado["servidorAgora"]) - int(time.time() * 1000)
                 self.session_items.reset(self.estado)
                 self._rare_last = self._rare_counts()
                 self.block = None
@@ -336,6 +339,7 @@ class AccountConnection:
                 background = [
                     asyncio.create_task(self._status_logger()),
                     asyncio.create_task(self._inventory_logger()),
+                    asyncio.create_task(self._hunt_queue_loop()),
                 ]
                 if self.acc.auto_catch:
                     background.append(asyncio.create_task(self.balls.run_forever()))
@@ -468,6 +472,75 @@ class AccountConnection:
         while True:
             await asyncio.sleep(config.POTION_CHECK_INTERVAL_S)
             for r in self.restockers:
+                await r.check_and_restock()
+
+    # ----------------------------------------------------------- comandos do painel
+    @property
+    def can_send(self) -> bool:
+        return self.state == State.ONLINE and self.hunt._ws is not None
+
+    async def set_automation(self, patch: dict) -> None:
+        """auto.set (confirmado em conta real): clona a automação atual inteira, troca só `patch` e envia.
+        Nunca monta o frame do zero: campos que o painel não edita seguem como o jogo os mandou."""
+        if not self.can_send:
+            raise RuntimeError("conta offline")
+        current = dict(self.estado.get("automation") or {})
+        await self.hunt._ws.send(json.dumps({"t": "auto.set", **current, **patch}))
+        log.info("[%s] auto.set %s enviado", self.acc.name, sorted(patch))
+
+    def combat_lock_ms(self) -> int:
+        """Quanto falta (ms) para a conta poder trocar de hunt/ir ao Center. `estado.centroLivreEm` é a hora do
+        servidor em que a trava de combate acaba (docs/02); cada hit recebido a reinicia."""
+        free_at = self.estado.get("centroLivreEm")
+        if not isinstance(free_at, (int, float)):
+            return 0
+        return max(0, int(free_at) - self.market.server_now_ms())
+
+    def queue_hunt(self, slug: str | None) -> None:
+        """Guarda a hunt desejada: troca sozinha assim que a trava de combate acabar (None cancela)."""
+        self.pending_hunt = slug
+        log.info("[%s] hunt na fila: %s", self.acc.name, slug)
+
+    async def _hunt_queue_loop(self) -> None:
+        """Envia `hunt.select` da hunt na fila quando a trava de combate acaba e só dá a fila por cumprida
+        quando o jogo confirma (evento `hunt`). Se o jogo ignorar (ex.: um hit chegou na hora), tenta de novo."""
+        attempts = 0
+        while True:
+            await asyncio.sleep(0.25)
+            slug = self.pending_hunt
+            if not slug:
+                attempts = 0
+                continue
+            s = self.hunt.session
+            if s is not None and s.slug == slug:
+                self.pending_hunt = None
+                continue
+            if self.combat_lock_ms() > 0 or not self.can_send:
+                continue
+            await self.hunt.select_hunt(slug)
+            attempts += 1
+            for _ in range(24):  # até 6s pela confirmação
+                await asyncio.sleep(0.25)
+                s = self.hunt.session
+                if (s is not None and s.slug == slug) or self.pending_hunt != slug:
+                    break
+            else:
+                if attempts >= 4:
+                    log.warning("[%s] o jogo não aceitou a hunt %s após %d tentativas; fila cancelada",
+                                self.acc.name, slug, attempts)
+                    self.pending_hunt = None
+                    attempts = 0
+                continue
+            if self.pending_hunt == slug:
+                self.pending_hunt = None
+            attempts = 0
+
+    async def restock_now(self, kind: str) -> None:
+        """Roda já a reposição de `kind` ("item" = poção, "ball"), sem esperar o próximo ciclo
+        (usado logo após trocar poção/bola no painel). Só mexe no tipo pedido."""
+        for r in self.restockers:
+            if r.kind == kind:
+                r._last_try.clear()
                 await r.check_and_restock()
 
     # ----------------------------------------------------------- supervisor

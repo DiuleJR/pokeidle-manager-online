@@ -169,10 +169,16 @@ class AutoRestock:
             return  # uma compra por vez (aguarda k:"compra")
 
 
-def potion_ids_resolver(estado: dict, get_active_pokemon, potion_id: int | None):
+def _live(value):
+    """Aceita um valor fixo ou uma função que o devolve na hora (para trocar a escolha sem reconectar)."""
+    return value() if callable(value) else value
+
+
+def potion_ids_resolver(estado: dict, get_active_pokemon, potion_id):
     def resolve() -> list[int]:
-        if potion_id is not None:
-            return [potion_id]
+        pid = _live(potion_id)
+        if pid is not None:
+            return [pid]
         pk = get_active_pokemon()
         held = pk.get("heldItemId") if pk else None
         if held in KNOWN_POTION_IDS:
@@ -181,10 +187,11 @@ def potion_ids_resolver(estado: dict, get_active_pokemon, potion_id: int | None)
     return resolve
 
 
-def ball_ids_resolver(estado: dict, ball_priority, ball_id: int | None):
+def ball_ids_resolver(estado: dict, ball_priority, ball_id):
     def resolve() -> list[int]:
-        if ball_id is not None:
-            return [ball_id]
+        bid = _live(ball_id)
+        if bid is not None:
+            return [bid]
         ids = [i for i in (estado.get("automation") or {}).get("ballIds", []) if i in BUYABLE_BALL_IDS]
         if ids:
             return ids

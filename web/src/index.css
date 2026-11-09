@@ -19,6 +19,25 @@
   .tnum {
     font-variant-numeric: tabular-nums;
   }
+  /* Interface de aplicativo: não seleciona texto ao arrastar o mouse. Campos de digitação e código continuam copiáveis. */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input,
+  textarea,
+  select,
+  code,
+  pre,
+  [contenteditable="true"],
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  img {
+    -webkit-user-drag: none;
+  }
   ::selection {
     background: rgba(243, 192, 74, 0.35);
     color: #fff;
