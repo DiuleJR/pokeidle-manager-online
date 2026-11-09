@@ -37,4 +37,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: web_dist.zip
+          # Texto das novidades vem de RELEASE_NOTES.md; o link "Full Changelog" é anexado automaticamente.
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
