@@ -71,79 +71,45 @@ function premiumOf(it: MarketItem, moeda: Moeda): { floor: number; avg: number; 
   return { floor, avg, prem: floor / avg - 1 };
 }
 
-function Chip({ tone, children, title }: { tone: "green" | "gold" | "mute"; children: React.ReactNode; title?: string }) {
-  const cls = tone === "green" ? "border-[#2f6b3a] bg-[#16301c] text-poke-green" : tone === "gold" ? "border-[#7a5a1c] bg-[#38290f] text-poke-gold" : "border-line bg-void/40 text-mute";
-  return (
-    <span title={title} className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}>
-      {children}
-    </span>
-  );
-}
-
-/** Onde o meu anúncio está em relação ao mercado: menor preço, quanto acima dele e quanto acima da média. */
-function Standing({ l, it }: { l: Listing; it?: MarketItem }) {
-  if (l.tipo !== "item" || !it) return null;
-  const floor = l.moeda === "orb" ? it.minOrb : it.minGold;
-  const avg = l.moeda === "orb" ? it.avgOrb : it.avgGold;
-  if (!floor) return null;
-  const gap = (l.preco - floor) / floor;
-  const vsAvg = avg ? l.preco / avg - 1 : null;
-  return (
-    <>
-      {l.preco <= floor ? (
-        <Chip tone="green" title="Seu anúncio é o mais barato do mercado agora">
-          Menor preço
-        </Chip>
-      ) : (
-        <Chip tone="mute" title={`O menor preço do mercado é ${fmtInt(floor)}`}>
-          +{Math.round(gap * 100)}% do menor
-        </Chip>
-      )}
-      {vsAvg != null && Math.abs(vsAvg) >= 0.05 && (
-        <Chip tone={vsAvg >= CARO ? "gold" : "mute"} title={`Média de 7 dias: ${fmtInt(avg ?? 0)}`}>
-          {vsAvg > 0 ? "+" : "−"}
-          {Math.abs(Math.round(vsAvg * 100))}% da média
-        </Chip>
-      )}
-    </>
-  );
-}
-
-function ListingCard({ r, it, showNick }: { r: Row; it?: MarketItem; showNick: boolean }) {
+/** Uma linha por anúncio: o que é, de qual conta, quando expira; à direita o preço e como ele está no mercado. */
+function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
   const { l, drift } = r;
-  const now = Date.now() + drift;
-  const left = l.expiraEm ? Math.max(0, Math.round((l.expiraEm - now) / 1000)) : null;
-  const total = l.criadoEm && l.expiraEm ? (l.expiraEm - l.criadoEm) / 1000 : null;
-  const pctLeft = left != null && total ? Math.min(100, Math.max(0, (left / total) * 100)) : null;
-  const soon = left != null && left < DAY;
+  const left = l.expiraEm ? Math.max(0, Math.round((l.expiraEm - (Date.now() + drift)) / 1000)) : null;
   const isMon = l.tipo === "pokemon";
   const name = isMon ? `${l.ficha?.nome ?? "Pokémon"} nv. ${l.ficha?.level ?? "?"}` : (l.ficha?.nome ?? it?.name ?? `item #${l.itemId}`);
+  const floor = !isMon && it ? (l.moeda === "orb" ? it.minOrb : it.minGold) : null;
+  const avg = !isMon && it ? (l.moeda === "orb" ? it.avgOrb : it.avgGold) : null;
+  const vsAvg = avg ? l.preco / avg - 1 : null;
   return (
-    <li className="tile relative flex items-center gap-3 overflow-hidden p-2.5">
-      <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-line bg-void/50">
+    <li className="flex items-center gap-3 px-3 py-2.5">
+      <span className="grid size-10 shrink-0 place-items-center">
         {isMon ? <PokemonSprite looktype={l.ficha?.looktype} size={40} /> : <ItemSprite icon={it?.icon} size={36} alt="" />}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 text-[15px] font-bold leading-tight">
+        <p className="flex items-center gap-1.5 font-bold leading-tight">
           <span className="truncate">{name}</span>
           {isMon && l.ficha?.shiny && <ShinyMark />}
           {!isMon && l.qtd > 1 && <span className="shrink-0 font-semibold text-mute">×{fmtInt(l.qtd)}</span>}
         </p>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-mute">
-          {showNick && <Chip tone="mute">{r.nick}</Chip>}
-          <Standing l={l} it={it} />
-          {left != null && <span className={soon ? "font-semibold text-poke-red" : ""}>expira em {secondsLabel(left)}</span>}
+        <p className="mt-0.5 truncate text-xs text-mute">
+          {r.nick}
+          {left != null && (
+            <>
+              {" · "}
+              <span className={left < DAY ? "font-semibold text-poke-red" : ""}>expira em {secondsLabel(left)}</span>
+            </>
+          )}
         </p>
       </div>
       <div className="shrink-0 text-right">
         <Money v={l.preco} moeda={l.moeda} className="text-base font-extrabold" />
-        {l.qtd > 1 && !isMon && <p className="text-xs text-mute">cada · total {fmtInt(l.preco * l.qtd)}</p>}
+        {floor != null && (
+          <p className={`text-xs ${l.preco <= floor ? "font-semibold text-poke-green" : "text-mute"}`} title={`Menor preço do mercado: ${fmtInt(floor)}`}>
+            {l.preco <= floor ? "menor preço" : `+${Math.round(((l.preco - floor) / floor) * 100)}% do menor`}
+            {vsAvg != null && vsAvg >= CARO && <span className="font-semibold text-poke-gold"> · +{Math.round(vsAvg * 100)}% da média</span>}
+          </p>
+        )}
       </div>
-      {pctLeft != null && (
-        <span className="absolute inset-x-0 bottom-0 h-[3px] bg-line/60" aria-hidden>
-          <span className={`block h-full ${soon ? "bg-poke-red/80" : "bg-edge/70"}`} style={{ width: `${pctLeft}%` }} />
-        </span>
-      )}
     </li>
   );
 }
@@ -240,13 +206,15 @@ export function MineTab() {
     .flatMap((w) => w.ledger.map((x) => ({ ...x, nick: w.nick })))
     .sort((a, b) => (b.em ?? b.ts ?? 0) - (a.em ?? a.ts ?? 0));
   const rows: Row[] = (data.data?.mines ?? []).flatMap((m) => m.listings.map((l) => ({ l, nick: m.nick, drift: m.now - Date.now() })));
-  const byAccount = useMemo(() => {
-    const g = new Map<string, Row[]>();
-    for (const r of rows) g.set(r.nick, [...(g.get(r.nick) ?? []), r]);
-    for (const list of g.values()) list.sort((a, b) => (a.l.expiraEm ?? Infinity) - (b.l.expiraEm ?? Infinity));
-    return [...g.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const groups = useMemo(() => {
+    const items = rows.filter((r) => r.l.tipo !== "pokemon").sort((x, y) => (x.l.ficha?.nome ?? market.get(x.l.itemId ?? 0)?.name ?? "").localeCompare(y.l.ficha?.nome ?? market.get(y.l.itemId ?? 0)?.name ?? "") || x.nick.localeCompare(y.nick));
+    const mons = rows.filter((r) => r.l.tipo === "pokemon").sort((x, y) => y.l.preco - x.l.preco);
+    return [
+      { title: "Itens", list: items },
+      { title: "Pokémon", list: mons },
+    ].filter((g) => g.list.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.data]);
+  }, [data.data, market]);
   const listed = (moeda: Moeda) => rows.filter((r) => r.l.moeda === moeda).reduce((s, r) => s + r.l.preco * (r.l.tipo === "pokemon" ? 1 : r.l.qtd), 0);
   const locked = wallets.filter((w) => w.withdrawLocked);
 
@@ -326,20 +294,20 @@ export function MineTab() {
             {rows.length === 0 ? (
               <p className="card p-4 text-center text-sm text-mute">Nenhum anúncio aberto. Anuncie dentro do jogo e ele aparece aqui.</p>
             ) : (
-              byAccount.map(([nick, list]) => (
-                <div key={nick} className="space-y-1.5">
-                  {all && byAccount.length > 1 && (
-                    <p className="px-1 pt-1 text-sm font-bold">
-                      {nick} <span className="font-normal text-mute">· {list.length} {list.length === 1 ? "anúncio" : "anúncios"}</span>
+              <div className="card divide-y divide-line overflow-hidden">
+                {groups.map((g) => (
+                  <div key={g.title}>
+                    <p className="bg-void/40 px-3 py-1.5 text-xs font-semibold text-mute">
+                      {g.title} <span className="font-normal">({g.list.length})</span>
                     </p>
-                  )}
-                  <ul className="grid gap-1.5 lg:grid-cols-2">
-                    {list.map((r) => (
-                      <ListingCard key={`${nick}-${r.l.id}`} r={r} it={r.l.itemId != null ? market.get(r.l.itemId) : undefined} showNick={all && byAccount.length === 1} />
-                    ))}
-                  </ul>
-                </div>
-              ))
+                    <ul className="divide-y divide-line">
+                      {g.list.map((r) => (
+                        <ListingRow key={`${r.nick}-${r.l.id}`} r={r} it={r.l.itemId != null ? market.get(r.l.itemId) : undefined} />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             )}
           </section>
         </>
