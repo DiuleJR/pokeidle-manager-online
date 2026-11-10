@@ -226,3 +226,30 @@ def test_merge_catalog_inherits_sprites_and_remaps_outland():
     assert out["2002"]["lk"] == 60148 and out["2002"]["t"] == ["DRAGON"]   # Outland herda do Dragonair
     assert out["13094"]["lk"] == 60094                     # Orre herda do nacional (13094 - 13000)
     assert "2001" in out and "10501" not in out            # espelho antigo foi normalizado
+
+
+def test_queue_survives_a_failed_send(env):
+    import asyncio
+
+    _, conn, _, _ = env
+    conn.market.clock_offset_ms = 0
+    conn.estado["centroLivreEm"] = 0
+    calls = []
+
+    class FlakyWS(FakeWS):
+        async def send(self, raw):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ConnectionError("caiu")
+            await super().send(raw)
+
+    conn.hunt._ws = FlakyWS()
+    conn.queue_hunt("lapras")
+
+    async def scenario():
+        task = asyncio.create_task(conn._hunt_queue_loop())
+        await asyncio.sleep(1.8)
+        task.cancel()
+
+    asyncio.run(scenario())
+    assert conn.hunt._ws.sent[0] == {"t": "hunt.select", "slug": "lapras"}  # a fila sobreviveu e reenviou

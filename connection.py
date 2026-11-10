@@ -517,7 +517,12 @@ class AccountConnection:
                 continue
             if self.combat_lock_ms() > 0 or not self.can_send:
                 continue
-            await self.hunt.select_hunt(slug)
+            try:
+                await self.hunt.select_hunt(slug)
+            except Exception as e:  # conexão caiu no envio: a fila continua e tenta de novo quando voltar
+                log.warning("[%s] não consegui enviar a hunt da fila (%s)", self.acc.name, type(e).__name__)
+                await asyncio.sleep(1)
+                continue
             attempts += 1
             for _ in range(24):  # até 6s pela confirmação
                 await asyncio.sleep(0.25)

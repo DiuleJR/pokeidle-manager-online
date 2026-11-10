@@ -36,6 +36,8 @@ navegador), com um painel web para acompanhar e configurar tudo.
 - Visão de inventário por conta
 - Alertas no Discord (queda/volta, item raro, relatório diário)
 - **Aba Mercado:** preços e média de 7 dias de todos os itens (com selo "barato"), vitrine de Pokémon com os filtros do jogo, histórico de vendas do servidor, anúncios e carteira de Gemas (somente leitura), calculadora de comissão, alertas no Discord e compra automática (sniper, desligada por padrão)
+- **Aba Mapa:** escolha uma conta e mande ela caçar em qualquer área do jogo, sem entrar nele. Regiões, filtros por tipo e nível, fraquezas e drops. Áreas acima do nível aparecem trancadas. Se a conta estiver em combate, o bot espera a trava acabar e troca sozinho
+- **Dashboard:** clique na poção ou na bola de um card para trocá-la (se estiver sem estoque, o bot compra) e arraste os cards para mudar a ordem
 - Telemetria via FastAPI (`GET /api/telemetry`, `WS /ws/telemetry`) e dashboard React
 
 ## Requisitos
