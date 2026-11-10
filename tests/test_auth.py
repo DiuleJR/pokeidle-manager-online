@@ -145,3 +145,20 @@ def test_reset_clears_password_and_sessions(store, tmp_path, monkeypatch):
     auth.reset()
     assert c.get("/api/accounts").status_code == 401
     assert c.get("/api/auth/status").json()["mode"] == "setup"
+
+
+def test_rate_limit_is_per_client_ip_behind_proxy(store):
+    from types import SimpleNamespace
+
+    from auth import Auth
+
+    def req(peer, fwd=None):
+        return SimpleNamespace(client=SimpleNamespace(host=peer), headers={"x-forwarded-for": fwd} if fwd else {})
+
+    a = Auth(store, exposed=False, env_token="")
+    attacker, owner = req("127.0.0.1", "1.2.3.4"), req("127.0.0.1", "5.6.7.8")
+    for _ in range(10):
+        a.fail(attacker)
+    assert a.limited(attacker) and not a.limited(owner)  # o atacante não tranca o dono
+    spoof = req("9.9.9.9", "5.6.7.8")  # de par não-local o cabeçalho é ignorado
+    assert a.client_ip(spoof) == "9.9.9.9"

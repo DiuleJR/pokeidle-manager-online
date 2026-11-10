@@ -82,15 +82,34 @@ class Auth:
                 and not any(h in request.headers for h in _FORWARD_HEADERS))
 
     # ---------------------------------------------------------- limite de tentativas
+    @staticmethod
+    def client_ip(request: Request) -> str:
+        """IP real do cliente. Atrás de proxy local (Caddy/nginx no mesmo servidor) o socket é sempre
+        127.0.0.1: nesse caso vale o último X-Forwarded-For (o que o proxy acrescentou). De qualquer outro
+        par, o cabeçalho é ignorado (falsificável)."""
+        peer = request.client.host if request.client else "?"
+        if peer in LOOPBACK:
+            fwd = request.headers.get("x-forwarded-for", "")
+            last = fwd.split(",")[-1].strip()
+            if last:
+                return last[:64]
+        return peer
+
     def limited(self, request: Request) -> bool:
-        ip = request.client.host if request.client else "?"
+        ip = self.client_ip(request)
         now = time.time()
         recent = [t for t in self._fails.get(ip, []) if now - t < 60]
-        self._fails[ip] = recent
+        if recent:
+            self._fails[ip] = recent
+        else:
+            self._fails.pop(ip, None)
         return len(recent) >= 10
 
     def fail(self, request: Request) -> None:
-        ip = request.client.host if request.client else "?"
+        ip = self.client_ip(request)
+        if len(self._fails) > 5000:  # evita crescer sem limite sob ataque com muitos IPs
+            now = time.time()
+            self._fails = {k: v for k, v in self._fails.items() if v and now - v[-1] < 60}
         self._fails.setdefault(ip, []).append(time.time())
 
     # ---------------------------------------------------------- sessões
@@ -130,6 +149,8 @@ class Auth:
 
     def guard(self, request: Request, query_token: str | None = None) -> JSONResponse | None:
         """Para rotas protegidas: None = liberado; senão, a resposta de erro."""
+        if self.session_ok(request.cookies.get(SESSION_COOKIE)):
+            return None  # sessão válida nunca é barrada pelo limite de tentativas
         if self.limited(request):
             return JSONResponse({"error": "Muitas tentativas. Aguarde 1 minuto."}, status_code=429)
         if self.check(request, query_token):

@@ -218,6 +218,27 @@ def build_snapshot(conns: "list[AccountConnection]") -> dict:
     }
 
 
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://pokeidle.io; "
+        "connect-src 'self' ws: wss:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
+        "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": _CSP,
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+
+def _ws_origin_ok(ws: WebSocket) -> bool:
+    """Bloqueia WebSocket iniciado por outro site (CSWSH): a origem precisa ser o próprio host."""
+    origin = ws.headers.get("origin")
+    if not origin:
+        return True  # clientes que não são navegador (scripts com token) não enviam Origin
+    from urllib.parse import urlparse
+    return urlparse(origin).netloc == ws.headers.get("host", "")
+
+
 def create_app(
     conns: "list[AccountConnection] | Callable[[], list[AccountConnection]]",
     auth,
@@ -230,7 +251,16 @@ def create_app(
     """`conns` pode ser uma lista fixa ou uma função (contas mudam em tempo de execução).
     `auth` (auth.Auth) protege tudo. Com `manager` e `store`, registra as rotas de gestão (admin_api.py)."""
     get_conns = conns if callable(conns) else (lambda: conns)
-    app = FastAPI(title="Pokeidle Manager Telemetry", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Pokeidle Manager Telemetry", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        resp = await call_next(request)
+        for k, v in _SECURITY_HEADERS.items():
+            resp.headers.setdefault(k, v)
+        if request.url.path.startswith("/api/"):
+            resp.headers.setdefault("Cache-Control", "no-store")
+        return resp
     if cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=cors_origins,
                            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
@@ -304,7 +334,7 @@ def create_app(
 
     @app.websocket("/ws/telemetry")
     async def ws_telemetry(ws: WebSocket, tok: str | None = Query(None, alias="token")):
-        if auth.required() and not auth.check_ws(ws):
+        if not _ws_origin_ok(ws) or (auth.required() and not auth.check_ws(ws)):
             await ws.close(code=4401)  # antes do accept => HTTP 403 no handshake
             return
         await ws.accept()
