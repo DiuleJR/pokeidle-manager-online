@@ -30,7 +30,8 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
   const BALLS = [[1, "Poké Ball"], [2, "Great Ball"], [3, "Super Ball"], [4, "Ultra Ball"], [5, "Beast Ball"]] as const;
   const stock = (i: number, id: number) => (id % 3 === 0 ? 0 : 40 + ((id * 7 + i * 13) % 900));
   accs.forEach((a, i) => {
-    a.hunt = { slug: ["bellsprout", "caterpie", "geodude", "magikarp"][i], kills: 10 * i, minutes: 90 + i * 20 };
+    const mins = 90 + i * 20;
+    a.hunt = { slug: ["bellsprout", "caterpie", "geodude", "magikarp"][i], kills: Math.round((mins / 60) * (780 + i * 65)), minutes: mins };
     a.huntName = ["Bellsprout", "Caterpie", "Geodude", "Magikarp"][i];
     a.equipped!.options = {
       potion: POTIONS.map(([id, name]) => ({ id, name, qty: stock(i, id), icon: `${S}/items/potion.png` })),
@@ -74,6 +75,9 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
         a.goldPerHour = Math.round(a.goldPerHour * (0.97 + Math.random() * 0.06));
         a.gold += Math.round(a.goldPerHour / 3600);
         if (Math.random() < 0.3) a.balls = Math.max(0, a.balls - 1);
+        if (a.hunt) {
+          a.hunt = { ...a.hunt, minutes: a.hunt.minutes + 1 / 60, kills: a.hunt.kills + (Math.random() < 0.22 ? 1 : 0) };
+        }
       }
     }
     const lock = (window as unknown as { __mockLock?: Record<string, number> }).__mockLock ?? {};

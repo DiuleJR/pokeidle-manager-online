@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { Clock, Crosshair, Star } from "lucide-react";
+import { Clock, Crosshair, Star, Swords } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { EquipPopover } from "@/components/EquipPopover";
@@ -114,6 +114,8 @@ function ResumoBody({ id }: { id: string }) {
   const potion = acc.equipped?.potion;
   const ball = acc.equipped?.ball;
   const options = acc.equipped?.options;
+  // Abates por hora da hunt atual (só depois de 1 minuto, para o número não oscilar no começo).
+  const killsPerHour = acc.hunt && acc.hunt.minutes >= 1 ? Math.round(acc.hunt.kills / (acc.hunt.minutes / 60)) : null;
   const [picker, setPicker] = useState<{ kind: "ball" | "potion"; anchor: DOMRect } | null>(null);
   const open = (kind: "ball" | "potion") => (el: HTMLElement) => setPicker({ kind, anchor: el.getBoundingClientRect() });
   return (
@@ -144,6 +146,19 @@ function ResumoBody({ id }: { id: string }) {
         <span className="text-poke-gold">
           +<AnimatedNumber value={acc.goldPerHour} />
           <span className="hidden sm:inline"> Ouro/h</span>
+        </span>
+      </Tile>
+      <Tile icon={<Swords className="size-full text-fg" />} label="Abates por hora" className="order-7 col-span-full sm:order-none">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="text-fg">
+            {killsPerHour == null ? "—" : <AnimatedNumber value={killsPerHour} />}
+            <span className="text-mute"> abates/h</span>
+          </span>
+          {acc.hunt && acc.hunt.kills > 0 && (
+            <span className="text-xs font-medium text-mute">
+              <AnimatedNumber value={acc.hunt.kills} /> nesta hunt
+            </span>
+          )}
         </span>
       </Tile>
       <AnimatePresence>
