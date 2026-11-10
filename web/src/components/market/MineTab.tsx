@@ -148,17 +148,16 @@ function ListingCard({ r, it, showNick }: { r: Row; it?: MarketItem; showNick: b
   );
 }
 
-/** Itens raros que tenho nas contas e estão caros em Gemas agora (acima da média de 7 dias): é hora de vender. */
+/** Itens raros que estão caros em Gemas agora (acima da média de 7 dias). Os que eu tenho vêm primeiro. */
 function SellNow({ items, owned }: { items: MarketItem[]; owned: Map<number, number> }) {
   const hot = useMemo(() => {
-    const out: { it: MarketItem; qty: number; moeda: Moeda; floor: number; avg: number; prem: number }[] = [];
+    const out: { it: MarketItem; qty: number; floor: number; avg: number; prem: number }[] = [];
     for (const it of items) {
-      const qty = owned.get(it.id) ?? 0;
-      if (!qty) continue;
+      if (!it.rare) continue;
       const p = premiumOf(it, "orb"); // só Gemas
-      if (p && p.prem >= CARO) out.push({ it, qty, moeda: "orb", ...p });
+      if (p && p.prem >= CARO) out.push({ it, qty: owned.get(it.id) ?? 0, ...p });
     }
-    return out.sort((a, b) => b.prem - a.prem).slice(0, 6);
+    return out.sort((a, b) => Number(b.qty > 0) - Number(a.qty > 0) || b.prem - a.prem).slice(0, 8);
   }, [items, owned]);
 
   return (
@@ -167,22 +166,29 @@ function SellNow({ items, owned }: { items: MarketItem[]; owned: Map<number, num
         <TrendingUp className="size-4 text-poke-gold" aria-hidden /> Hora de vender
       </h2>
       {hot.length === 0 ? (
-        <p className="tile px-3 py-2.5 text-sm text-mute">Nenhum item raro seu está caro em Gemas agora. Avisamos no Discord quando ficar.</p>
+        <p className="tile px-3 py-2.5 text-sm text-mute">Nenhum item raro está caro em Gemas agora. Avisamos no Discord quando um que você tem ficar.</p>
       ) : (
         <ul className="grid gap-1.5 sm:grid-cols-2">
-          {hot.map(({ it, qty, moeda, floor, avg, prem }) => (
-            <li key={it.id} className="tile tile-gold flex items-center gap-3 p-2.5">
-              <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-[#7a5a1c] bg-void/40">
+          {hot.map(({ it, qty, floor, avg, prem }) => (
+            <li key={it.id} className={`tile flex items-center gap-3 p-2.5 ${qty ? "tile-gold" : ""}`}>
+              <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-line bg-void/40">
                 <ItemSprite icon={it.icon} size={36} alt="" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-bold leading-tight text-fg">{it.name}</p>
                 <p className="mt-1 text-xs text-mute">
-                  você tem <b className="text-fg">{fmtInt(qty)}</b> · média <Money v={avg} moeda={moeda} short className="text-mute" />
+                  {qty ? (
+                    <>
+                      você tem <b className="text-fg">{fmtInt(qty)}</b>
+                    </>
+                  ) : (
+                    "você não tem"
+                  )}{" "}
+                  · média <Money v={avg} moeda="orb" short className="text-mute" />
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <Money v={floor} moeda={moeda} short className="font-extrabold text-fg" />
+                <Money v={floor} moeda="orb" short className="font-extrabold text-fg" />
                 <p className="tnum text-xs font-bold text-poke-gold">+{Math.round(prem * 100)}%</p>
               </div>
             </li>

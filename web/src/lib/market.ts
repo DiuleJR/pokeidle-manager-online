@@ -10,6 +10,7 @@ export interface MarketItem {
   name: string;
   category: string;
   icon: string | null;
+  rare?: boolean;
   ads: number;
   units: number;
   minGold: number | null;

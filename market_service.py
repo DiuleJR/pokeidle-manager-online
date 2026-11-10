@@ -107,6 +107,11 @@ def plan_qty(listing: dict, spec: dict, balance: float, remaining_budget: float)
     return max(0, qtd)
 
 
+def _is_rare(category: str, rare: bool) -> bool:
+    """Pedras, poções e revives não contam como raros, mesmo que o jogo marque (igual ao inventário)."""
+    return bool(rare) and category not in ("stone", "heal", "revive")
+
+
 def sell_premium(floor: float | None, avg: float | None, sold: int | None, pct: float) -> float | None:
     """Ágio do menor preço anunciado sobre a média de 7 dias (0.5 = 50% acima), se for bom para vender.
     None quando não vale avisar: sem dados, preço de fachada (<10% da média), poucas vendas ou abaixo de `pct`."""
@@ -169,14 +174,19 @@ class MarketService:
         for c in self.manager.connections():
             for it in (c.mercado_cfg.get("catalogo") or []):
                 if isinstance(it, dict) and it.get("id") == iid:
+                    cat = it.get("categoria") or item_meta(iid)[0]
+                    nos = c.itens_nossos.get(iid) or {}
                     return {"id": iid, "name": PT_NAMES.get(iid) or it.get("nome") or item_name(iid),
-                            "category": it.get("categoria") or item_meta(iid)[0], "icon": self._icon(iid, c)}
+                            "category": cat, "icon": self._icon(iid, c),
+                            "rare": _is_rare(cat, bool(nos.get("rare")) or item_meta(iid)[1])}
             nos = c.itens_nossos.get(iid)
             if nos:
+                cat = nos.get("category") or "special"
                 return {"id": iid, "name": PT_NAMES.get(iid) or nos.get("name") or item_name(iid),
-                        "category": nos.get("category") or "special", "icon": self._abs(nos.get("icon"))}
-        return {"id": iid, "name": PT_NAMES.get(iid) or item_name(iid), "category": item_meta(iid)[0],
-                "icon": self._abs(item_icon_path(iid))}
+                        "category": cat, "icon": self._abs(nos.get("icon")), "rare": _is_rare(cat, bool(nos.get("rare")))}
+        cat, rare = item_meta(iid)
+        return {"id": iid, "name": PT_NAMES.get(iid) or item_name(iid), "category": cat,
+                "icon": self._abs(item_icon_path(iid)), "rare": _is_rare(cat, rare)}
 
     def _ids_by_name(self) -> dict[str, int]:
         """nome (minúsculo, em inglês ou português) -> id do item, para achar o ícone de uma linha do histórico."""
