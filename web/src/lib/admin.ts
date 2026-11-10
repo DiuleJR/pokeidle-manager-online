@@ -68,6 +68,9 @@ export interface GlobalSettings {
   public_url: string;
   hasWebhook: boolean;
   webhookHint: string;
+  alert_sell: boolean;
+  alert_sell_pct: number;
+  alert_sold: boolean;
   defaultWsUrl: string;
 }
 

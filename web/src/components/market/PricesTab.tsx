@@ -4,6 +4,7 @@ import { Bell, Crosshair, ShoppingCart, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/SettingsView";
 import { ItemSprite } from "@/components/Sprites";
+import { useAccountsMap } from "@/lib/telemetry";
 import { type Deal, type Listing, type MarketItem, type Moeda, dealLabel, marketApi, secondsUntil } from "@/lib/market";
 import { fmtInt, fmtShort } from "@/lib/utils";
 import { BuyDialog } from "./BuyDialog";
@@ -12,6 +13,7 @@ import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, type MoedaSel, fmt
 
 const SORTS = [
   { id: "discount", label: "Maior desconto" },
+  { id: "premium", label: "Mais caros (vender)" },
   { id: "cheap", label: "Menor preço" },
   { id: "supply", label: "Mais ofertas" },
   { id: "name", label: "Nome" },
@@ -20,12 +22,20 @@ type SortId = (typeof SORTS)[number]["id"];
 
 const DEAL_CLS: Record<string, string> = {
   barato: "border-[#2f6b3a] bg-[#16301c] text-poke-green",
-  caro: "border-[#7a2f27] bg-[#32140f] text-poke-red",
+  caro: "border-[#7a5a1c] bg-[#38290f] text-poke-gold",
   justo: "border-line bg-tile text-mute",
 };
 export function DealBadge({ d }: { d?: Deal }) {
-  if (d !== "barato") return null; // só destaca o que vale a pena; o resto é ruído
-  return <span className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-bold uppercase ${DEAL_CLS[d]}`}>{dealLabel(d)}</span>;
+  if (d !== "barato" && d !== "caro") return null; // só destaca o que vale a pena; o resto é ruído
+  return (
+    <span
+      className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-bold uppercase ${DEAL_CLS[d]}`}
+      title={d === "caro" ? "15% ou mais acima da média de 7 dias: bom momento para vender" : "15% ou mais abaixo da média de 7 dias: bom momento para comprar"}
+    >
+      {d === "caro" ? "↑ " : "↓ "}
+      {dealLabel(d)}
+    </span>
+  );
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -174,6 +184,12 @@ export function PricesTab() {
   const [open, setOpen] = useState<MarketItem | null>(null);
   const ov = useAsync(() => marketApi.overview(), [], { every: 30000 });
   const [favs, setFavs] = useState<Record<number, boolean>>({});
+  const accounts = useAccountsMap();
+  const owned = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const a of Object.values(accounts)) for (const it of a.inventory?.items ?? []) m[it.id] = (m[it.id] ?? 0) + it.qty;
+    return m;
+  }, [accounts]);
 
   const items = useMemo(() => (ov.data?.items ?? []).map((i) => (i.id in favs ? { ...i, fav: favs[i.id] } : i)), [ov.data, favs]);
   const cats = useMemo(() => Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort(), [items]);
@@ -184,12 +200,17 @@ export function PricesTab() {
   const disc = (p: number | null | undefined, a: number | null | undefined) => (p && a && p >= a * 0.1 ? (a - p) / a : -1); // < 10% da média = preço de fachada
   const discount = (i: MarketItem) =>
     moeda === "all" ? Math.max(disc(i.minGold, i.avgGold), disc(i.minOrb, i.avgOrb)) : disc(price(i), avg(i));
+  /** Quanto o menor preço está acima da média (0.5 = +50%); -1 = sem dado ou preço de fachada. */
+  const premium = (i: MarketItem) => {
+    const one = (p: number | null | undefined, a: number | null | undefined) => (p && a && p >= a * 0.1 ? (p - a) / a : -1);
+    return moeda === "all" ? Math.max(one(i.minGold, i.avgGold), one(i.minOrb, i.avgOrb)) : one(price(i), avg(i));
+  };
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
     const out = items.filter((i) => price(i) != null && (!t || i.name.toLowerCase().includes(t)) && (!cat || i.category === cat) && (!onlyFav || i.fav));
     out.sort((a, b) =>
-      sort === "discount" ? discount(b) - discount(a) : sort === "cheap" ? (price(a) ?? 0) - (price(b) ?? 0) : sort === "supply" ? b.units - a.units : a.name.localeCompare(b.name),
+      sort === "discount" ? discount(b) - discount(a) : sort === "premium" ? premium(b) - premium(a) : sort === "cheap" ? (price(a) ?? 0) - (price(b) ?? 0) : sort === "supply" ? b.units - a.units : a.name.localeCompare(b.name),
     );
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,7 +257,8 @@ export function PricesTab() {
         </div>
       </div>
       <p className="text-xs text-mute">
-        {rows.length} itens · <span className="text-poke-green">Barato</span> = 15% ou mais abaixo da média de {ov.data?.days ?? 7} dias
+        {rows.length} itens · <span className="text-poke-green">Barato</span> = 15% ou mais abaixo da média de {ov.data?.days ?? 7} dias ·{" "}
+        <span className="text-poke-gold">Caro</span> = 15% ou mais acima (bom para vender)
       </p>
 
       {rows.length === 0 ? (
@@ -258,6 +280,7 @@ export function PricesTab() {
                       <span className="mt-1 flex items-center gap-1.5 text-xs text-mute">
                         <DealBadge d={deal(i)} />
                         <span className="truncate">{i.ads} anúncios</span>
+                        {owned[i.id] ? <span className="shrink-0 rounded-md border border-[#7a5a1c] px-1.5 py-0.5 text-[11px] font-semibold text-poke-gold">você tem {fmtInt(owned[i.id])}</span> : null}
                         <span className="hidden sm:inline">· {fmtInt(i.units)} un.</span>
                       </span>
                     </span>
@@ -277,6 +300,7 @@ export function PricesTab() {
                           </span>
                         ) : null}
                         {d > 0.001 && <span className="tnum text-poke-green">−{Math.round(d * 100)}%</span>}
+                        {d <= 0.001 && premium(i) >= 0.15 && <span className="tnum text-poke-gold">+{Math.round(premium(i) * 100)}%</span>}
                       </span>
                     </span>
                   </button>

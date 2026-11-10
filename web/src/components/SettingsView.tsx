@@ -750,6 +750,35 @@ function GlobalForm() {
         <p className="text-xs text-mute">Avisa quando uma conta cai ou volta, quando cai item raro e envia o relatório do dia.</p>
       </Group>
 
+      <Group title="Avisos do Mercado" badge={<Chip on={s.hasWebhook && (s.alert_sell || s.alert_sold)} label={s.hasWebhook ? (s.alert_sell || s.alert_sold ? "Ativo" : "Desligado") : "Precisa do webhook"} />}>
+        <div className="space-y-3">
+          <Check2 checked={s.alert_sold} onChange={(v) => run(async () => fill(await admin.saveSettings({ alert_sold: v })), v ? "Aviso de venda ligado." : "Aviso de venda desligado.")}>
+            Avisar quando um anúncio das minhas contas for vendido
+          </Check2>
+          <Check2 checked={s.alert_sell} onChange={(v) => run(async () => fill(await admin.saveSettings({ alert_sell: v })), v ? "Aviso de preço alto ligado." : "Aviso de preço alto desligado.")}>
+            Avisar quando um item que eu tenho estiver caro
+          </Check2>
+          {s.alert_sell && (
+            <label className="flex items-center justify-between gap-3 pl-6 text-sm">
+              Caro = pelo menos
+              <select
+                className="field"
+                value={s.alert_sell_pct}
+                disabled={busy}
+                onChange={(e) => run(async () => fill(await admin.saveSettings({ alert_sell_pct: Number(e.target.value) })), "Limite salvo.")}
+              >
+                {[15, 20, 30, 50, 75, 100].map((p) => (
+                  <option key={p} value={p}>
+                    {p}% acima da média
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="text-xs text-mute">O preço alto é comparado com a média de 7 dias do Mercado. Cada item só é avisado de novo depois de 6 horas, ou se o preço subir ainda mais.</p>
+        </div>
+      </Group>
+
       <Group title="Relatório diário">
         <label className="flex items-center justify-between gap-3 text-sm">
           O dia vira às

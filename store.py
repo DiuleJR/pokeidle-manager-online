@@ -28,6 +28,9 @@ SETTING_DEFAULTS: dict[str, str] = {
     "report_tz": "America/Sao_Paulo",
     "public_url": "",
     "sniper_enabled": "0",   # chave geral: sem ela ligada, nenhuma regra de compra automática roda
+    "alert_sell": "1",       # Discord: item meu está bem acima da média (bom momento de vender)
+    "alert_sell_pct": "30",  # quanto acima da média (%) para avisar
+    "alert_sold": "1",       # Discord: um anúncio de uma das minhas contas foi vendido
 }
 SECRET_SETTINGS = {"discord_webhook"}
 

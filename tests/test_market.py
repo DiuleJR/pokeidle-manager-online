@@ -421,3 +421,12 @@ def test_icon_by_history_description(env):
     assert svc.icon_by_name("1× Bicycle Fragment") == "https://pokeidle.io/assets/items/bike_frag.png"
     assert svc.icon_by_name("13× Cocoon Stone") is not None            # nome do catálogo
     assert svc.icon_by_name("Item que não existe") is None
+
+
+def test_sell_premium_only_when_worth_selling():
+    sp = ms.sell_premium
+    assert sp(398, 217, 6975, 0.3) == pytest.approx(398 / 217 - 1)   # chave bem acima da média
+    assert sp(250, 217, 6975, 0.3) is None                           # só +15%: abaixo do limite
+    assert sp(2, 217, 6975, 0.3) is None                             # preço de fachada
+    assert sp(400, 217, 1, 0.3) is None                              # quase sem vendas: média não confiável
+    assert sp(None, 217, 50, 0.3) is None and sp(400, None, 50, 0.3) is None

@@ -42,6 +42,11 @@ MIN_POLL_S = 5
 DEFAULT_POLL_S = 10
 MAX_WAIT_S = 200                 # só agenda compra de anúncio que libera em até isso (a espera é ~2 min)
 ALERT_MIN_CHECK_S = 30
+SELL_CHECK_S = 120               # confere se algum item meu está caro
+SELL_COOLDOWN_S = 6 * 3600       # não repete o aviso do mesmo item antes disso...
+SELL_RISE = 0.25                 # ...a menos que o ágio suba mais 25 pontos
+SELL_MIN_SOLD = 3                # média de 7 dias só vale com algumas vendas
+SALE_CHECK_S = 60                # confere as vendas das contas
 SITE = "https://pokeidle.io"
 PT_NAMES = {70011: "Fragmento de Chave", 70012: "Fragmento de Shiny Stone", 70013: "Fragmento de Bicicleta"}
 
@@ -102,6 +107,15 @@ def plan_qty(listing: dict, spec: dict, balance: float, remaining_budget: float)
     return max(0, qtd)
 
 
+def sell_premium(floor: float | None, avg: float | None, sold: int | None, pct: float) -> float | None:
+    """Ágio do menor preço anunciado sobre a média de 7 dias (0.5 = 50% acima), se for bom para vender.
+    None quando não vale avisar: sem dados, preço de fachada (<10% da média), poucas vendas ou abaixo de `pct`."""
+    if not floor or not avg or avg <= 0 or floor < avg * 0.1 or (sold or 0) < SELL_MIN_SOLD:
+        return None
+    prem = floor / avg - 1
+    return prem if prem >= pct else None
+
+
 # ------------------------------------------------------------------ serviço
 
 
@@ -127,6 +141,9 @@ class MarketService:
         self._usd_per_gem: tuple[float, float | None] = (0.0, None)
         self._name_ids: tuple[float, dict[str, int]] = (0.0, {})
         self._shiny_cache: dict[str, tuple[float, float | None]] = {}
+        self._sell_alerted: dict[tuple[int, str], tuple[float, float]] = {}   # (item, moeda) -> (quando, ágio)
+        self._sell_at = 0.0
+        self._sale_at = 0.0
 
     # ------------------------------------------------------------ contas
     def online(self):
@@ -550,9 +567,121 @@ class MarketService:
             self.notifier.send(f"⚠️ Sniper não comprou: {label}", detail or status, RED,
                                [("Conta", conn.acc.nick, True)])
 
+    # ------------------------------------------------------------ avisos de venda (Discord)
+    def _owned_items(self) -> dict[int, list[tuple[str, int]]]:
+        """item -> [(nick, quantidade)] nas contas; só itens (não bolas) com estoque."""
+        out: dict[int, list[tuple[str, int]]] = {}
+        for c in self.manager.connections():
+            for raw, qty in (c.estado.get("items") or {}).items():
+                try:
+                    iid, q = int(raw), int(qty)
+                except (TypeError, ValueError):
+                    continue
+                if q > 0:
+                    out.setdefault(iid, []).append((c.acc.nick, q))
+        return out
+
+    async def sell_alerts(self) -> None:
+        """Avisa no Discord quando um item que tenho está bem acima da média de 7 dias (hora de vender)."""
+        if not self.notifier.enabled or self.store.get_setting("alert_sell") != "1":
+            return
+        now = time.time()
+        if now - self._sell_at < SELL_CHECK_S or self.pick() is None:
+            return
+        self._sell_at = now
+        owned = self._owned_items()
+        if not owned:
+            return
+        pct = max(5, int(self.store.get_setting("alert_sell_pct") or 30)) / 100
+        itens = await self.refresh_itens(SELL_CHECK_S / 2)
+        await self.refresh_medias()
+        for iid, holders in owned.items():
+            r = itens.get(str(iid))
+            if not r:
+                continue
+            info = self.item_info(iid)
+            total = sum(q for _, q in holders)
+            for moeda, key, nome in (("orb", "minOrb", "Gemas"), ("gold", "minGold", "Gold")):
+                m = (self._medias.get(str(iid)) or {}).get(moeda) or {}
+                floor, avg = r.get(key), m.get("media")
+                prem = sell_premium(floor, avg, m.get("unidades"), pct)
+                if prem is None:
+                    continue
+                prev = self._sell_alerted.get((iid, moeda))
+                if prev and now - prev[0] < SELL_COOLDOWN_S and prem < prev[1] + SELL_RISE:
+                    continue
+                self._sell_alerted[(iid, moeda)] = (now, prem)
+                quem = " · ".join(f"{n}: {q}" for n, q in sorted(holders, key=lambda h: -h[1])[:4])
+                self.notifier.send(
+                    f"💰 Ótimo para vender: {info['name']}",
+                    f"Menor preço **{int(floor):,}** {nome} — **+{prem * 100:.0f}%** sobre a média de 7 dias "
+                    f"({int(avg):,}).".replace(",", "."),
+                    GREEN,
+                    [("Você tem", f"{total:,} un.".replace(",", "."), True),
+                     ("Valor no menor preço", f"{int(floor * total):,} {nome}".replace(",", "."), True),
+                     ("Contas", quem, False)],
+                    thumbnail=info.get("icon"))
+                log.info("[mercado] ótimo para vender %s (%s): +%.0f%%", info["name"], moeda, prem * 100)
+
+    async def sale_alerts(self) -> None:
+        """Avisa no Discord quando um anúncio de uma das contas é vendido (lê o extrato de vendas da conta)."""
+        if not self.notifier.enabled or self.store.get_setting("alert_sold") != "1":
+            return
+        now = time.time()
+        if now - self._sale_at < SALE_CHECK_S:
+            return
+        self._sale_at = now
+        for c in self.online():
+            key = f"sale_seen_{c.acc.index}"
+            seen = int(self.store.get_setting(key) or 0)
+            try:
+                res = await c.market.historico("vendas", 0, {})
+            except MarketError:
+                continue
+            rows = []
+            for r in res.get("linhas") or []:
+                try:
+                    if isinstance(r, dict) and r.get("tipo") in (None, "item", "pokemon"):
+                        rows.append((int(r["em"]), r))
+                except (KeyError, TypeError, ValueError):
+                    continue
+            rows.sort(key=lambda x: x[0])
+            if not seen:   # primeira leitura desta conta: marca o ponto de partida sem avisar o passado
+                self.store.set_setting(key, str(rows[-1][0] if rows else int(now * 1000)))
+                continue
+            new = [r for em, r in rows if em > seen]
+            if not new:
+                continue
+            self.store.set_setting(key, str(max(em for em, _ in rows)))
+            for r in new[:5]:
+                moeda = "Gemas" if r.get("moeda") == "orb" else "Gold"
+                bruto = r.get("bruto")
+                campos = [("Conta", c.acc.nick, True)]
+                if r.get("comprador"):
+                    campos.append(("Comprador", str(r["comprador"]), True))
+                if isinstance(r.get("liquido"), (int, float)):
+                    campos.append(("Você recebeu", f"{int(r['liquido']):,} {moeda}".replace(",", "."), True))
+                preco = f"{int(bruto):,} {moeda}".replace(",", ".") if isinstance(bruto, (int, float)) else "?"
+                icon = None
+                if r.get("tipo") != "pokemon":
+                    icon = (self.item_info(int(r["itemId"]))["icon"] if r.get("itemId")
+                            else self.icon_by_name(r.get("descricao")))
+                self.notifier.send(f"💸 Vendido: {r.get('descricao') or 'anúncio'}", f"Por **{preco}**.", GOLD,
+                                   campos, thumbnail=icon)
+                self.store.add_market_log(c.acc.index, None, "vendido", f"vendido: {r.get('descricao')} por {preco}")
+            if len(new) > 5:
+                self.notifier.send(f"💸 Mais {len(new) - 5} vendas em {c.acc.nick}", "Veja em Mercado → Vendas.", GOLD)
+
     # ------------------------------------------------------------ laço
     async def tick(self) -> None:
         await self.snapshot_if_due()
+        for job in (self.sell_alerts, self.sale_alerts):
+            try:
+                await job()
+            except MarketError as e:
+                log.debug("aviso de mercado: %s", e)
+            except Exception:  # noqa: BLE001
+                log.exception("aviso de mercado falhou")
         rules = [r for r in self.store.list_rules() if r["enabled"]]
         if not rules:
             return

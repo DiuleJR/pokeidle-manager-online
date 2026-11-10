@@ -141,3 +141,11 @@ def test_settings_validation_and_secret_masking(client):
     assert client.get("/api/settings", headers=H).json()["hasWebhook"] is True
     client.put("/api/settings", headers=H, json={"discord_webhook": ""})  # vazio: limpa
     assert client.get("/api/settings", headers=H).json()["hasWebhook"] is False
+
+
+def test_alert_settings_roundtrip(client):
+    r = client.get("/api/settings", headers=H).json()
+    assert r["alert_sell"] is True and r["alert_sold"] is True and r["alert_sell_pct"] == 30
+    r = client.put("/api/settings", headers=H, json={"alert_sell": False, "alert_sell_pct": 50}).json()
+    assert r["alert_sell"] is False and r["alert_sell_pct"] == 50
+    assert client.put("/api/settings", headers=H, json={"alert_sell_pct": 1}).status_code == 422
