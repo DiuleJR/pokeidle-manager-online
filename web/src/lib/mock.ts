@@ -97,7 +97,7 @@ function installMockApi(accs: AccountSnapshot[]) {
   const hunts = regions.flatMap(([area, base], r) =>
     SPECIES.map(([n, , id], k) => ({
       slug: k < 4 && r === 0 ? n.toLowerCase() : `${area}-${n.toLowerCase()}`,
-      nome: r === 1 ? `Brave ${n}` : n, area, nivel: base + k * 10, totalSpawns: 15, looktype: null,
+      nome: r === 1 ? `Brave ${n}` : n, area: area === "kanto" || area === "outland" ? area : "orre", regiao: area, nivel: base + k * 10, totalSpawns: 15, looktype: null,
       especies: [{ pokeId: id, nome: n, pontos: 15 }],
     })),
   );

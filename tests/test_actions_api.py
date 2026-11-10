@@ -208,3 +208,21 @@ def test_queue_waits_again_if_a_new_hit_restarts_the_lock(env):
         task.cancel()
 
     asyncio.run(scenario())
+
+
+def test_merge_catalog_inherits_sprites_and_remaps_outland():
+    base = {"creatures": [
+        {"pokeId": 148, "name": "Dragonair", "type1": "DRAGON", "looktype": 25},
+        {"pokeId": 94, "name": "Gengar", "type1": "GHOST", "type2": "POISON", "looktype": 5},
+        {"pokeId": 10501, "name": "Brave Blastoise", "type1": "WATER", "looktype": 1},   # id antigo do espelho
+    ]}
+    novos = {"creatures": [
+        {"pokeId": 2002, "name": "Ancient Dragonair", "type1": "DRAGON", "looktype": 1},   # variante Outland
+        {"pokeId": 13094, "name": "Gengar de Orre", "type1": "GHOST", "looktype": 1},      # clone de Orre
+    ]}
+    lab = {"patches": [{"pokeId": 148, "looktype": 60148}, {"pokeId": 94, "looktype": 60094}]}
+    out = actions_api.merge_catalog([base, novos], lab)
+    assert out["148"]["lk"] == 60148                       # patch do lab
+    assert out["2002"]["lk"] == 60148 and out["2002"]["t"] == ["DRAGON"]   # Outland herda do Dragonair
+    assert out["13094"]["lk"] == 60094                     # Orre herda do nacional (13094 - 13000)
+    assert "2001" in out and "10501" not in out            # espelho antigo foi normalizado

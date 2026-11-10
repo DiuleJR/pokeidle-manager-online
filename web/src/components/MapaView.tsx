@@ -4,17 +4,14 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
 import { actions, useCreatures, useHuntCatalog, type Creature, type Hunt } from "@/lib/actions";
+import { inRegion, REGIONS, regionOfHunt } from "@/lib/regions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { effectiveness, matchup, TYPE_COLOR, TYPES } from "@/lib/typeChart";
 import { fmtInt } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const REGION_ORDER = ["kanto", "outland", "johto", "hoenn", "sinnoh", "unova", "kalos", "alola", "galar", "paldea"];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const rank = (id: string) => {
-  const i = REGION_ORDER.indexOf(id);
-  return i < 0 ? 99 : i;
-};
+
 
 type Mode = "own" | "weak" | "strong";
 const MODES: { id: Mode; label: string; hint: string }[] = [
@@ -84,33 +81,35 @@ const HuntRow = memo(function HuntRow({
   onFocus: (slug: string) => void;
   onHunt: (h: Hunt) => void;
 }) {
-  const first = h.especies[0];
-  const lk = (first && creatures?.[String(first.pokeId)]?.lk) ?? h.looktype;
+  // A cara da área é a espécie com mais pontos de spawn (como no jogo).
+  const main = [...h.especies].sort((a, b) => b.pontos - a.pontos)[0];
+  const lk = (main && creatures?.[String(main.pokeId)]?.lk) || h.looktype;
   const types = typesOf(h, creatures);
-  const tooHigh = h.nivel > level;
+  const locked = h.nivel > level;
   return (
     <div
       onPointerEnter={(e) => e.pointerType === "mouse" && onFocus(h.slug)}
       onClick={() => onFocus(h.slug)}
       className={`tile flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-150 sm:gap-3 sm:px-3 ${
         current ? "!border-poke-green/70" : focused ? "!border-edge" : ""
-      }`}
+      } ${locked ? "text-mute" : ""}`}
     >
       <span
-        className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-edge/70 sm:size-12"
+        className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 sm:size-12 ${locked ? "border-line opacity-60 grayscale" : "border-edge/70"}`}
         style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)" }}
       >
         <PokemonSprite looktype={lk} size={40} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="truncate text-[15px] font-bold leading-tight sm:text-base">{h.nome}</span>
-          <span className={`tnum rounded border px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${tooHigh ? "border-poke-red/60 text-poke-red" : "border-line text-mute"}`}>
+          <span className={`truncate text-[15px] font-bold leading-tight sm:text-base ${locked ? "text-mute" : ""}`}>{h.nome}</span>
+          <span className={`tnum inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${locked ? "bg-black/30 text-mute" : "text-mute"}`}>
+            {locked && <Lock className="size-2.5" aria-hidden />}
             Nv {fmtInt(h.nivel)}
           </span>
         </div>
         <div className="mt-1 flex flex-wrap gap-1">
-          {types.length ? types.map((t) => <TypeChip key={t} type={t} />) : <span className="text-xs text-mute">{h.especies.length} espécie(s)</span>}
+          {types.length ? types.map((t) => <span key={t} className={locked ? "opacity-50 grayscale" : ""}><TypeChip type={t} /></span>) : <span className="text-xs text-mute">{h.especies.length} espécie(s)</span>}
         </div>
       </div>
       {current ? (
@@ -120,6 +119,13 @@ const HuntRow = memo(function HuntRow({
       ) : queued ? (
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-[#3a2a12] px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-poke-gold">
           <Timer className="size-3.5" aria-hidden /> Na fila
+        </span>
+      ) : locked ? (
+        <span
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-black/30 px-2.5 py-1.5 text-xs font-bold text-mute"
+          title={`Libera no nível ${fmtInt(h.nivel)}`}
+        >
+          <Lock className="size-3.5" aria-hidden /> Trancada
         </span>
       ) : (
         <button
@@ -228,29 +234,20 @@ export function MapaView() {
   const currentSlug = acc?.hunt?.slug ?? cat?.current ?? null;
   const online = acc?.status === "online";
 
-  // Regiões na ordem do jogo, com o menor nível de cada uma (trava visual).
-  const regions = useMemo(() => {
-    const min = new Map<string, number>();
-    for (const h of cat?.hunts ?? []) min.set(h.area, Math.min(min.get(h.area) ?? Infinity, h.nivel));
-    return [...min.entries()]
-      .map(([id, nivel]) => ({ id, nivel }))
-      .sort((a, b) => rank(a.id) - rank(b.id) || a.nivel - b.nivel);
-  }, [cat]);
-
-  // Região inicial: a da hunt atual da conta (ou a primeira).
-  const currentArea = cat?.hunts.find((h) => h.slug === currentSlug)?.area;
+  // Região inicial: a da hunt atual da conta (ou Kanto). As dez regiões do jogo ficam sempre à vista.
+  const currentArea = regionOfHunt(cat?.hunts.find((h) => h.slug === currentSlug))?.id;
   useEffect(() => {
-    if (!regions.length) return;
-    if (!area || !regions.some((r) => r.id === area)) setArea(currentArea && regions.some((r) => r.id === currentArea) ? currentArea : regions[0].id);
-  }, [regions, area, currentArea]);
+    if (!area && cat?.hunts.length) setArea(currentArea ?? REGIONS[0].id);
+  }, [area, currentArea, cat]);
+  const region = REGIONS.find((r) => r.id === area) ?? REGIONS[0];
 
   const q = query.trim().toLowerCase();
   const list = useMemo(
     () =>
       (cat?.hunts ?? [])
-        .filter((h) => h.area === area && (!onlyOpen || h.nivel <= level) && matches(h, creatures, q, types, mode))
+        .filter((h) => inRegion(h, region) && (!onlyOpen || h.nivel <= level) && matches(h, creatures, q, types, mode))
         .sort((a, b) => a.nivel - b.nivel || a.nome.localeCompare(b.nome)),
-    [cat, area, onlyOpen, level, creatures, q, types, mode],
+    [cat, region, onlyOpen, level, creatures, q, types, mode],
   );
   const focused = useMemo(() => cat?.hunts.find((h) => h.slug === (focus ?? currentSlug)) ?? null, [cat, focus, currentSlug]);
 
@@ -358,7 +355,7 @@ export function MapaView() {
       {/* Regiões */}
       <Reveal index={1}>
         <div className="-mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-1" role="tablist" aria-label="Região">
-          {regions.map((r) => (
+          {REGIONS.map((r) => (
             <button
               key={r.id}
               type="button"
@@ -370,7 +367,7 @@ export function MapaView() {
             >
               <span className="flex items-center gap-1">
                 {r.nivel > level && <Lock className="size-3 opacity-70" aria-hidden />}
-                {cap(r.id)}
+                {r.label}
               </span>
               <span className="tnum text-[10px] font-semibold opacity-70">Nv {fmtInt(r.nivel)}</span>
             </button>
@@ -396,7 +393,7 @@ export function MapaView() {
             </button>
             </div>
             <span className="text-xs text-mute sm:ml-auto" aria-live="polite">
-              {fmtInt(list.length)} áreas em {cap(area || "—")}
+              {fmtInt(list.length)} áreas em {region.label}
             </span>
           </div>
           <AnimatePresence initial={false}>
@@ -493,7 +490,11 @@ export function MapaView() {
         <Reveal index={3}>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
             <ul key={area} className="space-y-1.5 lg:max-h-[calc(100vh-22rem)] lg:overflow-y-auto lg:pr-1">
-              {list.length === 0 && <li className="card p-8 text-center text-sm text-mute">Nenhuma área com esses filtros.</li>}
+              {list.length === 0 && (
+                <li className="card p-8 text-center text-sm text-mute">
+                  {query || types.length || onlyOpen ? "Nenhuma área com esses filtros." : `${region.label} ainda não tem áreas no jogo.`}
+                </li>
+              )}
               {list.map((h, i) => {
                 const row = (
                   <HuntRow

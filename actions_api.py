@@ -53,6 +53,53 @@ def hunt_catalog(conn: AccountConnection) -> list[dict]:
     return out
 
 
+# Variantes Outland (#2001+): o nome é "<prefixo> <espécie base>" e elas herdam o sprite da base.
+OUTLAND_MIN, OUTLAND_MAX = 2001, 2059
+OUTLAND_LEGACY_MIN, OUTLAND_LEGACY_MAX = 10501, 10548   # faixa antiga do espelho: normaliza para 2001+
+ORRE_MIN, ORRE_MAX = 13000, 14000                        # clones de Orre (#13000 + dex): sprite do nacional
+OUTLAND_PREFIXES = (
+    "Brave ", "Tribal ", "Ancient ", "War ", "Furious ", "Charged ", "Magnetic ", "Evil ", "Freezing ", "Psy ",
+    "Heavy ", "Milch-", "Roll ", "Hard ", "Brute ", "Enraged ", "Dark ", "Trickmaster ", "Banshee ",
+    "Taekwondo ", "Enigmatic ", "Magma ", "Toxic ",
+)
+CATALOG_FILES = ("creatures.json", "creatures-novos.json", "creatures-outland-novos.json", "creatures-formas.json")
+
+
+def merge_catalog(parts: list[dict], lab: dict | None = None) -> dict:
+    """Junta os arquivos de espécies do jogo como o cliente oficial faz: lista única, normaliza o Outland antigo,
+    aplica os looktypes do lab e faz Orre e Outland herdarem o sprite da espécie base. Devolve o formato compacto."""
+    creatures: list[dict] = []
+    for p in parts:
+        creatures.extend(c for c in (p or {}).get("creatures", []) if isinstance(c, dict) and c.get("pokeId") is not None)
+    creatures = [dict(c) for c in creatures]
+    for c in creatures:
+        if OUTLAND_LEGACY_MIN <= int(c["pokeId"]) < OUTLAND_LEGACY_MAX:
+            c["pokeId"] = int(c["pokeId"]) - (OUTLAND_LEGACY_MIN - OUTLAND_MIN)
+    by_id: dict[int, dict] = {}
+    for c in creatures:
+        by_id.setdefault(int(c["pokeId"]), c)
+    for patch in (lab or {}).get("patches", []):
+        c = by_id.get(patch.get("pokeId"))
+        if c is not None and patch.get("looktype"):
+            c["looktype"] = patch["looktype"]
+    by_name = {str(c.get("name", "")).lower(): c for c in creatures if int(c["pokeId"]) <= 1025}
+    for c in creatures:
+        pid = int(c["pokeId"])
+        base = None
+        if ORRE_MIN <= pid < ORRE_MAX:
+            base = by_id.get(pid - ORRE_MIN)
+        elif OUTLAND_MIN <= pid < OUTLAND_MAX:
+            name = str(c.get("name", "")).strip()
+            for pre in OUTLAND_PREFIXES:
+                if name.startswith(pre):
+                    name = name[len(pre):]
+                    break
+            base = by_name.get(name.lower())
+        if base is not None and (base.get("looktype") or 0) > 1:
+            c["looktype"] = base["looktype"]
+    return compact_creatures({"creatures": creatures})
+
+
 def compact_creatures(raw: dict) -> dict:
     """creatures.json do jogo -> {pokeId: {n: nome, t: [tipos], l: [nomes de loot], lk: looktype}} (leve para o navegador)."""
     out: dict[str, dict] = {}
@@ -95,10 +142,18 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
         if creatures_cache.get("exp", 0) < time.time():
             import aiohttp
 
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
-                async with s.get(f"{SITE}/assets/creatures.json") as resp:
-                    raw = json.loads(await resp.text())
-            creatures_cache.update(exp=time.time() + 3600, data=compact_creatures(raw))
+            async def fetch(s, name: str):
+                try:
+                    async with s.get(f"{SITE}/assets/{name}") as resp:
+                        return json.loads(await resp.text()) if resp.status == 200 else None
+                except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                    return None  # arquivo opcional: o catálogo fica só com o que veio
+
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
+                *parts, lab = await asyncio.gather(*(fetch(s, n) for n in (*CATALOG_FILES, "creatures-sprites-lab.json")))
+            if not parts[0]:
+                return JSONResponse({"error": "não consegui baixar os dados do jogo"}, status_code=502)
+            creatures_cache.update(exp=time.time() + 3600, data=merge_catalog(parts, lab))
         return JSONResponse(creatures_cache["data"], headers={"Cache-Control": "max-age=3600"})
 
     @app.post("/api/accounts/{acc_id}/hunt")
