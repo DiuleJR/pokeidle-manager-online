@@ -569,16 +569,14 @@ class MarketService:
 
     # ------------------------------------------------------------ avisos de venda (Discord)
     def _owned_items(self) -> dict[int, list[tuple[str, int]]]:
-        """item -> [(nick, quantidade)] nas contas; só itens (não bolas) com estoque."""
+        """item raro -> [(nick, quantidade)] nas contas (só raros têm aviso de venda)."""
+        from telemetry import item_rows  # import tardio: evita ciclo
+
         out: dict[int, list[tuple[str, int]]] = {}
         for c in self.manager.connections():
-            for raw, qty in (c.estado.get("items") or {}).items():
-                try:
-                    iid, q = int(raw), int(qty)
-                except (TypeError, ValueError):
-                    continue
-                if q > 0:
-                    out.setdefault(iid, []).append((c.acc.nick, q))
+            for row in item_rows(c):
+                if row["rare"] and row["qty"] > 0:
+                    out.setdefault(row["id"], []).append((c.acc.nick, row["qty"]))
         return out
 
     async def sell_alerts(self) -> None:
@@ -601,7 +599,7 @@ class MarketService:
                 continue
             info = self.item_info(iid)
             total = sum(q for _, q in holders)
-            for moeda, key, nome in (("orb", "minOrb", "Gemas"), ("gold", "minGold", "Gold")):
+            for moeda, key, nome in (("orb", "minOrb", "Gemas"),):   # só Gemas
                 m = (self._medias.get(str(iid)) or {}).get(moeda) or {}
                 floor, avg = r.get(key), m.get("media")
                 prem = sell_premium(floor, avg, m.get("unidades"), pct)

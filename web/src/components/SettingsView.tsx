@@ -756,7 +756,7 @@ function GlobalForm() {
             Avisar quando um anúncio das minhas contas for vendido
           </Check2>
           <Check2 checked={s.alert_sell} onChange={(v) => run(async () => fill(await admin.saveSettings({ alert_sell: v })), v ? "Aviso de preço alto ligado." : "Aviso de preço alto desligado.")}>
-            Avisar quando um item que eu tenho estiver caro
+            Avisar quando um item raro que eu tenho estiver caro em Gemas
           </Check2>
           {s.alert_sell && (
             <label className="flex items-center justify-between gap-3 pl-6 text-sm">

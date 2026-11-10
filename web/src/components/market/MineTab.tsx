@@ -148,18 +148,15 @@ function ListingCard({ r, it, showNick }: { r: Row; it?: MarketItem; showNick: b
   );
 }
 
-/** Itens que tenho nas contas e estão caros agora (acima da média de 7 dias): é hora de vender. */
+/** Itens raros que tenho nas contas e estão caros em Gemas agora (acima da média de 7 dias): é hora de vender. */
 function SellNow({ items, owned }: { items: MarketItem[]; owned: Map<number, number> }) {
   const hot = useMemo(() => {
     const out: { it: MarketItem; qty: number; moeda: Moeda; floor: number; avg: number; prem: number }[] = [];
     for (const it of items) {
       const qty = owned.get(it.id) ?? 0;
       if (!qty) continue;
-      const best = (["orb", "gold"] as Moeda[])
-        .map((m) => ({ m, p: premiumOf(it, m) }))
-        .filter((x) => x.p && x.p.prem >= CARO)
-        .sort((a, b) => (b.p?.prem ?? 0) - (a.p?.prem ?? 0))[0];
-      if (best?.p) out.push({ it, qty, moeda: best.m, ...best.p });
+      const p = premiumOf(it, "orb"); // só Gemas
+      if (p && p.prem >= CARO) out.push({ it, qty, moeda: "orb", ...p });
     }
     return out.sort((a, b) => b.prem - a.prem).slice(0, 6);
   }, [items, owned]);
@@ -170,7 +167,7 @@ function SellNow({ items, owned }: { items: MarketItem[]; owned: Map<number, num
         <TrendingUp className="size-4 text-poke-gold" aria-hidden /> Hora de vender
       </h2>
       {hot.length === 0 ? (
-        <p className="tile px-3 py-2.5 text-sm text-mute">Nenhum item seu está caro agora. Avisamos no Discord quando ficar.</p>
+        <p className="tile px-3 py-2.5 text-sm text-mute">Nenhum item raro seu está caro em Gemas agora. Avisamos no Discord quando ficar.</p>
       ) : (
         <ul className="grid gap-1.5 sm:grid-cols-2">
           {hot.map(({ it, qty, moeda, floor, avg, prem }) => (
@@ -223,7 +220,7 @@ export function MineTab() {
 
   const owned = useMemo(() => {
     const m = new Map<number, number>();
-    for (const a of targets) for (const it of accounts[a.key]?.inventory?.items ?? []) m.set(it.id, (m.get(it.id) ?? 0) + it.qty);
+    for (const a of targets) for (const it of accounts[a.key]?.inventory?.items ?? []) if (it.rare) m.set(it.id, (m.get(it.id) ?? 0) + it.qty); // só itens raros
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, sel, accs.length]);
