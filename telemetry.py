@@ -225,9 +225,7 @@ _CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
 _SECURITY_HEADERS = {
     "Content-Security-Policy": _CSP,
     "Cross-Origin-Opener-Policy": "same-origin",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-}
+}  # nosniff, Referrer-Policy, HSTS e X-Frame-Options já vêm do Caddy (não duplicar)
 
 
 def _ws_origin_ok(ws: WebSocket) -> bool:
