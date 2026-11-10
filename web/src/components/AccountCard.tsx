@@ -251,6 +251,12 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
             <span aria-hidden>·</span>
             <span className="truncate">{pk?.name ?? "—"}</span>
             {pk?.shiny && <ShinyMark />}
+            {/* Celular: o rodapé some, então a hunt atual fica aqui, na mesma linha. */}
+            <span className="flex min-w-0 flex-1 items-center justify-end gap-1 sm:hidden">
+              <Crosshair className="size-3.5 shrink-0 text-poke-gold" aria-hidden />
+              <span className="sr-only">Hunt atual: </span>
+              <b className="truncate font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
+            </span>
           </div>
           <div
             className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/50 sm:mt-2 sm:h-1.5"
@@ -265,22 +271,9 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
         </div>
       </header>
 
-      {/* Celular: o rodapé some, então a hunt atual (e a troca na fila) vem numa linha fina logo abaixo do cabeçalho. */}
-      <div className="mt-1.5 space-y-0.5 text-xs text-mute sm:hidden">
-        <p className="flex items-center gap-1.5">
-          <Crosshair className="size-3.5 shrink-0 text-poke-gold" aria-hidden />
-          <span className="min-w-0 truncate">
-            <span className="sr-only">Hunt atual: </span>
-            <b className="font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
-          </span>
-          {acc.hunt && <span className="tnum shrink-0">· {fmtDuration(acc.hunt.minutes)}</span>}
-        </p>
-        {acc.huntPending && (
-          <p className="truncate pl-5 text-poke-gold">
-            → {acc.huntPending.name} (na fila)
-          </p>
-        )}
-      </div>
+      {acc.huntPending && (
+        <p className="mt-1.5 truncate text-xs text-poke-gold sm:hidden">→ {acc.huntPending.name} (na fila)</p>
+      )}
 
       <div className="mt-2 sm:mt-2.5">
         <AnimatePresence mode="wait" initial={false}>

@@ -1,3 +1,3 @@
 ## Novidades
 
-- **Hunt atual no celular:** cada card mostra agora a hunt em que a conta está caçando e há quanto tempo, numa linha logo abaixo do nome. Se houver uma troca na fila, ela aparece logo abaixo.
+- **Hunt atual no celular, mais bem posicionada:** o nome da hunt agora fica na mesma linha do nível e do Pokémon, encostado na borda direita do card. Nomes longos crescem para a esquerda e são cortados com reticências se não couberem.
