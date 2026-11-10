@@ -253,3 +253,17 @@ def test_queue_survives_a_failed_send(env):
 
     asyncio.run(scenario())
     assert conn.hunt._ws.sent[0] == {"t": "hunt.select", "slug": "lapras"}  # a fila sobreviveu e reenviou
+
+
+def test_reset_session_zeroes_time_and_items(env):
+    c, conn, acc_id, _ = env
+    assert c.post("/api/session/reset").status_code == 401
+    conn.session_started = 1000.0
+    conn.session_items.gained["key"] = 7
+    conn.balls.caught = 3
+    r = c.post("/api/session/reset", headers=H)
+    assert r.status_code == 200 and r.json()["reset"] == [f"acc{acc_id}"]
+    assert conn.session_started > 1000.0
+    assert all(v == 0 for v in conn.session_items.gained.values()) and conn.balls.caught == 0
+    assert conn.session_store.get(conn._session_key)["gained"]["key"] == 0   # persistido: sobrevive a reinício
+    assert c.post("/api/session/reset?account=99", headers=H).status_code == 404

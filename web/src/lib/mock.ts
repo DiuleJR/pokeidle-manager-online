@@ -113,6 +113,11 @@ function installMockApi(accs: AccountSnapshot[]) {
     const wait = () => new Promise((r) => setTimeout(r, 350));
     if (path === "/api/hunts") return json({ account: "acc1", level: 120, current: accs[0].hunt?.slug ?? null, hunts });
     if (path === "/api/creatures") return json(creatures);
+    if (path === "/api/session/reset" && init?.method === "POST") {
+      await wait();
+      for (const a of accs) a.session = { startedAt: Date.now(), items: { boss: 0, key: 0, shinyStone: 0, bike: 0 } };
+      return json({ ok: true, reset: accs.map((a) => a.id) });
+    }
     let m = path.match(/^\/api\/accounts\/(\d+)\/equip$/);
     if (m && init?.method === "POST") {
       await wait();

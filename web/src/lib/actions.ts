@@ -26,6 +26,7 @@ export const actions = {
   equip: (accId: string, kind: "ball" | "potion", id: number) =>
     call<EquipResult>("POST", `/api/accounts/${numId(accId)}/equip`, { kind, id }),
   selectHunt: (accId: string, slug: string) => call<HuntResult>("POST", `/api/accounts/${numId(accId)}/hunt`, { slug }),
+  resetSession: () => call<{ ok: boolean; reset: string[] }>("POST", "/api/session/reset"),
   cancelHuntQueue: (accId: string) => call<{ ok: boolean }>("DELETE", `/api/accounts/${numId(accId)}/hunt/queue`),
 };
 

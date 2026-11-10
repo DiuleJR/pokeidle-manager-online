@@ -1,6 +1,6 @@
-import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import { AnimatePresence, motion, useDragControls, type PanInfo } from "framer-motion";
 import { Clock, Crosshair, Star, Swords } from "lucide-react";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { EquipPopover } from "@/components/EquipPopover";
 import { StatusPill } from "@/components/StatusPill";
@@ -207,8 +207,81 @@ export interface CardDrag {
   onDragOver: (id: string, point: { x: number; y: number }) => void;
 }
 
+const HOLD_MS = 380; // quanto tempo segurar o card no celular para "levantar" e poder arrastar
+const HOLD_SLOP = 10; // se o dedo andar mais que isso antes, é rolagem e não segurar
+const SCROLL_EDGE = 84; // faixa junto à borda da tela que rola a página durante o arrasto
+
 function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: CardMode; index?: number; drag?: CardDrag }) {
   const acc = useAccount(id);
+  const controls = useDragControls();
+  const [lifted, setLifted] = useState(false);
+  const liftedRef = useRef(false);
+  const hold = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const ptr = useRef({ x: 0, y: 0 }); // posição do dedo na tela durante o arrasto
+  // Celular/tablet (sem mouse): segurar o card levanta e libera o arrasto; o toque normal continua rolando a página.
+  const touchMode = !!drag && !drag.canDrag;
+
+  const clearHold = () => {
+    if (hold.current) window.clearTimeout(hold.current.timer);
+    hold.current = null;
+  };
+  const drop = () => {
+    clearHold();
+    if (liftedRef.current) {
+      liftedRef.current = false;
+      setLifted(false);
+    }
+  };
+  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (!touchMode || e.pointerType !== "touch" || (e.target as HTMLElement).closest("a,input,select,textarea")) return;
+    const native = e.nativeEvent;
+    clearHold();
+    hold.current = {
+      x: e.clientX,
+      y: e.clientY,
+      timer: window.setTimeout(() => {
+        hold.current = null;
+        liftedRef.current = true;
+        ptr.current = { x: native.clientX, y: native.clientY };
+        setLifted(true);
+        navigator.vibrate?.(18);
+        controls.start(native);
+      }, HOLD_MS),
+    };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const h = hold.current;
+    if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP) clearHold(); // o dedo andou: é rolagem
+  };
+
+  // Com o card levantado, o toque não pode rolar a página (o cancelável só vale antes de a rolagem começar).
+  useEffect(() => {
+    if (!touchMode) return;
+    const block = (e: TouchEvent) => {
+      if (liftedRef.current && e.cancelable) e.preventDefault();
+    };
+    document.addEventListener("touchmove", block, { passive: false });
+    return () => document.removeEventListener("touchmove", block);
+  }, [touchMode]);
+
+  // Arrastando perto da borda de cima/baixo, a página rola para dar para levar o card mais longe.
+  useEffect(() => {
+    if (!lifted || !drag) return;
+    let raf = 0;
+    const step = () => {
+      const { x, y } = ptr.current;
+      const bottom = window.innerHeight - 150; // acima da barra de abas
+      const dy = y < SCROLL_EDGE ? -(SCROLL_EDGE - y) / 5 : y > bottom ? (y - bottom) / 5 : 0;
+      if (dy) {
+        window.scrollBy(0, Math.max(-16, Math.min(16, dy)));
+        drag.onDragOver(id, { x: x + window.scrollX, y: y + window.scrollY });
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [lifted, drag, id]);
+
   if (!acc) return null;
 
   const pk = acc.pokemon;
@@ -228,16 +301,27 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
         // Troca de lugar: mola rápida, sem o atraso da entrada.
         layout: { type: "spring", stiffness: 420, damping: 36, delay: 0 },
       }}
-      drag={drag?.canDrag}
+      drag={!!drag}
+      dragListener={!!drag?.canDrag}
+      dragControls={controls}
       dragSnapToOrigin
       dragMomentum={false}
       dragElastic={0.14}
       whileDrag={{ scale: 1.03, zIndex: 40, boxShadow: "0 22px 44px -10px rgba(0,0,0,.75), 0 0 0 2px rgba(243,192,74,.55)" }}
-      onDrag={(_: unknown, info: PanInfo) => drag?.onDragOver(id, info.point)}
+      onDrag={(_: unknown, info: PanInfo) => {
+        ptr.current = { x: info.point.x - window.scrollX, y: info.point.y - window.scrollY };
+        drag?.onDragOver(id, info.point);
+      }}
       onDragEnd={() => {
         dragState.endedAt = performance.now();
+        drop();
       }}
-      className={`card p-2.5 sm:p-3 ${drag?.canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={drop}
+      onPointerCancel={drop}
+      onContextMenu={touchMode ? (e) => e.preventDefault() : undefined}
+      className={`card p-2.5 sm:p-3 ${drag?.canDrag ? "cursor-grab active:cursor-grabbing" : touchMode ? "select-none [-webkit-touch-callout:none]" : ""} ${lifted ? "ring-2 ring-poke-gold/70" : ""}`}
     >
       <header className="flex items-center gap-2.5 sm:gap-3.5">
         <motion.div

@@ -496,6 +496,17 @@ class AccountConnection:
             return 0
         return max(0, int(free_at) - self.market.server_now_ms())
 
+    def reset_session(self) -> None:
+        """Zera a sessão (tempo e itens coletados do card). Não mexe na conta, só nas estatísticas do painel."""
+        self.session_started = time.time()
+        for k in self.session_items.gained:
+            self.session_items.gained[k] = 0
+        self.session_items.reset(self.estado)   # novo ponto de partida para contar aumentos
+        self.balls.caught = 0
+        self.balls.failed = 0
+        self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
+        log.info("[%s] sessão zerada pelo painel", self.acc.name)
+
     def queue_hunt(self, slug: str | None) -> None:
         """Guarda a hunt desejada: troca sozinha assim que a trava de combate acabar (None cancela)."""
         self.pending_hunt = slug

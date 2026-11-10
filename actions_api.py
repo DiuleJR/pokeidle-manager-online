@@ -192,6 +192,18 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
         conn.queue_hunt(None)
         return {"ok": True}
 
+    @app.post("/api/session/reset")
+    async def reset_session(request: Request, tok: str | None = Query(None, alias="token"), account: int | None = None):
+        """Zera a sessão (tempo e itens coletados) de uma conta ou de todas as ligadas."""
+        if (r := guard(request, tok)):
+            return r
+        targets = [c for c in manager.connections() if account in (None, c.acc.index)]
+        if not targets:
+            return JSONResponse({"error": "conta não encontrada ou desligada"}, status_code=404)
+        for c in targets:
+            c.reset_session()
+        return {"ok": True, "reset": [f"acc{c.acc.index}" for c in targets]}
+
     @app.post("/api/accounts/{acc_id}/equip")
     async def equip(acc_id: int, body: EquipIn, request: Request, tok: str | None = Query(None, alias="token")):
         if (r := guard(request, tok)):

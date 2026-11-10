@@ -1,5 +1,5 @@
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { LayoutDashboard, Map as MapIcon, Package, Settings, Store } from "lucide-react";
+import { LayoutDashboard, Map as MapIcon, Package, RotateCcw, Settings, Store } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AccountCard, type CardDrag, type CardMode } from "@/components/AccountCard";
 import { ConnectionIndicator } from "@/components/ConnectionIndicator";
@@ -10,7 +10,8 @@ import { SettingsView } from "@/components/SettingsView";
 import { SummaryBar } from "@/components/SummaryBar";
 import { UpdateBanner } from "@/components/UpdateCard";
 import { SupportPopup, SupportSide, SupportStrip } from "@/components/SupportCard";
-import { Frame } from "@/components/ui";
+import { ConfirmDialog, Frame } from "@/components/ui";
+import { actions } from "@/lib/actions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { useCardOrder } from "@/lib/useCardOrder";
 
@@ -72,7 +73,7 @@ function Segmented<T extends string>({
   );
 }
 
-/** Arrastar só faz sentido com mouse: no celular o dedo rola a página. */
+/** Com mouse o card arrasta direto; no celular (sem mouse) só depois de segurar, para o dedo continuar rolando a página. */
 const useFinePointer = () => {
   const [fine, setFine] = useState(() => matchMedia("(pointer: fine)").matches);
   useEffect(() => {
@@ -130,6 +131,21 @@ function Dashboard({ mode }: { mode: CardMode }) {
 export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
   const [mode, setMode] = useState<CardMode>("resumo");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetErr, setResetErr] = useState("");
+  const doReset = async () => {
+    setResetBusy(true);
+    setResetErr("");
+    try {
+      await actions.resetSession();
+      setResetOpen(false);
+    } catch (e) {
+      setResetErr(e instanceof Error ? e.message : "Não foi possível zerar a sessão.");
+    } finally {
+      setResetBusy(false);
+    }
+  };
   const [account, setAccount] = useState("all");
   const ids = useAccountIds();
   const accounts = useAccountsMap();
@@ -198,7 +214,18 @@ export default function App() {
                 {/* Sem animação de saída: o elemento que sai (popLayout) ficava preso por cima das abas. */}
                 {tab === "dashboard" ? (
                   <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
-                    <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
+                    <div className="flex items-center gap-1.5 sm:gap-2.5">
+                      <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setResetOpen(true)}
+                        title="Zerar o tempo e os itens coletados da sessão de todas as contas"
+                      >
+                        <RotateCcw className="size-4" aria-hidden />
+                        <span>Zerar sessão</span>
+                      </button>
+                    </div>
                   </motion.div>
                 ) : tab === "inventario" ? (
                   <motion.div key="acc" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
@@ -208,6 +235,23 @@ export default function App() {
               </LayoutGroup>
             </div>
           </header>
+
+          <ConfirmDialog
+            open={resetOpen}
+            title="Zerar a sessão das contas?"
+            busy={resetBusy}
+            busyLabel="Zerando…"
+            danger={false}
+            confirmLabel="Zerar sessão"
+            onCancel={() => !resetBusy && setResetOpen(false)}
+            onConfirm={() => void doReset()}
+            message={
+              <>
+                O <b className="text-fg">tempo da sessão</b> e os <b className="text-fg">itens coletados</b> de todas as contas voltam a zero. Nada muda nas contas nem no jogo.
+                {resetErr && <div className="mt-2 text-poke-red">{resetErr}</div>}
+              </>
+            }
+          />
 
           <main className="mt-3 sm:mt-4">
             <UpdateBanner />
