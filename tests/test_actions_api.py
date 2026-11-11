@@ -267,3 +267,16 @@ def test_reset_session_zeroes_time_and_items(env):
     assert all(v == 0 for v in conn.session_items.gained.values()) and conn.balls.caught == 0
     assert conn.session_store.get(conn._session_key)["gained"]["key"] == 0   # persistido: sobrevive a reinício
     assert c.post("/api/session/reset?account=99", headers=H).status_code == 404
+
+
+def test_pokemon_sheet_for_hunt_calculator(env):
+    c, conn, acc_id, _ = env
+    assert c.get(f"/api/accounts/{acc_id}/sheet").status_code == 401
+    assert c.get(f"/api/accounts/{acc_id}/sheet", headers=H).status_code == 409   # sem Pokémon equipado
+    conn.estado.update({"activeId": 5, "pokemons": [{
+        "id": 5, "speciesId": 212, "nome": "Scizor", "level": 100, "quality": 1.796, "potencia": 3, "shiny": False,
+        "stats": {"hp": 188, "atk": 264, "def": 190, "spAtk": 202, "spDef": 218, "speed": 175},
+        "ivs": {"hp": 14, "atk": 10, "def": 4, "spAtk": 30, "spDef": 22, "speed": 13}}]})
+    j = c.get(f"/api/accounts/{acc_id}/sheet", headers=H).json()
+    assert j["speciesId"] == 212 and j["stats"]["atk"] == 264 and j["trainerLevel"] == 300 and j["potencia"] == 3
+    assert c.get("/api/accounts/99/sheet", headers=H).status_code == 404

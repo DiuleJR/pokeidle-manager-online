@@ -228,6 +228,13 @@ _SECURITY_HEADERS = {
 }  # nosniff, Referrer-Policy, HSTS e X-Frame-Options já vêm do Caddy (não duplicar)
 
 
+# O worker da "Melhor hunt" roda o motor de um site de terceiros (PokéIdle Hub). Esta CSP, entregue com o próprio
+# arquivo do worker, só deixa esse código falar com o Hub: ele não alcança a nossa API nem outros sites.
+HUNT_HUB = "https://pokeidle-gg.pages.dev"
+_WORKER_CSP = f"default-src 'none'; script-src {HUNT_HUB}; connect-src {HUNT_HUB}"
+_WORKER_PATH = "/hunt-worker.js"
+
+
 def _ws_origin_ok(ws: WebSocket) -> bool:
     """Bloqueia WebSocket iniciado por outro site (CSWSH): a origem precisa ser o próprio host."""
     origin = ws.headers.get("origin")
@@ -256,6 +263,8 @@ def create_app(
         resp = await call_next(request)
         for k, v in _SECURITY_HEADERS.items():
             resp.headers.setdefault(k, v)
+        if request.url.path == _WORKER_PATH:
+            resp.headers["Content-Security-Policy"] = _WORKER_CSP
         if request.url.path.startswith("/api/"):
             resp.headers.setdefault("Cache-Control", "no-store")
         return resp

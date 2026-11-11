@@ -192,6 +192,24 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
         conn.queue_hunt(None)
         return {"ok": True}
 
+    @app.get("/api/accounts/{acc_id}/sheet")
+    async def pokemon_sheet(acc_id: int, request: Request, tok: str | None = Query(None, alias="token")):
+        """Ficha do Pokémon equipado (o que a calculadora de hunt precisa), direto do estado do jogo."""
+        if (r := guard(request, tok)):
+            return r
+        conn = conn_of(acc_id)
+        if conn is None:
+            return JSONResponse({"error": "conta não encontrada ou desligada"}, status_code=404)
+        pk = conn.hunt.active_pokemon()
+        if not pk or not isinstance(pk.get("stats"), dict) or not isinstance(pk.get("ivs"), dict):
+            return JSONResponse({"error": "A conta não tem um Pokémon equipado com ficha completa."}, status_code=409)
+        return {
+            "id": pk.get("id"), "speciesId": pk.get("speciesId"), "nome": pk.get("nome"), "looktype": pk.get("looktype"),
+            "level": pk.get("level") or 1, "shiny": bool(pk.get("shiny")), "quality": pk.get("quality"),
+            "potencia": pk.get("potencia") or 1, "stats": pk["stats"], "ivs": pk["ivs"], "tmAoe": bool(pk.get("tmAoe")),
+            "trainerLevel": conn.estado.get("level") or 1,
+        }
+
     @app.post("/api/session/reset")
     async def reset_session(request: Request, tok: str | None = Query(None, alias="token"), account: int | None = None):
         """Zera a sessão (tempo e itens coletados) de uma conta ou de todas as ligadas."""

@@ -107,12 +107,31 @@ function installMockApi(accs: AccountSnapshot[]) {
   );
   const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json" } });
   const real = window.fetch.bind(window);
+  let realHunts: Promise<unknown[]> | null = null;
   window.fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const path = new URL(url, location.href).pathname;
     const wait = () => new Promise((r) => setTimeout(r, 350));
-    if (path === "/api/hunts") return json({ account: "acc1", level: 120, current: accs[0].hunt?.slug ?? null, hunts });
+    if (path === "/api/hunts") {
+      // Dev: usa as hunts reais do Hub (mesmos slugs do jogo), para a "Melhor hunt" casar com o mapa. Sem rede, cai nas de mentira.
+      realHunts ??= real("https://pokeidle-gg.pages.dev/data/jogo/hunts.json")
+        .then((r) => r.json())
+        .then((d: { hunts: { slug: string; nome: string; regiao: string; nivel: number; especies: { pokeId: number; pontos: number }[] }[] }) =>
+          d.hunts.map((h) => ({ slug: h.slug, nome: h.nome, area: h.regiao === "kanto" || h.regiao === "outland" ? h.regiao : "orre", regiao: h.regiao, nivel: h.nivel, totalSpawns: 15, looktype: null, especies: h.especies.map((e) => ({ ...e, nome: h.nome })) })))
+        .catch(() => hunts);
+      const list = await realHunts;
+      return json({ account: "acc1", level: 1265, current: "bellsprout", hunts: list });
+    }
     if (path === "/api/creatures") return json(creatures);
+    const sheetM = path.match(/^\/api\/accounts\/(\d+)\/sheet$/);
+    if (sheetM) {
+      await wait();
+      // A ficha do exemplo do jogo (Scizor Nv 100), a mesma para todas as contas do mock.
+      return json({
+        id: 1, speciesId: 212, nome: "Scizor", looktype: 370, level: 100, shiny: false, quality: 1.796, potencia: 3, tmAoe: false, trainerLevel: 300,
+        stats: { hp: 188, atk: 264, def: 190, spAtk: 202, spDef: 218, speed: 175 }, ivs: { hp: 14, atk: 10, def: 4, spAtk: 30, spDef: 22, speed: 13 },
+      });
+    }
     if (path === "/api/session/reset" && init?.method === "POST") {
       await wait();
       for (const a of accs) a.session = { startedAt: Date.now(), items: { boss: 0, key: 0, shinyStone: 0, bike: 0 } };

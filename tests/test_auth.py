@@ -162,3 +162,17 @@ def test_rate_limit_is_per_client_ip_behind_proxy(store):
     assert a.limited(attacker) and not a.limited(owner)  # o atacante não tranca o dono
     spoof = req("9.9.9.9", "5.6.7.8")  # de par não-local o cabeçalho é ignorado
     assert a.client_ip(spoof) == "9.9.9.9"
+
+
+def test_hunt_worker_is_confined_by_its_own_csp(store, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from telemetry import create_app
+
+    (tmp_path / "hunt-worker.js").write_text("// worker")
+    (tmp_path / "index.html").write_text("<html></html>")
+    monkeypatch.setenv("WEB_DIR", str(tmp_path))
+    c = TestClient(create_app([], Auth(store, exposed=False, env_token="")))
+    worker = c.get("/hunt-worker.js").headers["content-security-policy"]
+    assert "pokeidle-gg.pages.dev" in worker and "'self'" not in worker   # não alcança a nossa API
+    assert "'self'" in c.get("/").headers["content-security-policy"]       # o painel segue com a CSP normal

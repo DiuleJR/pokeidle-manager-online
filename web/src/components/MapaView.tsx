@@ -1,9 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Crosshair, Loader2, Lock, Search, Swords, Timer, X } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Loader2, Lock, Search, Swords, Timer, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BestHuntCard } from "@/components/BestHuntCard";
+import { HuntRow, TypeChip } from "@/components/HuntRow";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
 import { actions, useCreatures, useHuntCatalog, type Creature, type Hunt } from "@/lib/actions";
+import { type HuntOrder, rankLines, useBestHunts } from "@/lib/huntAdvisor";
 import { inRegion, REGIONS, regionOfHunt } from "@/lib/regions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { effectiveness, matchup, TYPE_COLOR, TYPES } from "@/lib/typeChart";
@@ -19,24 +22,6 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "weak", label: "Fraco contra", hint: "Áreas cujos Pokémon são fracos (×2 ou mais) a esses tipos" },
   { id: "strong", label: "Forte contra", hint: "Áreas cujos Pokémon resistem (×0,5 ou menos) a esses tipos" },
 ];
-
-function TypeChip({ type, mult }: { type: string; mult?: number }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wide text-white/95"
-      style={{ background: TYPE_COLOR[type] ?? "#555" }}
-    >
-      {type}
-      {mult !== undefined && <span className="tnum font-bold opacity-90">×{mult === 0 ? "0" : mult.toString().replace(".", ",")}</span>}
-    </span>
-  );
-}
-
-const typesOf = (h: Hunt, creatures: Record<string, Creature> | null) => {
-  const set = new Set<string>();
-  for (const e of h.especies) for (const t of creatures?.[String(e.pokeId)]?.t ?? []) set.add(t);
-  return [...set];
-};
 
 function matches(h: Hunt, creatures: Record<string, Creature> | null, q: string, types: string[], mode: Mode) {
   if (q) {
@@ -57,94 +42,6 @@ type Status = { slug: string; state: "sending" | "ok" | "ignored" | "err" | "que
 
 /** Segundos restantes arredondados para cima ("3 s"). */
 const secs = (ms: number) => `${Math.max(1, Math.ceil(ms / 1000))} s`;
-
-const HuntRow = memo(function HuntRow({
-  h,
-  creatures,
-  level,
-  current,
-  queued,
-  focused,
-  canHunt,
-  busy,
-  onFocus,
-  onHunt,
-}: {
-  h: Hunt;
-  creatures: Record<string, Creature> | null;
-  level: number;
-  current: boolean;
-  queued: boolean;
-  focused: boolean;
-  canHunt: boolean;
-  busy: boolean;
-  onFocus: (slug: string) => void;
-  onHunt: (h: Hunt) => void;
-}) {
-  // A cara da área é a espécie com mais pontos de spawn (como no jogo).
-  const main = [...h.especies].sort((a, b) => b.pontos - a.pontos)[0];
-  const lk = (main && creatures?.[String(main.pokeId)]?.lk) || h.looktype;
-  const types = typesOf(h, creatures);
-  const locked = h.nivel > level;
-  return (
-    <div
-      onPointerEnter={(e) => e.pointerType === "mouse" && onFocus(h.slug)}
-      onClick={() => onFocus(h.slug)}
-      className={`tile flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-150 sm:gap-3 sm:px-3 ${
-        current ? "!border-poke-green/70" : focused ? "!border-edge" : ""
-      } ${locked ? "text-mute" : ""}`}
-    >
-      <span
-        className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 sm:size-12 ${locked ? "border-line opacity-60 grayscale" : "border-edge/70"}`}
-        style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)" }}
-      >
-        <PokemonSprite looktype={lk} size={40} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className={`truncate text-[15px] font-bold leading-tight sm:text-base ${locked ? "text-mute" : ""}`}>{h.nome}</span>
-          <span className={`tnum inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${locked ? "bg-black/30 text-mute" : "text-mute"}`}>
-            {locked && <Lock className="size-2.5" aria-hidden />}
-            Nv {fmtInt(h.nivel)}
-          </span>
-        </div>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {types.length ? types.map((t) => <span key={t} className={locked ? "opacity-50 grayscale" : ""}><TypeChip type={t} /></span>) : <span className="text-xs text-mute">{h.especies.length} espécie(s)</span>}
-        </div>
-      </div>
-      {current ? (
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-poke-green/60 bg-[#16301c] px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-poke-green">
-          <Check className="size-3.5" aria-hidden /> Caçando
-        </span>
-      ) : queued ? (
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-[#3a2a12] px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-poke-gold">
-          <Timer className="size-3.5" aria-hidden /> Na fila
-        </span>
-      ) : locked ? (
-        <span
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-black/30 px-2.5 py-1.5 text-xs font-bold text-mute"
-          title={`Libera no nível ${fmtInt(h.nivel)}`}
-        >
-          <Lock className="size-3.5" aria-hidden /> Trancada
-        </span>
-      ) : (
-        <button
-          type="button"
-          className="btn shrink-0"
-          data-active="true"
-          disabled={!canHunt || busy}
-          title={canHunt ? `Mandar a conta caçar em ${h.nome}` : "A conta precisa estar online"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onHunt(h);
-          }}
-        >
-          <Crosshair className="size-4" aria-hidden /> Caçar
-        </button>
-      )}
-    </div>
-  );
-});
 
 /** Painel de análise da área: espécies, fraquezas, resistências e drops (dados públicos do jogo). */
 function Analyser({ hunt, creatures }: { hunt: Hunt | null; creatures: Record<string, Creature> | null }) {
@@ -229,10 +126,14 @@ export function MapaView() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>(null);
+  const [order, setOrder] = useState<HuntOrder>("xp");
 
   const level = acc?.level ?? cat?.level ?? 0;
   const currentSlug = acc?.hunt?.slug ?? cat?.current ?? null;
   const online = acc?.status === "online";
+  // Melhor hunt para o Pokémon equipado: recalcula quando ele (ou o nível) muda.
+  const best = useBestHunts(selected || null, `${acc?.pokemon?.name}|${acc?.pokemon?.level}|${acc?.level}`, online);
+  const rankBySlug = useMemo(() => new Map(rankLines(best.data?.lines, order).slice(0, 3).map((l, i) => [l.slug, i + 1] as const)), [best.data, order]);
 
   // Região inicial: a da hunt atual da conta (ou Kanto). As dez regiões do jogo ficam sempre à vista.
   const currentArea = regionOfHunt(cat?.hunts.find((h) => h.slug === currentSlug))?.id;
@@ -351,6 +252,29 @@ export function MapaView() {
           {acc.nick} não está online agora: dá para ver o mapa, mas só dá para trocar de hunt com a conta conectada.
         </p>
       )}
+
+      <Reveal index={1}>
+        <BestHuntCard
+          nick={acc?.nick ?? ""}
+          order={order}
+          onOrder={setOrder}
+          best={best.data}
+          loading={best.loading}
+          error={best.error}
+          onRetry={best.reload}
+          online={online}
+          level={level}
+          hunts={cat?.hunts ?? []}
+          creatures={creatures}
+          currentSlug={currentSlug}
+          pendingSlug={pendingSlug}
+          focusSlug={focused?.slug ?? null}
+          busy={status?.state === "sending"}
+          canHunt={online}
+          onFocus={setFocus}
+          onHunt={hunt}
+        />
+      </Reveal>
 
       {/* Regiões */}
       <Reveal index={1}>
@@ -506,6 +430,7 @@ export function MapaView() {
                     focused={h.slug === focused?.slug}
                     canHunt={online}
                     busy={status?.state === "sending"}
+                    rank={rankBySlug.get(h.slug)}
                     onFocus={setFocus}
                     onHunt={hunt}
                   />

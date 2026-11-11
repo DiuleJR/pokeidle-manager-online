@@ -22,10 +22,27 @@ export interface HuntResult {
   waitMs?: number;
 }
 
+/** O Pokémon equipado de uma conta, como a calculadora de hunt precisa. */
+export interface PokemonSheet {
+  id: number;
+  speciesId: number;
+  nome: string;
+  looktype?: number | null;
+  level: number;
+  shiny: boolean;
+  quality: number;
+  potencia: number;
+  stats: Record<string, number>;
+  ivs: Record<string, number>;
+  tmAoe: boolean;
+  trainerLevel: number;
+}
+
 export const actions = {
   equip: (accId: string, kind: "ball" | "potion", id: number) =>
     call<EquipResult>("POST", `/api/accounts/${numId(accId)}/equip`, { kind, id }),
   selectHunt: (accId: string, slug: string) => call<HuntResult>("POST", `/api/accounts/${numId(accId)}/hunt`, { slug }),
+  sheet: (accId: string) => call<PokemonSheet>("GET", `/api/accounts/${numId(accId)}/sheet`),
   resetSession: () => call<{ ok: boolean; reset: string[] }>("POST", "/api/session/reset"),
   cancelHuntQueue: (accId: string) => call<{ ok: boolean }>("DELETE", `/api/accounts/${numId(accId)}/hunt/queue`),
 };
