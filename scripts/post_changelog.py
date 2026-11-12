@@ -30,6 +30,7 @@ MAX_IMAGES = 10
 MAX_BYTES = 8 * 1024 * 1024
 DEFAULT_REPO = "DiuleJR/pokeidle-manager-online"
 NAME = "PokéIdle Manager Online"
+PING_EVERYONE = os.getenv("CHANGELOG_PING", "everyone").strip().lower() != "none"   # CHANGELOG_PING=none desliga a marcação
 
 # Emoji de cada seção (pela palavra-chave do título); o resto leva ✨.
 SECTION_EMOJI = [
@@ -84,11 +85,12 @@ def chunk(text: str, limit: int = MAX_CHARS) -> list[str]:
 
 def build_messages(tag: str, repo: str, images: list[Path]) -> list[dict]:
     body = to_discord(read_notes(tag))
-    parts = chunk(body, MAX_CHARS - 60)    # folga para o título que entra na 1ª mensagem
+    parts = chunk(body, MAX_CHARS - 80)    # folga para o título que entra na 1ª mensagem
     url = f"https://github.com/{repo}"   # link do repositório (sem pré-visualização, por causa dos <>)
-    parts[0] = f"# 🚀 {NAME} {tag}\n{parts[0]}"
+    ping = "||@everyone||\n" if PING_EVERYONE else ""      # no spoiler: a notificação toca, o texto fica escondido
+    parts[0] = f"{ping}# 🚀 {NAME} {tag}\n{parts[0]}"
     parts.append(f"🔗 **Download oficial:** <{url}>")
-    msgs = [{"content": p, "files": []} for p in parts]
+    msgs = [{"content": p, "files": [], "ping": PING_EVERYONE and i == 0} for i, p in enumerate(parts)]
     msgs[-1]["files"] = images      # as imagens vão na última mensagem, junto do link
     return msgs
 
@@ -118,7 +120,8 @@ def multipart(payload: dict, files: list[Path]) -> tuple[bytes, str]:
 
 
 def send(webhook: str, msg: dict) -> None:
-    payload = {"content": msg["content"], "allowed_mentions": {"parse": []}}   # nunca marca ninguém
+    # só a 1ª mensagem pode marcar @everyone (e só se ligado); nenhuma outra marca ninguém
+    payload = {"content": msg["content"], "allowed_mentions": {"parse": ["everyone"] if msg.get("ping") else []}}
     if msg["files"]:
         payload["attachments"] = [{"id": i, "filename": f.name} for i, f in enumerate(msg["files"])]
         data, ctype = multipart(payload, msg["files"])
