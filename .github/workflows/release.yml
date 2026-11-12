@@ -40,3 +40,18 @@ jobs:
           # Texto das novidades vem de RELEASE_NOTES.md; o link "Full Changelog" é anexado automaticamente.
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
+
+  # Depois de publicar a Release, avisa no canal de changelog do Discord (texto das notas + imagens de
+  # changelog/<tag>/). Sem o segredo DISCORD_CHANGELOG_WEBHOOK, não envia nada; uma falha aqui não derruba a Release.
+  changelog:
+    needs: dashboard
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Postar o changelog no Discord
+        env:
+          DISCORD_CHANGELOG_WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}
+        run: python3 scripts/post_changelog.py --tag "${GITHUB_REF_NAME}"

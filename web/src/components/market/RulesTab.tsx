@@ -289,7 +289,7 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
                 <ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden /> Filtros{" "}
                 <span className="font-normal text-mute">{filtersActive ? "(em uso)" : "(opcional)"}</span>
               </summary>
-              <div className="grid gap-3 pt-1 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                 <Labeled label="Tipo">
                   <select className="field w-full" value={spec.elemento ?? ""} onChange={(e) => set("elemento", e.target.value)}>
                     {ELEMENTS.map((x) => (
@@ -330,7 +330,7 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
           <span className="label block">Moeda</span>
           <CurrencyToggle value={spec.moeda} onChange={(m) => set("moeda", m as Moeda)} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Labeled label={`Preço máximo por unidade (${unit})`}>
             <MoneyField value={spec.max_price} onChange={(n) => set("max_price", n)} placeholder={floor ? fmtInt(floor) : "0"} />
           </Labeled>
@@ -369,7 +369,7 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-poke-gold [&::-webkit-details-marker]:hidden">
               <ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden /> Mais opções
             </summary>
-            <div className="grid gap-3 pt-1 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
               <Labeled label="Máximo de unidades por compra" hint="Vazio = sem limite (até o orçamento).">
                 <input className="field w-full" inputMode="numeric" value={spec.qty_max || ""} onChange={(e) => set("qty_max", digits(e.target.value))} />
               </Labeled>
@@ -474,11 +474,11 @@ function RuleRow({ r, onEdit, onChanged, buyers }: { r: Rule; onEdit: () => void
   const pct = budget > 0 ? Math.min(100, (r.spentToday / budget) * 100) : 0;
   const full = budget > 0 && r.spentToday >= budget;
   return (
-    <li className={`tile space-y-3 p-3.5 transition-opacity ${r.enabled ? "" : "opacity-60"}`}>
+    <li className={`tile min-w-0 space-y-3 p-3.5 transition-opacity ${r.enabled ? "" : "opacity-60"}`}>
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-line bg-void text-poke-gold">{snipe ? <Crosshair className="size-5" aria-hidden /> : <Bell className="size-5" aria-hidden />}</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold leading-tight">{r.label}</p>
+          <p className="line-clamp-2 break-words text-base font-bold leading-tight">{r.label}</p>
           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-mute">
             <span>{snipe ? "Compra até" : "Avisa até"}</span>
             {s.max_price > 0 ? (
@@ -509,9 +509,9 @@ function RuleRow({ r, onEdit, onChanged, buyers }: { r: Rule; onEdit: () => void
 
       {snipe && (
         <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="text-mute">{budget > 0 ? `Gasto hoje${buyers.length > 1 ? ` · ${fmtInt(perAccount)} por conta` : ""}` : "Gasto hoje · sem limite"}</span>
-            <span className="tnum font-semibold">
+          <div className="flex items-baseline justify-between gap-3 text-xs">
+            <span className="text-mute">{budget > 0 ? "Gasto hoje" : "Gasto hoje · sem limite"}</span>
+            <span className="tnum whitespace-nowrap font-semibold">
               {fmtInt(r.spentToday)}
               {budget > 0 && <span className="font-normal text-mute"> / {fmtInt(budget)}</span>}
             </span>
@@ -521,6 +521,7 @@ function RuleRow({ r, onEdit, onChanged, buyers }: { r: Rule; onEdit: () => void
               <div className={`h-full rounded-full ${full ? "bg-poke-green" : "bg-poke-gold"}`} style={{ width: `${pct}%` }} />
             </div>
           )}
+          {budget > 0 && buyers.length > 1 && <p className="text-[11px] text-mute">Orçamento de {fmtInt(perAccount)} por conta.</p>}
         </div>
       )}
 
@@ -737,7 +738,7 @@ export function RulesTab() {
             Dica: abra um item na aba Comprar e use <b>Avisar</b> ou <b>Comprar sozinho</b>.
           </p>
         ) : (
-          <ul className="grid items-start gap-3 lg:grid-cols-2">
+          <ul className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
             {list.map((r) => (
               <RuleRow key={r.id} r={r} buyers={buyersOf(r)} onEdit={() => setDlg({ kind: r.kind, rule: r })} onChanged={reload} />
             ))}

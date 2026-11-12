@@ -130,6 +130,7 @@ function installMockApi(accs: AccountSnapshot[]) {
           { id: 1, kind: "snipe", enabled: true, label: "Sun Stone", lastFire: null, spentToday: 12000, spec: { target: "item", item_id: 23, moeda: "gold", max_price: 800, below_avg_pct: 0, account_id: 1, qty_max: 0, budget_daily: 0, poll_s: 10 } },
           { id: 2, kind: "snipe", enabled: true, label: "Rare Candy", lastFire: null, spentToday: 2400000, spec: { target: "item", item_id: 24, moeda: "gold", max_price: 100000, below_avg_pct: 0, account_id: 1, account_ids: accs.map((a) => Number(a.id.replace(/\D/g, ""))), qty_max: 0, budget_daily: 1000000, poll_s: 10 } },
           { id: 3, kind: "alert", enabled: true, label: "Pikachu shiny", lastFire: null, spentToday: 0, spec: { target: "pokemon", busca: "Pikachu", so_shiny: true, moeda: "gold", max_price: 5000, below_avg_pct: 0 } },
+          { id: 4, kind: "snipe", enabled: true, label: "Qualquer Pokémon shiny", lastFire: null, spentToday: 0, spec: { target: "pokemon", busca: "", so_shiny: true, moeda: "gold", max_price: 100000000, below_avg_pct: 0, account_id: 1, account_ids: [1, 2, 3, 4], qty_max: 0, budget_daily: 0, poll_s: 10 } },
         ],
       });
     }
