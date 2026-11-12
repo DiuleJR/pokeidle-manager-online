@@ -76,6 +76,13 @@ CREATE TABLE IF NOT EXISTS price_history (
     ads INTEGER NOT NULL, units INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_price_item ON price_history(item_id, ts);
+CREATE TABLE IF NOT EXISTS market_rule_spend (
+    rule_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    spent REAL NOT NULL DEFAULT 0,   -- gasto do dia desta conta nesta regra (o orçamento vale por conta)
+    PRIMARY KEY (rule_id, account_id)
+);
 CREATE TABLE IF NOT EXISTS market_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts REAL NOT NULL,
@@ -311,6 +318,7 @@ class Store:
     def delete_rule(self, rule_id: int) -> None:
         with self._lock:
             self._db.execute("DELETE FROM market_rules WHERE id=?", (rule_id,))
+            self._db.execute("DELETE FROM market_rule_spend WHERE rule_id=?", (rule_id,))
             self._db.commit()
 
     def rule_spent(self, rule_id: int, day: str) -> float:
@@ -319,7 +327,21 @@ class Store:
             r = self._db.execute("SELECT spent, spent_day FROM market_rules WHERE id=?", (rule_id,)).fetchone()
         return float(r["spent"]) if r and r["spent_day"] == day else 0.0
 
-    def add_rule_spent(self, rule_id: int, day: str, amount: float) -> None:
+    def account_spent(self, rule_id: int, account_id: int, day: str) -> float:
+        """Gasto do dia de UMA conta numa regra (o orçamento diário vale por conta)."""
+        with self._lock:
+            r = self._db.execute("SELECT spent, day FROM market_rule_spend WHERE rule_id=? AND account_id=?",
+                                 (rule_id, account_id)).fetchone()
+        return float(r["spent"]) if r and r["day"] == day else 0.0
+
+    def add_rule_spent(self, rule_id: int, day: str, amount: float, account_id: int | None = None) -> None:
+        if account_id is not None:
+            base = self.account_spent(rule_id, account_id, day)
+            with self._lock:
+                self._db.execute("INSERT INTO market_rule_spend(rule_id, account_id, day, spent) VALUES(?,?,?,?) "
+                                 "ON CONFLICT(rule_id, account_id) DO UPDATE SET day=excluded.day, spent=excluded.spent",
+                                 (rule_id, account_id, day, base + amount))
+                self._db.commit()
         with self._lock:
             r = self._db.execute("SELECT spent, spent_day FROM market_rules WHERE id=?", (rule_id,)).fetchone()
             if not r:

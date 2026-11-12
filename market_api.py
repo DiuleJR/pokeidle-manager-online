@@ -6,7 +6,7 @@ Gemas nem envia Coins: o painel só LÊ a carteira.
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
@@ -40,7 +40,8 @@ class RuleIn(BaseModel):
     moeda: Literal["gold", "orb"] = "gold"
     max_price: int = Field(0, ge=0, le=10**12)
     below_avg_pct: float = Field(0, ge=0, le=95)
-    account_id: int | None = Field(None, ge=1)
+    account_id: int | None = Field(None, ge=1)                      # legado: use account_ids
+    account_ids: list[Annotated[int, Field(ge=1)]] = Field(default_factory=list, max_length=8)
     qty_max: int = Field(0, ge=0, le=1_000_000)
     budget_daily: int = Field(0, ge=0, le=10**13)
     poll_s: int = Field(10, ge=5, le=600)
@@ -49,8 +50,6 @@ class RuleIn(BaseModel):
     def _check(self):
         if self.target == "item" and not self.item_id:
             raise ValueError("escolha o item")
-        if self.target == "pokemon" and not (self.busca.strip() or self.so_shiny or self.so_p5):
-            raise ValueError("para Pokémon, informe o nome ou marque shiny/P5")
         if self.target == "pokemon" and self.below_avg_pct:
             raise ValueError("\"abaixo da média\" só existe para itens")
         if self.elemento.upper() not in ELEMENTS:
@@ -58,16 +57,17 @@ class RuleIn(BaseModel):
         if self.max_price <= 0 and self.below_avg_pct <= 0:
             raise ValueError("defina o preço máximo ou a porcentagem abaixo da média")
         if self.kind == "snipe":
-            if not self.account_id:
-                raise ValueError("escolha a conta que vai comprar")
-            if self.budget_daily <= 0:
-                raise ValueError("defina o orçamento diário (o máximo que a regra pode gastar por dia)")
+            if not (self.account_ids or self.account_id):
+                raise ValueError("escolha ao menos uma conta para comprar")
         return self
 
     def spec(self) -> dict:
         d = self.model_dump(exclude={"kind", "enabled"})
         d["elemento"] = d["elemento"].upper()
         d["busca"] = d["busca"].strip()
+        ids = list(dict.fromkeys(self.account_ids or ([self.account_id] if self.account_id else [])))
+        d["account_ids"] = ids if self.kind == "snipe" else []
+        d["account_id"] = ids[0] if ids and self.kind == "snipe" else None   # compatível com regras antigas
         return d
 
 
@@ -253,7 +253,7 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
                 "sniperEnabled": store.get_setting("sniper_enabled") == "1"}
 
     def _check_account(body: RuleIn):
-        if body.kind == "snipe" and manager.get(body.account_id or 0) is None:
+        if body.kind == "snipe" and any(manager.get(i) is None for i in (body.account_ids or [body.account_id or 0])):
             return JSONResponse({"error": "conta não encontrada (ou desligada)"}, status_code=422)
         return None
 

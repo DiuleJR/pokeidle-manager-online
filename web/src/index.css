@@ -132,3 +132,41 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Log de compras do sniper: a largura que vale é a da LISTA (não a da janela), porque o painel tem
+   coluna lateral. Estreito = 2 linhas por registro; largo = uma linha em colunas. */
+.buylog {
+  container-type: inline-size;
+}
+.lg-row {
+  display: grid;
+  flex: 1 1 0%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.25rem;
+}
+.lg-meta {
+  min-width: 0;
+}
+.lg-chips {
+  display: none;
+}
+.lg-time {
+  justify-self: end;
+}
+@container (min-width: 900px) {
+  .lg-row {
+    grid-template-columns: minmax(0, 1fr) 8rem minmax(0, 2.5fr) 7rem 7rem;
+  }
+  .lg-meta {
+    display: contents;
+  }
+  .lg-item { grid-column: 1; grid-row: 1; font-size: 1rem; }
+  .lg-status { grid-column: 2; grid-row: 1; font-size: 0.875rem; }
+  .lg-chips { display: flex; grid-column: 3; grid-row: 1; flex-wrap: wrap; align-items: center; gap: 0.375rem; }
+  .lg-compact { display: none; }
+  .lg-price { grid-column: 4; grid-row: 1; font-size: 1rem; }
+  .lg-time { grid-column: 5; grid-row: 1; font-size: 0.75rem; }
+}

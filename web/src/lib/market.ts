@@ -138,6 +138,8 @@ export interface RuleSpec {
   max_price: number;
   below_avg_pct: number;
   account_id?: number | null;
+  /** Contas que compram (sniper). Regras antigas só têm `account_id`. */
+  account_ids?: number[];
   qty_max?: number;
   budget_daily?: number;
   poll_s?: number;
@@ -234,3 +236,6 @@ export const dealLabel = (d?: Deal) => (d === "barato" ? "Barato" : d === "caro"
 /** Segundos até o anúncio ser liberado para compra (0 = já pode). `drift` = hora do servidor − hora local. */
 export const secondsUntil = (ms: number | undefined, drift: number) =>
   ms ? Math.max(0, Math.ceil((ms - (Date.now() + drift)) / 1000)) : 0;
+
+/** Contas de uma regra de sniper, já considerando as regras antigas (uma conta só). */
+export const ruleAccountIds = (s: RuleSpec): number[] => (s.account_ids?.length ? s.account_ids : s.account_id ? [s.account_id] : []);

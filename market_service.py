@@ -5,7 +5,7 @@ disponível) e é somente leitura. A única ação que gasta é a compra do snip
 quando TODAS as travas abaixo estão satisfeitas:
 
     - a chave geral `sniper_enabled` está ligada (padrão: desligada);
-    - a regra está ligada e tem orçamento diário > 0 (na moeda da regra);
+    - a regra está ligada (o orçamento diário por conta é opcional: sem ele, vale só o saldo da conta);
     - a conta da regra está online e tem saldo para pelo menos 1 unidade;
     - o anúncio está aberto, é de outro jogador e custa no máximo o preço da regra.
 
@@ -24,7 +24,7 @@ import re
 
 from game_data import ITEM_NAMES, item_icon_path, item_meta, item_name
 from market import MarketError
-from notify import BLUE, GOLD, GREEN, RED
+from notify import BLUE, GOLD, GREEN
 
 if TYPE_CHECKING:
     from manager import AccountManager
@@ -47,6 +47,8 @@ SELL_COOLDOWN_S = 6 * 3600       # não repete o aviso do mesmo item antes disso
 SELL_RISE = 0.25                 # ...a menos que o ágio suba mais 25 pontos
 SELL_MIN_SOLD = 3                # média de 7 dias só vale com algumas vendas
 SALE_CHECK_S = 60                # confere as vendas das contas
+NO_BUDGET_CAP = 10**15            # regra sem orçamento diário: só o saldo da conta limita
+WIN_BATCH_S = 3                 # espera para juntar as compras de várias contas no mesmo anúncio
 SITE = "https://pokeidle.io"
 PT_NAMES = {70011: "Fragmento de Chave", 70012: "Fragmento de Shiny Stone", 70013: "Fragmento de Bicicleta"}
 
@@ -94,6 +96,17 @@ def pick_candidates(listings: list[dict], thr: int, my_nick: str, dead: dict[int
     return out
 
 
+def fmt_n(n: float) -> str:
+    """4899999 -> '4.899.999' (separador de milhar do Brasil)."""
+    return f"{int(n):,}".replace(",", ".")
+
+
+def rule_account_ids(spec: dict) -> list[int]:
+    """Contas que compram por uma regra de sniper (`account_ids`; regras antigas têm só `account_id`)."""
+    ids = spec.get("account_ids") or ([spec["account_id"]] if spec.get("account_id") else [])
+    return list(dict.fromkeys(int(i) for i in ids))
+
+
 def plan_qty(listing: dict, spec: dict, balance: float, remaining_budget: float) -> int:
     """Quantas unidades comprar do anúncio respeitando tudo: oferta, `qty_max`, saldo e orçamento."""
     preco = int(listing["preco"])
@@ -136,13 +149,12 @@ class MarketService:
         self._medias_at = 0.0
         self._ov_lock = asyncio.Lock()
         self._dead: dict[int, float] = {}            # anúncio -> até quando ignorar
-        self._inflight: set[int] = set()             # anúncios com compra agendada
-        self._reserved: dict[int, float] = {}        # regra -> orçamento reservado em compras no ar
+        self._inflight: set[tuple[int, int]] = set()  # (anúncio, conta) com compra agendada
+        self._reserved: dict[tuple[int, int], float] = {}   # (regra, conta) -> orçamento reservado em compras no ar
         self._notified: dict[int, set[int]] = {}     # regra -> anúncios já avisados
         self._last_check: dict[int, float] = {}
-        self._buy_locks: dict[int, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
-        self._warned_budget: set[int] = set()
+        self._wins: dict[tuple[int, int], dict] = {}   # (regra, anúncio) -> compras feitas, esperando sair juntas no Discord
         self._usd_per_gem: tuple[float, float | None] = (0.0, None)
         self._name_ids: tuple[float, dict[str, int]] = (0.0, {})
         self._shiny_cache: dict[str, tuple[float, float | None]] = {}
@@ -425,7 +437,7 @@ class MarketService:
     # ------------------------------------------------------------ regras
     def describe(self, spec: dict) -> str:
         if spec.get("target") == "pokemon":
-            partes = [spec.get("busca") or "Pokémon"]
+            partes = [spec.get("busca") or "Qualquer Pokémon"]
             if spec.get("so_shiny"):
                 partes.append("shiny")
             if spec.get("so_p5"):
@@ -464,9 +476,13 @@ class MarketService:
         self._last_check[rid] = now
         if kind == "snipe" and not sniper_on:
             return
-        conn = self.pick(int(spec["account_id"])) if kind == "snipe" and spec.get("account_id") else self.pick()
-        if conn is None:
+        if kind == "snipe":
+            conns = [c for i in rule_account_ids(spec) if (c := self.pick(i)) is not None]
+        else:
+            conns = [c for c in [self.pick()] if c is not None]
+        if not conns:
             return
+        conn = conns[0]
         moeda = spec.get("moeda", "gold")
         if spec.get("target") != "pokemon" and spec.get("below_avg_pct"):
             await self.refresh_medias()
@@ -475,14 +491,16 @@ class MarketService:
         if thr <= 0:
             return
         lines = await self._listings_for(spec, conn)
-        cands = pick_candidates(lines, thr, conn.acc.nick, self._dead)
-        if not cands:
-            return
         if kind == "alert":
-            self._alert(rule, conn, cands, thr)
-        else:
-            for a in cands[:3]:
-                self._maybe_snipe(rule, conn, a)
+            cands = pick_candidates(lines, thr, conn.acc.nick, self._dead)
+            if cands:
+                self._alert(rule, conn, cands, thr)
+            return
+        # Sniper: todas as contas marcadas tentam o MESMO anúncio ao mesmo tempo, para entrar no
+        # sorteio de liberação do servidor. Cada uma só deixa de fora os anúncios da própria conta.
+        for c in conns:
+            for a in pick_candidates(lines, thr, c.acc.nick, self._dead)[:3]:
+                self._maybe_snipe(rule, c, a)
 
     # ------------------------------------------------------------ alertas
     def _alert(self, rule: dict, conn, cands: list[dict], thr: int) -> None:
@@ -505,24 +523,21 @@ class MarketService:
     # ------------------------------------------------------------ sniper
     def _maybe_snipe(self, rule: dict, conn, listing: dict) -> None:
         aid = int(listing["id"])
-        if aid in self._inflight:
+        acc = conn.acc.index
+        if (aid, acc) in self._inflight:
             return
         spec, rid = rule["spec"], rule["id"]
-        budget = float(spec.get("budget_daily") or 0)
-        if budget <= 0:
-            if rid not in self._warned_budget:
-                self._warned_budget.add(rid)
-                self.store.add_market_log(conn.acc.index, rid, "ignorado", "regra sem orçamento diário: nada será comprado")
-            return
+        budget = float(spec.get("budget_daily") or 0)    # 0 = sem limite diário (o saldo da conta ainda limita)
         moeda = spec.get("moeda", "gold")
         balance = float(conn.estado.get("orbs" if moeda == "orb" else "gold") or 0)
-        spent = self.store.rule_spent(rid, today_key()) + self._reserved.get(rid, 0.0)
-        qty = plan_qty(listing, spec, balance, budget - spent)
+        # o orçamento diário vale POR CONTA: cada conta marcada gasta até o seu próprio teto
+        spent = self.store.account_spent(rid, acc, today_key()) + self._reserved.get((rid, acc), 0.0)
+        qty = plan_qty(listing, spec, balance, budget - spent if budget > 0 else NO_BUDGET_CAP)
         if qty < 1:
             return
         cost = int(listing["preco"]) * qty
-        self._inflight.add(aid)
-        self._reserved[rid] = self._reserved.get(rid, 0.0) + cost
+        self._inflight.add((aid, acc))
+        self._reserved[(rid, acc)] = self._reserved.get((rid, acc), 0.0) + cost
         t = asyncio.create_task(self._buy(rule, conn, listing, qty, cost), name=f"snipe{aid}")
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
@@ -534,19 +549,24 @@ class MarketService:
         label = self.describe(spec)
         status, detail, paid = "erro", "", 0
         try:
-            wait = (int(listing.get("compravelEm") or 0) - conn.market.server_now_ms()) / 1000
+            due = int(listing.get("compravelEm") or 0)
+            wait = (due - conn.market.server_now_ms()) / 1000
             if wait > MAX_WAIT_S:
                 self._dead[aid] = time.time() + 30
                 return
             if wait > 0:
-                await asyncio.sleep(wait + 0.05)
+                await conn.market.sleep_until_server(due)
             # a decisão pode ter mudado durante a espera
             fresh = self.store.get_rule(rid)
             if (not fresh or not fresh["enabled"] or self.store.get_setting("sniper_enabled") != "1"
                     or not conn.market.online):
                 return
-            lock = self._buy_locks.setdefault(conn.acc.index, asyncio.Lock())
-            async with lock:
+            log.info("[%s] sniper dispara #%s %+d ms depois da liberação (relógio estimado)", conn.acc.name, aid,
+                     conn.market.server_now_ms() - due)
+            res = await conn.market.comprar(aid, qty, int(listing["preco"]), moeda)
+            if res["status"] == "indisponivel" and 1 <= int(res.get("restam") or 0) < qty:
+                # o anúncio tinha menos unidades do que pedimos: leva o que sobrou, na hora
+                qty = int(res["restam"])
                 res = await conn.market.comprar(aid, qty, int(listing["preco"]), moeda)
             status, detail = res["status"], res.get("detail") or ""
             if status == "comprado":
@@ -557,25 +577,46 @@ class MarketService:
             log.exception("[snipe] falha inesperada")
             status, detail = "erro", type(e).__name__
         finally:
-            self._inflight.discard(aid)
-            self._reserved[rid] = max(0.0, self._reserved.get(rid, 0.0) - cost)
+            self._inflight.discard((aid, conn.acc.index))
+            key = (rid, conn.acc.index)
+            self._reserved[key] = max(0.0, self._reserved.get(key, 0.0) - cost)
         if status == "comprado":
-            self.store.add_rule_spent(rid, today_key(), paid)
+            self.store.add_rule_spent(rid, today_key(), paid, conn.acc.index)
             self.store.touch_rule(rid)
-        self._dead[aid] = time.time() + (3600 if status == "comprado" else 120 if status != "timeout" else 20)
+        self._dead[aid] = time.time() + (3600 if status in ("comprado", "indisponivel") else 120 if status != "timeout" else 20)
         moeda_nome = "Gemas" if moeda == "orb" else "Gold"
-        text = f"{qty}× {label} a {int(listing['preco'])} {moeda_nome} (#{aid}): {status}" + (f" — {detail}" if detail else "")
+        # o status já aparece no selo do log: o texto só repete o detalhe quando ele explica uma falha
+        text = f"{qty}× {label} a {int(listing['preco'])} {moeda_nome} (#{aid})" + (f" — {detail}" if detail and status not in ("comprado", "perdeu_sorteio") else "")
         self.store.add_market_log(conn.acc.index, rid, status, text)
         log.info("[%s] sniper %s", conn.acc.name, text)
+        # Discord: só as compras que deram certo (perdeu o sorteio, recusa e erro ficam só no painel).
+        # Contas que compram o mesmo anúncio ao mesmo tempo saem juntas, numa mensagem só.
         if status == "comprado":
-            self.notifier.send(f"✅ Sniper comprou: {label}", detail or "", GREEN,
-                               [("Conta", conn.acc.nick, True), ("Gasto", f"{paid} {moeda_nome}", True)])
-        elif status == "perdeu_sorteio":
-            self.notifier.send(f"🎲 Sniper perdeu o sorteio: {label}", "Nada foi cobrado.", GOLD,
-                               [("Conta", conn.acc.nick, True)])
-        elif status in ("recusado", "erro"):
-            self.notifier.send(f"⚠️ Sniper não comprou: {label}", detail or status, RED,
-                               [("Conta", conn.acc.nick, True)])
+            self._queue_win(rid, aid, spec, label, moeda_nome, conn.acc.nick, qty, paid)
+
+    def _queue_win(self, rid: int, aid: int, spec: dict, label: str, moeda_nome: str, nick: str, qty: int, paid: int) -> None:
+        key = (rid, aid)
+        w = self._wins.get(key)
+        if w is None:
+            w = self._wins[key] = {"label": label, "moeda": moeda_nome, "item_id": spec.get("item_id") if spec.get("target") != "pokemon" else None, "rows": []}
+            asyncio.get_running_loop().call_later(WIN_BATCH_S, self._flush_win, key)
+        w["rows"].append((nick, qty, paid))
+
+    def _flush_win(self, key: tuple[int, int]) -> None:
+        w = self._wins.pop(key, None)
+        if not w or not w["rows"]:
+            return
+        rows, moeda = w["rows"], w["moeda"]
+        icon = self.item_info(int(w["item_id"]))["icon"] if w["item_id"] else None
+        if len(rows) == 1:
+            nick, qty, paid = rows[0]
+            fields = [("Conta", nick, True), ("Quantidade", f"{qty}×", True), ("Gasto", f"{fmt_n(paid)} {moeda}", True)]
+            title = f"✅ Sniper comprou: {w['label']}"
+        else:
+            fields = [(nick, f"{qty}× · {fmt_n(paid)} {moeda}", True) for nick, qty, paid in rows]
+            fields.append(("Total", f"{sum(r[1] for r in rows)}× · {fmt_n(sum(r[2] for r in rows))} {moeda}", False))
+            title = f"✅ Sniper comprou: {w['label']} ({len(rows)} contas)"
+        self.notifier.send(title, "", GREEN, fields, thumbnail=icon)
 
     # ------------------------------------------------------------ avisos de venda (Discord)
     def _owned_items(self) -> dict[int, list[tuple[str, int]]]:

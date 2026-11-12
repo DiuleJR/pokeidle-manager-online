@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { SupportSection } from "@/components/SupportCard";
@@ -99,7 +99,13 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
         onClick={(e) => e.stopPropagation()}
         className={`card my-auto w-full p-4 sm:p-5 ${wide ? "max-w-2xl" : "max-w-lg"}`}
       >
-        <h2 className="text-lg font-extrabold leading-tight sm:text-xl">{title}</h2>
+        {/* Cabeçalho fixo no topo: o X continua à mão mesmo rolando uma janela comprida (celular). */}
+        <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between gap-3 rounded-t-[14px] border-b border-line bg-[#261a0f] px-4 py-2 sm:-mx-5 sm:-mt-5 sm:px-5">
+          <h2 className="min-w-0 truncate text-lg font-extrabold leading-tight sm:text-xl">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Fechar" title="Fechar" className="btn !min-h-11 !min-w-11 shrink-0 !px-0">
+            <X className="size-5" aria-hidden />
+          </button>
+        </div>
         <div className="mt-3 space-y-3">{children}</div>
       </motion.div>
     </motion.div>

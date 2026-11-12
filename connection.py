@@ -317,7 +317,7 @@ class AccountConnection:
                     self.session_started = time.time()
                     self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
                 if isinstance(self.estado.get("servidorAgora"), (int, float)):
-                    self.market.clock_offset_ms = int(self.estado["servidorAgora"]) - int(time.time() * 1000)
+                    self.market.note_server_time(self.estado["servidorAgora"])
                 self.session_items.reset(self.estado)
                 self._rare_last = self._rare_counts()
                 self.block = None

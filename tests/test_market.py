@@ -112,6 +112,11 @@ def test_buy_success_loses_and_refused():
         r = await mc.comprar(7, 1, 10, "gold")
         assert r["status"] == "recusado" and "semSaldo" in r["detail"]
 
+        # outro jogador levou o anúncio antes: o servidor avisa em texto puro (antes virava "sem resposta")
+        mc._ws.on_send = lambda m: asyncio.get_running_loop().call_soon(
+            mc.handle_frame, {"t": "batalha", "ev": [{"k": "aviso", "msg": "esse anúncio já saiu"}]})
+        assert (await mc.comprar(8, 1, 10, "gold"))["status"] == "indisponivel"
+
     run(go())
 
 
@@ -214,12 +219,14 @@ def test_api_requires_auth(env):
 def test_rule_validation(env):
     post = lambda b: env.post("/api/market/rules", json=b, headers=H)  # noqa: E731
     assert post(snipe_body()).status_code == 200
-    assert post(snipe_body(budget_daily=0)).status_code == 422          # sem orçamento não existe sniper
+    assert post(snipe_body(budget_daily=0)).status_code == 200          # orçamento diário é opcional (0 = sem limite)
     assert post(snipe_body(max_price=0)).status_code == 422             # sem teto de preço
     assert post(snipe_body(account_id=None)).status_code == 422
     assert post(snipe_body(account_id=9)).status_code == 422            # conta inexistente
     assert post({"kind": "alert", "target": "item", "max_price": 5}).status_code == 422   # falta o item
-    assert post({"kind": "alert", "target": "pokemon", "max_price": 5}).status_code == 422
+    r = post({"kind": "snipe", "target": "pokemon", "max_price": 500, "account_ids": [1], "budget_daily": 1000})
+    assert r.status_code == 200 and r.json()["label"] == "Qualquer Pokémon"     # sem nome: qualquer um, só pelo preço
+    assert post({"kind": "alert", "target": "pokemon", "max_price": 0}).status_code == 422   # mas o preço é obrigatório
     assert post({"kind": "alert", "target": "pokemon", "busca": "Pikachu", "max_price": 5}).status_code == 200
     assert post({"kind": "alert", "target": "item", "item_id": 23, "below_avg_pct": 20}).status_code == 200
 
@@ -430,3 +437,181 @@ def test_sell_premium_only_when_worth_selling():
     assert sp(2, 217, 6975, 0.3) is None                             # preço de fachada
     assert sp(400, 217, 1, 0.3) is None                              # quase sem vendas: média não confiável
     assert sp(None, 217, 50, 0.3) is None and sp(400, None, 50, 0.3) is None
+
+
+# ------------------------------------------------------------------ sniper com várias contas
+def test_rule_accepts_many_accounts_and_stays_compatible(env):
+    env.mgr._conns[2] = FakeConn(2, "Misty")
+    post = lambda b: env.post("/api/market/rules", json=b, headers=H)  # noqa: E731
+    r = post(snipe_body(account_id=None, account_ids=[1, 2, 2])).json()
+    assert r["spec"]["account_ids"] == [1, 2] and r["spec"]["account_id"] == 1     # sem repetidas; 1ª = legado
+    assert post(snipe_body(account_id=None, account_ids=[1, 9])).status_code == 422  # uma delas não existe
+    assert post(snipe_body(account_id=None, account_ids=[])).status_code == 422
+    assert ms.rule_account_ids({"account_id": 3}) == [3]                            # regra antiga continua valendo
+    assert ms.rule_account_ids({"account_id": 3, "account_ids": [1, 2]}) == [1, 2]
+
+
+def test_sniper_all_accounts_try_same_listing(env, monkeypatch):
+    other = FakeConn(2, "Misty")
+    env.mgr._conns[2] = other
+    listing = {"id": 77, "vendedor": "Outro", "qtd": 50, "preco": 80, "estado": "aberto", "comprador": None,
+               "compravelEm": 0, "tipo": "item", "moeda": "gold"}
+    monkeypatch.setattr("market.MIN_GAP_S", 0)
+    rid = env.store.add_rule("snipe", {"target": "item", "item_id": 23, "moeda": "gold", "max_price": 100,
+                                       "account_id": 1, "account_ids": [1, 2], "budget_daily": 1000, "poll_s": 5})
+    env.store.set_setting("sniper_enabled", "1")
+
+    async def go():
+        _answer(env.conn, [listing])
+        _answer(other, [listing])
+        svc = env.mgr.market
+        await svc.tick()
+        assert len(svc._tasks) == 2                        # as duas contas disputam o mesmo anúncio
+        await asyncio.gather(*list(svc._tasks))
+        assert not any(svc._reserved.values()) and not svc._inflight
+
+    run(go())
+    for c in (env.conn, other):
+        buy = [m for m in c.market._ws.sent if m["t"] == "market.comprar"]
+        assert len(buy) == 1 and buy[0]["id"] == 77
+    # o orçamento diário vale por conta: cada uma gasta até o seu próprio teto (1000 // 80 = 12)
+    for c in (env.conn, other):
+        assert [m for m in c.market._ws.sent if m["t"] == "market.comprar"][0]["qtd"] == 12
+        assert env.store.account_spent(rid, c.acc.index, ms.today_key()) == 12 * 80
+    assert env.store.rule_spent(rid, ms.today_key()) == 2 * 12 * 80
+
+
+def test_discord_only_wins_grouped_with_dotted_numbers(env, monkeypatch):
+    other = FakeConn(2, "Misty", gold=10_000_000)
+    env.conn.estado["gold"] = 10_000_000
+    env.mgr._conns[2] = other
+    sent = []
+    env.mgr.market.notifier = type("N", (), {"send": lambda self, *a, **k: sent.append((a, k))})()
+    monkeypatch.setattr("market.MIN_GAP_S", 0)
+    monkeypatch.setattr("market_service.WIN_BATCH_S", 0.05)
+    listing = {"id": 5, "vendedor": "Outro", "qtd": 50, "preco": 100_000, "estado": "aberto", "compravelEm": 0, "tipo": "item", "moeda": "gold"}
+    env.store.add_rule("snipe", {"target": "item", "item_id": 23, "moeda": "gold", "max_price": 100_000, "account_id": 1,
+                                 "account_ids": [1, 2], "budget_daily": 1_000_000, "qty_max": 5, "poll_s": 5})
+    env.store.set_setting("sniper_enabled", "1")
+
+    async def go():
+        _answer(env.conn, [listing], resumo_min=100_000)
+        _answer(other, [listing], resumo_min=100_000)
+        svc = env.mgr.market
+        await svc.tick()
+        await asyncio.gather(*list(svc._tasks))
+        await asyncio.sleep(0.2)
+
+    run(go())
+    assert len(sent) == 1                                     # as duas contas saem numa mensagem só
+    (title, _desc, _color, fields), kw = sent[0]
+    assert "2 contas" in title and "thumbnail" in kw
+    assert ("Total", "10× · 1.000.000 Gold", False) in fields  # 5× por conta, com ponto de milhar
+    assert ms.fmt_n(4899999) == "4.899.999"
+
+
+
+# ------------------------------------------------------------------ relógio do servidor e hora da compra
+def test_clock_uses_least_delayed_sample():
+    mc = make_client()
+    now = int(time.time() * 1000)
+    for delay in (400, 60, 150, 90):                       # a rede só atrasa a amostra, nunca adianta
+        mc.note_server_time(now + 5000 - delay)
+    assert 4900 < mc.clock_offset_ms <= 5000 - 55           # vale a menos atrasada (60 ms)
+    mc.clock_offset_ms = 0                                  # definir à mão apaga as amostras
+    assert mc.clock_offset_ms == 0
+
+
+def test_sleep_until_server_fires_just_after_target():
+    async def go():
+        mc = make_client()
+        mc.clock_offset_ms = 250                            # o servidor está 250 ms à frente
+        target = mc.server_now_ms() + 400
+        await mc.sleep_until_server(target)
+        late = mc.server_now_ms() - target
+        assert 0 <= late < 120                              # nunca antes, e logo depois da liberação
+
+    run(go())
+
+
+def test_buy_does_not_wait_for_request_gap(monkeypatch):
+    async def go():
+        mc = make_client()
+        mc._ws.on_send = lambda m: asyncio.get_running_loop().call_soon(
+            mc.handle_frame, {"t": "batalha", "ev": [{"k": "marketComprado", "descricao": "x", "total": 10, "moeda": "gold"}]})
+        mc._last_sent = time.monotonic()                    # acabou de consultar o mercado
+        t0 = time.monotonic()
+        assert (await mc.comprar(1, 1, 10, "gold"))["status"] == "comprado"
+        assert time.monotonic() - t0 < 0.3                  # a consulta esperaria 0,5 s; a compra não
+
+    run(go())
+
+
+# ------------------------------------------------------------------ várias compras ao mesmo tempo na mesma conta
+def test_concurrent_buys_on_one_account_are_matched():
+    async def go():
+        mc = make_client()
+        feed = lambda ev: mc.handle_frame({"t": "batalha", "ev": [ev]})  # noqa: E731
+        a = asyncio.create_task(mc.comprar(1, 2, 100, "gold"))     # entra no sorteio
+        b = asyncio.create_task(mc.comprar(2, 3, 50, "gold"))      # já liberado: compra na hora
+        c = asyncio.create_task(mc.comprar(3, 1, 10, "gold"))      # alguém levou antes
+        await asyncio.sleep(0)
+        await asyncio.sleep(0.01)
+        assert len([m for m in mc._ws.sent if m["t"] == "market.comprar"]) == 3   # os 3 saem sem esperar um ao outro
+        feed({"k": "aviso", "msg": "market.sorteio"})                              # resposta do 1º enviado
+        feed({"k": "marketComprado", "descricao": "3× X", "total": 150, "moeda": "gold"})   # casa pelo total: é o 2º
+        feed({"k": "aviso", "msg": "esse anúncio já saiu"})                        # sobrou o 3º sem resposta
+        feed({"k": "aviso", "msg": "market.sorteioPerdeu"})                        # fim do sorteio: é o 1º
+        ra, rb, rc = await asyncio.gather(a, b, c)
+        assert rb["status"] == "comprado" and rb["total"] == 150
+        assert rc["status"] == "indisponivel"
+        assert ra["status"] == "perdeu_sorteio"
+        assert not mc._buys
+
+    run(go())
+
+
+def test_only_n_left_is_reported_and_sniper_takes_the_rest(env, monkeypatch):
+    monkeypatch.setattr("market.MIN_GAP_S", 0)
+    listing = {"id": 31, "vendedor": "Outro", "qtd": 3, "preco": 80, "estado": "aberto", "compravelEm": 0, "tipo": "item", "moeda": "gold"}
+    rid = env.store.add_rule("snipe", {"target": "item", "item_id": 23, "moeda": "gold", "max_price": 100,
+                                       "account_id": 1, "budget_daily": 1000, "qty_max": 3, "poll_s": 5})
+    env.store.set_setting("sniper_enabled", "1")
+
+    async def go():
+        _answer(env.conn, [listing])
+        ws = env.conn.market._ws
+        base = ws.on_send
+
+        def reply(msg):
+            if msg["t"] == "market.comprar" and msg["qtd"] > 1:   # pedimos 3, só resta 1
+                asyncio.get_running_loop().call_soon(env.conn.market.handle_frame, {"t": "batalha", "ev": [{"k": "aviso", "msg": "só restam 1"}]})
+            else:
+                base(msg)
+        ws.on_send = reply
+        svc = env.mgr.market
+        await svc.tick()
+        await asyncio.gather(*list(svc._tasks))
+
+    run(go())
+    buys = [m for m in env.conn.market._ws.sent if m["t"] == "market.comprar"]
+    assert [b["qtd"] for b in buys] == [3, 1]                    # tentou 3 e, sabendo que sobrou 1, levou 1
+    assert env.store.market_log(1)[0]["status"] == "comprado"
+
+
+def test_sniper_without_daily_budget_is_limited_by_balance(env, monkeypatch):
+    env.conn.estado["gold"] = 400                                           # saldo para só 5 unidades de 80
+    listing = {"id": 41, "vendedor": "Outro", "qtd": 50, "preco": 80, "estado": "aberto", "compravelEm": 0, "tipo": "item", "moeda": "gold"}
+    monkeypatch.setattr("market.MIN_GAP_S", 0)
+    env.store.add_rule("snipe", {"target": "item", "item_id": 23, "moeda": "gold", "max_price": 100,
+                                 "account_id": 1, "account_ids": [1], "budget_daily": 0, "poll_s": 5})
+    env.store.set_setting("sniper_enabled", "1")
+
+    async def go():
+        _answer(env.conn, [listing])
+        await env.mgr.market.tick()
+        await asyncio.gather(*list(env.mgr.market._tasks))
+
+    run(go())
+    buy = [m for m in env.conn.market._ws.sent if m["t"] == "market.comprar"]
+    assert len(buy) == 1 and buy[0]["qtd"] == 5                              # sem teto diário: só o saldo limita

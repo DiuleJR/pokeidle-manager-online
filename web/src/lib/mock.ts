@@ -122,6 +122,30 @@ function installMockApi(accs: AccountSnapshot[]) {
       const list = await realHunts;
       return json({ account: "acc1", level: 1265, current: "bellsprout", hunts: list });
     }
+    if (path === "/api/market/rules") {
+      // Sniper do mock: uma regra antiga (1 conta) e uma com as contas todas.
+      return json({
+        sniperEnabled: true,
+        rules: [
+          { id: 1, kind: "snipe", enabled: true, label: "Sun Stone", lastFire: null, spentToday: 12000, spec: { target: "item", item_id: 23, moeda: "gold", max_price: 800, below_avg_pct: 0, account_id: 1, qty_max: 0, budget_daily: 0, poll_s: 10 } },
+          { id: 2, kind: "snipe", enabled: true, label: "Rare Candy", lastFire: null, spentToday: 2400000, spec: { target: "item", item_id: 24, moeda: "gold", max_price: 100000, below_avg_pct: 0, account_id: 1, account_ids: accs.map((a) => Number(a.id.replace(/\D/g, ""))), qty_max: 0, budget_daily: 1000000, poll_s: 10 } },
+          { id: 3, kind: "alert", enabled: true, label: "Pikachu shiny", lastFire: null, spentToday: 0, spec: { target: "pokemon", busca: "Pikachu", so_shiny: true, moeda: "gold", max_price: 5000, below_avg_pct: 0 } },
+        ],
+      });
+    }
+    if (path === "/api/market/log") {
+      const st = ["comprado", "perdeu_sorteio", "perdeu_sorteio", "comprado", "recusado"];
+      return json({
+        log: Array.from({ length: 28 }, (_, i) => ({
+          id: 100 - i, ts: Date.now() / 1000 - i * 95, accountId: (i % 4) + 1, ruleId: 2, status: st[Math.floor(i / 4) % 5],
+          text: `${6 - (i % 3)}× Rare Candy a ${Math.floor(i / 4) % 2 ? 490 : 100000} ${Math.floor(i / 4) % 2 ? "Gemas" : "Gold"} (#${1129124 - Math.floor(i / 4)})` + (st[Math.floor(i / 4) % 5] === "recusado" ? " — saldo insuficiente" : ""),
+        })),
+      });
+    }
+    if (path === "/api/market/overview") {
+      const it = (id: number, name: string, minGold: number | null, minOrb: number | null, avgGold: number | null, avgOrb: number | null) => ({ id, name, category: "stone", icon: null, ads: 3, units: 12, minGold, minOrb, avgGold, avgOrb, fav: false });
+      return json({ ts: Date.now(), days: 7, online: [1], items: [it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
+    }
     if (path === "/api/creatures") return json(creatures);
     const sheetM = path.match(/^\/api\/accounts\/(\d+)\/sheet$/);
     if (sheetM) {
