@@ -188,6 +188,16 @@ function SessaoBody({ id }: { id: string }) {
           <SessionClock startedAt={acc.session?.startedAt} />
         </span>
       </Tile>
+      {acc.session?.shinies && (
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
+          <Tile icon={<span className="text-2xl">✨</span>} label="Shinies vistos">
+            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={acc.session.shinies.seen} /></span>
+          </Tile>
+          <Tile icon={<span className="text-2xl">✨</span>} label="Shinies capturados">
+            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={acc.session.shinies.captured} /></span>
+          </Tile>
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-2.5">
         {SESSION_ITEMS.map((it) => (
           <Tile key={it.key} icon={<ItemSprite icon={it.icon} size={32} alt={it.label} />} label={it.label}>

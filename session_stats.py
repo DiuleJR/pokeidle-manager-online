@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +62,51 @@ class SessionItems:
         self._last = now
 
 
+def show_session_shinies(hunts: list, slug: str | None) -> bool:
+    hunt = next((h for h in hunts if isinstance(h, dict) and h.get("slug") == slug), None)
+    if not hunt:
+        return False
+    area, region = hunt.get("area"), hunt.get("regiao")
+    return bool(area or region) and not any(str(v or "").lower().startswith("outland") for v in (area, region))
+
+class ShinyTracker:
+    """Conta resultados por slot e associa uma fuga à tentativa falha correspondente."""
+    def __init__(self) -> None:
+        self.encounters = {}
+        self.seen = 0
+        self.captured = 0
+
+    def handle(self, event: dict) -> tuple[bool, bool]:
+        now = time.monotonic()
+        self.encounters = {k: v for k, v in self.encounters.items() if now - v["time"] < 60}
+        kind, slot = event.get("k"), event.get("slot")
+        if kind == "morte" and event.get("quem") == "selvagem" and slot is not None:
+            self.encounters[slot] = {"name": event.get("nome"), "seen": False, "captured": False, "failed": None, "time": now}
+        elif kind == "bola" and slot is not None:
+            e = self.encounters.setdefault(slot, {"name": event.get("nome"), "seen": False, "captured": False, "failed": None, "time": now})
+            e["time"] = now
+            shiny, success = event.get("shiny") is True, event.get("sucesso") is True
+            seen, captured = shiny and not e["seen"], shiny and success and not e["captured"]
+            e["seen"] |= shiny
+            e["captured"] |= captured
+            e["failed"] = now if shiny and not success else None
+            self.seen += seen
+            self.captured += captured
+            return seen, captured
+        elif kind == "fugiu" and event.get("shiny") is True:
+            name = str(event.get("nome") or "").strip().casefold()
+            matches = [e for k, e in self.encounters.items() if e["seen"] and e["failed"] is not None
+                       and now - e["failed"] < 10 and ((slot is not None and k == slot and
+                       (not e["name"] or str(e["name"]).strip().casefold() == name)) or
+                       (slot is None and name and e["name"] and str(e["name"]).strip().casefold() == name))]
+            if len(matches) == 1:
+                matches[0]["failed"] = None
+            else:
+                self.seen += 1
+                return True, False
+        return False, False
+
+
 class SessionStore:
     """Persiste a sessão de cada conta (início + itens coletados) em um JSON, para
     sobreviver a reinícios do bot/VPS. Escrita atômica (arquivo temporário + replace).
@@ -95,8 +141,8 @@ class SessionStore:
         if self._data.pop(key, None) is not None:
             self._write()
 
-    def save(self, key: str, started_at: float | None, gained: dict[str, int]) -> None:
-        self._data[key] = {"started_at": started_at, "gained": dict(gained)}
+    def save(self, key: str, started_at: float | None, gained: dict[str, int], shinies: dict | None = None) -> None:
+        self._data[key] = {"started_at": started_at, "gained": dict(gained), "shinies": dict(shinies or {})}
         self._write()
 
     def _write(self) -> None:

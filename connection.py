@@ -33,7 +33,7 @@ from inventory import InventoryView
 from market import MarketClient
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
 from game_data import item_name
-from session_stats import ITEM_LABELS, TRACKED, SessionItems, SessionStore
+from session_stats import ITEM_LABELS, TRACKED, SessionItems, SessionStore, ShinyTracker
 from shop import AutoRestock, ShopManager, ball_ids_resolver, potion_ids_resolver
 
 log = logging.getLogger("conn")
@@ -177,6 +177,7 @@ class AccountConnection:
         self.itens_nossos: dict[int, dict] = {}   # welcome.itensNossos: itens só do servidor (nome/ícone)
         self.session_started: float | None = None  # epoch do 1º ONLINE deste processo
         self.session_items = SessionItems()
+        self.shinies = ShinyTracker()
         # sessão persistida: sobrevive a reinícios do bot (início + itens coletados)
         self._session_key = f"acc{account.index}"
         self.session_store = SessionStore.shared()
@@ -187,6 +188,12 @@ class AccountConnection:
             for k, v in (saved.get("gained") or {}).items():
                 if k in self.session_items.gained and isinstance(v, int):
                     self.session_items.gained[k] = v
+        if saved:
+            shiny_saved = saved.get("shinies") or {}
+            for key in ("seen", "captured"):
+                value = shiny_saved.get(key)
+                if type(value) is int and value >= 0:
+                    setattr(self.shinies, key, value)
         self.hunt = HuntManager(account.name, self.estado, self.hunts)
         if self.daily:
             self.hunt.on_kill = lambda xp, gold: self.daily.add_kill(self.acc.nick, xp, gold)
@@ -315,7 +322,7 @@ class AccountConnection:
                 self.mercado_cfg = m if isinstance(m, dict) else {}
                 if self.session_started is None:
                     self.session_started = time.time()
-                    self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
+                    self._save_session()
                 if isinstance(self.estado.get("servidorAgora"), (int, float)):
                     self.market.note_server_time(self.estado["servidorAgora"])
                 self.session_items.reset(self.estado)
@@ -373,6 +380,7 @@ class AccountConnection:
                     if self.on_token_renewed:
                         self.on_token_renewed(self.acc.index, self.acc.token)
                     continue
+                self._track_shinies(msg)
                 self.hunt.handle_frame(msg)
                 self.balls.handle_frame(msg)
                 self.shop.handle_frame(msg)
@@ -382,7 +390,7 @@ class AccountConnection:
                 self.session_items.update(self.estado)
                 if self.session_items.gained != before:
                     self._on_rare_items(before)
-                    self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
+                    self._save_session()
         except ConnectionClosed as e:
             code = e.rcvd.code if e.rcvd else None
             if code in self.settings.external_login_codes:
@@ -392,6 +400,24 @@ class AccountConnection:
                 sufixo = " (login externo)" if code == 4001 else ""
                 raise AuthRejected(f"close code {code}{sufixo}") from e
             raise
+
+    def _save_session(self) -> None:
+        self.session_store.save(self._session_key, self.session_started, self.session_items.gained,
+                                {"seen": self.shinies.seen, "captured": self.shinies.captured})
+
+    def _track_shinies(self, msg: dict) -> None:
+        if msg.get("t") != "batalha":
+            return
+        for event in msg.get("ev", []):
+            seen, captured = self.shinies.handle(event)
+            if seen or captured:
+                self._save_session()
+                name = event.get("nome")
+                if not name and event.get("slot") in self.shinies.encounters:
+                    name = self.shinies.encounters[event["slot"]].get("name")
+                label = f" **{name}**" if name else ""
+                outcome = "capturou" if captured else "encontrou"
+                self.notifier.send(self.acc.nick, f"✨ {outcome} um shiny{label}!", GOLD)
 
     # Itens raros do próprio servidor (Mystery Egg, fichas novas...): ids >= 70000 marcados como raros no
     # `welcome.itensNossos`. Os 4 acompanhados em session_stats têm tratamento próprio; o Boss Token não avisa.
@@ -502,9 +528,11 @@ class AccountConnection:
         for k in self.session_items.gained:
             self.session_items.gained[k] = 0
         self.session_items.reset(self.estado)   # novo ponto de partida para contar aumentos
+        self.shinies.seen = 0
+        self.shinies.captured = 0
         self.balls.caught = 0
         self.balls.failed = 0
-        self.session_store.save(self._session_key, self.session_started, self.session_items.gained)
+        self._save_session()
         log.info("[%s] sessão zerada pelo painel", self.acc.name)
 
     def queue_hunt(self, slug: str | None) -> None:

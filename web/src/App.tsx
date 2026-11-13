@@ -220,7 +220,7 @@ export default function App() {
                         type="button"
                         className="btn"
                         onClick={() => setResetOpen(true)}
-                        title="Zerar o tempo e os itens coletados da sessão de todas as contas"
+                        title="Zerar o tempo, os itens e os shinies da sessão de todas as contas"
                       >
                         <RotateCcw className="size-4" aria-hidden />
                         <span>Zerar sessão</span>
@@ -247,7 +247,7 @@ export default function App() {
             onConfirm={() => void doReset()}
             message={
               <>
-                O <b className="text-fg">tempo da sessão</b> e os <b className="text-fg">itens coletados</b> de todas as contas voltam a zero. Nada muda nas contas nem no jogo.
+                O <b className="text-fg">tempo da sessão</b> e os <b className="text-fg">itens coletados e os shinies</b> de todas as contas voltam a zero. Nada muda nas contas nem no jogo.
                 {resetErr && <div className="mt-2 text-poke-red">{resetErr}</div>}
               </>
             }

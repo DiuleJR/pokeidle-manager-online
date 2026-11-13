@@ -59,6 +59,7 @@ const sameAccount = (a: AccountSnapshot, b: AccountSnapshot) =>
   a.vip === b.vip &&
   a.session?.startedAt === b.session?.startedAt &&
   JSON.stringify(a.session?.items) === JSON.stringify(b.session?.items) &&
+  JSON.stringify(a.session?.shinies) === JSON.stringify(b.session?.shinies) &&
   a.pokemon?.looktype === b.pokemon?.looktype &&
   a.pokemon?.level === b.pokemon?.level &&
   a.huntName === b.huntName &&
