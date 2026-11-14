@@ -71,6 +71,8 @@ export interface GlobalSettings {
   alert_sell: boolean;
   alert_sell_pct: number;
   alert_sold: boolean;
+  /** Minutos de espera antes de reconectar uma conta aberta em outro lugar. */
+  external_login_wait_min: number;
   defaultWsUrl: string;
 }
 

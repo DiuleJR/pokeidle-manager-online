@@ -12,7 +12,9 @@ Nunca expõe token/proxy/device_id das contas. As rotas de gestão ficam em admi
 """
 from __future__ import annotations
 
-from session_stats import show_session_shinies
+from battle_pass import passe_publico
+from maps import REGION_LABELS, region_of_hunt
+from session_stats import hunt_is_outland
 
 import asyncio
 import json
@@ -155,6 +157,20 @@ def _pending_hunt(c: "AccountConnection") -> dict | None:
     return {"slug": slug, "name": name or slug}
 
 
+def _map_info(c: "AccountConnection", slug: str | None) -> dict | None:
+    """Mapa onde a conta caça (região) e, em Outland, o nível dela. O painel mostra isso no card."""
+    hunt = next((h for h in c.hunts if isinstance(h, dict) and h.get("slug") == slug), None)
+    region = region_of_hunt(hunt)
+    if region is None:
+        return None
+    info: dict = {"region": region, "label": REGION_LABELS.get(region) or region.capitalize(), "outland": None}
+    if region == "outland":
+        t = c.outland_tier()
+        info["outland"] = {"tier": t["tier"], "label": t["rotulo"], "mult": t["mult"]}
+        info["label"] = t["rotulo"]
+    return info
+
+
 def account_snapshot(c: "AccountConnection") -> dict:
     from inventory import POTION_NAMES  # evita ciclo em import-time
 
@@ -164,7 +180,7 @@ def account_snapshot(c: "AccountConnection") -> dict:
     inv = c.inventory
     summary = inv.pokemon_summary()
     slug = s.slug if s else est.get("huntSlug")
-    show_shinies = show_session_shinies(c.hunts, slug)
+    outland = hunt_is_outland(c.hunts, slug)
     return {
         "id": f"acc{c.acc.index}",
         "nick": c.acc.nick,
@@ -187,13 +203,16 @@ def account_snapshot(c: "AccountConnection") -> dict:
         "hunt": {"slug": s.slug, "kills": s.kills, "minutes": round(s.elapsed_h * 60, 1)} if s else None,
         "vip": (est.get("loja") or {}).get("vipAte", 0) > (est.get("servidorAgora") or 0),
         "huntName": s.nome if s else None,
+        "map": _map_info(c, slug),
+        "pass": passe_publico(est.get("passe")),
         # Em combate a conta não troca de hunt: tempo restante e a hunt que está na fila (se houver).
         "combatLockMs": c.combat_lock_ms(),
         "huntPending": _pending_hunt(c),
         "session": {
             "startedAt": int(c.session_started * 1000) if c.session_started else None,
             "items": dict(c.session_items.gained),
-            "shinies": {"seen": c.shinies.seen, "captured": c.shinies.captured} if show_shinies else None,
+            "shinies": {"seen": c.shinies.seen, "captured": c.shinies.captured},
+            "outland": outland,   # o painel mostra shinies fora de Outland e itens raros em Outland
         },
         "equipped": equipped_rows(c),
         "gold": est.get("gold") or 0,

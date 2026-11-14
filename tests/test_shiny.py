@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from session_stats import SessionStore, ShinyTracker, show_session_shinies
+from session_stats import SessionStore, ShinyTracker, hunt_is_outland
 
 
 class ShinyTests(unittest.TestCase):
@@ -27,10 +27,11 @@ class ShinyTests(unittest.TestCase):
         hunts = [{"slug": "one", "area": "kanto"},
                  {"slug": "two", "area": "outland", "regiao": "outland2"},
                  {"slug": "three", "area": "orre", "regiao": "outland3"}]
-        self.assertTrue(show_session_shinies(hunts, "one"))
-        self.assertFalse(show_session_shinies(hunts, "two"))
-        self.assertFalse(show_session_shinies(hunts, "three"))
-        self.assertFalse(show_session_shinies(hunts, "unknown"))
+        self.assertIs(hunt_is_outland(hunts, "one"), False)
+        self.assertIs(hunt_is_outland(hunts, "two"), True)
+        self.assertIs(hunt_is_outland(hunts, "three"), True)
+        self.assertIsNone(hunt_is_outland(hunts, "unknown"))
+        self.assertIsNone(hunt_is_outland([{"slug": "x"}], "x"))
 
     def test_persistence_and_legacy_session(self):
         store = SessionStore("missing-session-file.json")

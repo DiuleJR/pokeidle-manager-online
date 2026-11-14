@@ -26,10 +26,15 @@ if TYPE_CHECKING:
 
 SITE = "https://pokeidle.io"
 HUNT_CONFIRM_TIMEOUT_S = 6.0   # o jogo confirma a troca com batalha.ev[].k == "hunt"
+PASS_CLAIM_TIMEOUT_S = 6.0      # o jogo confirma o resgate do passe com {"t": "passe", "resgate": ...}
 
 
 class HuntIn(BaseModel):
     slug: str
+
+
+class OutlandTierIn(BaseModel):
+    tier: int
 
 
 class EquipIn(BaseModel):
@@ -132,7 +137,8 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
             return {"account": None, "level": 0, "current": None, "hunts": []}
         s = pick.hunt.session
         return {"account": f"acc{pick.acc.index}", "level": pick.estado.get("level") or 0,
-                "current": s.slug if s else pick.estado.get("huntSlug"), "hunts": hunt_catalog(pick)}
+                "current": s.slug if s else pick.estado.get("huntSlug"), "hunts": hunt_catalog(pick),
+                "outland": {"tiers": pick.outland_tiers, "tier": pick.outland_tier()["tier"]}}
 
     @app.get("/api/creatures")
     async def creatures(request: Request, tok: str | None = Query(None, alias="token")):
@@ -181,6 +187,54 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
             if s is not None and s.slug == body.slug:
                 return {"ok": True, "confirmed": True, "slug": body.slug}
         return {"ok": True, "confirmed": False, "slug": body.slug}
+
+    @app.post("/api/accounts/{acc_id}/outland-tier")
+    async def select_outland_tier(acc_id: int, body: OutlandTierIn, request: Request,
+                                  tok: str | None = Query(None, alias="token")):
+        """Troca o nível de Outland da conta (como o seletor do mapa do jogo)."""
+        if (r := guard(request, tok)):
+            return r
+        conn = conn_of(acc_id)
+        if conn is None:
+            return JSONResponse({"error": "conta não encontrada ou desligada"}, status_code=404)
+        if not conn.can_send:
+            return JSONResponse({"error": "A conta está offline."}, status_code=409)
+        tier = next((t for t in conn.outland_tiers if t["tier"] == body.tier), None)
+        if tier is None:
+            return JSONResponse({"error": "Nível de Outland desconhecido."}, status_code=400)
+        level = conn.estado.get("level") or 0
+        if level < tier["nivel"]:
+            return JSONResponse({"error": f"{tier['rotulo']} pede nível {tier['nivel']} de treinador."}, status_code=400)
+        await conn.hunt.select_outland_tier(tier["tier"])
+        for _ in range(int(HUNT_CONFIRM_TIMEOUT_S / 0.25)):      # quem confirma é o `estado.outlandTier` do jogo
+            await asyncio.sleep(0.25)
+            if conn.outland_tier()["tier"] == tier["tier"] and conn.estado.get("outlandTier") == tier["tier"]:
+                return {"ok": True, "confirmed": True, "tier": tier["tier"]}
+        return {"ok": True, "confirmed": False, "tier": tier["tier"]}
+
+    @app.post("/api/accounts/{acc_id}/pass/claim")
+    async def claim_pass(acc_id: int, request: Request, tok: str | None = Query(None, alias="token")):
+        """Resgata o dia do Passe de Batalha da conta (o mesmo botão do jogo)."""
+        if (r := guard(request, tok)):
+            return r
+        conn = conn_of(acc_id)
+        if conn is None:
+            return JSONResponse({"error": "conta não encontrada ou desligada"}, status_code=404)
+        if not conn.can_send:
+            return JSONResponse({"error": "A conta está offline."}, status_code=409)
+        why = conn.pass_status()
+        if why == "nivel":
+            return JSONResponse({"error": "O Passe de Batalha libera no nível 10 de treinador."}, status_code=400)
+        if why == "ja_resgatado":
+            return JSONResponse({"error": "O dia de hoje já foi resgatado. O próximo libera à meia-noite de Brasília."},
+                                status_code=409)
+        seq = conn.pass_claim_seq
+        await conn.claim_pass()
+        for _ in range(int(PASS_CLAIM_TIMEOUT_S / 0.25)):       # quem confirma é a resposta `passe.resgate` do jogo
+            await asyncio.sleep(0.25)
+            if conn.pass_claim_seq != seq:
+                return {"ok": True, "confirmed": True, "claim": conn.pass_claim}
+        return {"ok": True, "confirmed": False, "claim": None}
 
     @app.delete("/api/accounts/{acc_id}/hunt/queue")
     async def cancel_hunt_queue(acc_id: int, request: Request, tok: str | None = Query(None, alias="token")):

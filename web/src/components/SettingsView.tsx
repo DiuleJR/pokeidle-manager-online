@@ -668,6 +668,7 @@ function Group({ title, badge, children }: { title: string; badge?: React.ReactN
 function GlobalForm() {
   const [s, setS] = useState<GlobalSettings | null>(null);
   const [form, setForm] = useState({ ws_url: "", report_hour: 0, report_tz: "", public_url: "" });
+  const [wait, setWait] = useState("5"); // minutos de espera após login em outro lugar (texto: dá para apagar e digitar)
   const [hook, setHook] = useState<string | null>(null); // null = não está editando o webhook
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -676,6 +677,7 @@ function GlobalForm() {
   const fill = (g: GlobalSettings) => {
     setS(g);
     setForm({ ws_url: g.ws_url, report_hour: g.report_hour, report_tz: g.report_tz, public_url: g.public_url });
+    setWait(String(g.external_login_wait_min));
   };
   useEffect(() => {
     admin.settings().then(fill).catch((e) => setMsg({ ok: false, text: errMsg(e) }));
@@ -783,6 +785,33 @@ function GlobalForm() {
           )}
           <p className="text-xs text-mute">O preço alto é comparado com a média de 7 dias do Mercado. Cada item só é avisado de novo depois de 6 horas, ou se o preço subir ainda mais.</p>
         </div>
+      </Group>
+
+      <Group title="Conexão">
+        <Labeled label="Reconectar depois de abrir a conta em outro lugar" hint="Quando você entra numa conta pelo jogo ou outro aparelho, o bot espera esse tempo antes de tentar de novo, para não derrubar você. De 1 a 1440 minutos.">
+          <div className="flex items-center gap-2">
+            <input
+              className="field w-24"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={1440}
+              value={wait}
+              onChange={(e) => setWait(e.target.value)}
+              aria-label="Minutos de espera"
+            />
+            <span className="text-sm text-mute">minutos</span>
+            {Number(wait) !== s.external_login_wait_min && (
+              <button
+                className="btn ml-auto border-0 bg-poke-gold font-bold text-void hover:bg-[#f6ca5e]"
+                disabled={busy || !Number.isInteger(Number(wait)) || Number(wait) < 1 || Number(wait) > 1440}
+                onClick={() => run(async () => fill(await admin.saveSettings({ external_login_wait_min: Number(wait) })), "Tempo de espera salvo.")}
+              >
+                Salvar
+              </button>
+            )}
+          </div>
+        </Labeled>
       </Group>
 
       <Group title="Relatório diário">

@@ -2,14 +2,17 @@ import type { AccountSnapshot, ConnectionState, SnapshotMessage } from "./types"
 
 /** Gerador de dados falsos (VITE_MOCK=1) para desenvolver a UI sem backend. */
 export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: ConnectionState) => void) {
+  const D = Math.floor((Date.now() - 10_800_000) / 86_400_000); // dia do passe de hoje (vira à meia-noite de Brasília)
   const names = ["Pikachu", "Charizard", "Gengar", "Snorlax"];
   const statuses: AccountSnapshot["status"][] = ["online", "online", "paused_cooldown", "offline"];
   const accs: AccountSnapshot[] = names.map((p, i) => ({
     id: `acc${i + 1}`,
     nick: `Treinador${i + 1}`,
-    level: 40 + i * 7,
+    level: [2104, 1306, 450, 40][i],
     status: statuses[i],
-    pokemon: { name: p, hp: 100, maxHp: 100 },
+    pokemon: { name: p, hp: 100, maxHp: 100, level: [565, 487, 333, 21][i] },
+    pass: [{ ultimo: D - 1, degrau: 6, total: 5, vipAte: 0, ciclos: 0, vipPegos: 0 }, { ultimo: D, degrau: 12, total: 40, vipAte: Date.now() + 9 * 86_400_000, ciclos: 1, vipPegos: 0b11111111111, ultimoVip: D }, { ultimo: D - 3, degrau: 3, total: 3, vipAte: 0, ciclos: 0, vipPegos: 0 }, null][i],
+    map: [{ region: "outland", label: "Outland 2", outland: { tier: 2, label: "Outland 2", mult: 1.25 } }, { region: "hoenn", label: "Hoenn", outland: null }, { region: "kanto", label: "Kanto", outland: null }, { region: "outland", label: "Outland 1", outland: { tier: 1, label: "Outland 1", mult: 1 } }][i],
     xpPerHour: 90_000 + i * 12_000,
     goldPerHour: 15_000 + i * 3_000,
     gold: 1_200_000 * (i + 1),
@@ -105,6 +108,7 @@ function installMockApi(accs: AccountSnapshot[]) {
       especies: [{ pokeId: id, nome: n, pontos: 15 }],
     })),
   );
+  const mockSettings = { ws_url: "wss://pokeidle.io", report_hour: 0, report_tz: "America/Sao_Paulo", public_url: "", hasWebhook: true, webhookHint: "abc…", alert_sell: true, alert_sell_pct: 30, alert_sold: true, external_login_wait_min: 5, defaultWsUrl: "wss://pokeidle.io" };
   const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json" } });
   const real = window.fetch.bind(window);
   let realHunts: Promise<unknown[]> | null = null;
@@ -120,7 +124,8 @@ function installMockApi(accs: AccountSnapshot[]) {
           d.hunts.map((h) => ({ slug: h.slug, nome: h.nome, area: h.regiao === "kanto" || h.regiao === "outland" ? h.regiao : "orre", regiao: h.regiao, nivel: h.nivel, totalSpawns: 15, looktype: null, especies: h.especies.map((e) => ({ ...e, nome: h.nome })) })))
         .catch(() => hunts);
       const list = await realHunts;
-      return json({ account: "acc1", level: 1265, current: "bellsprout", hunts: list });
+      const tiers = [[1, 150, 1], [2, 1000, 1.25], [3, 2000, 1.5], [4, 4000, 2], [5, 8000, 3], [6, 16000, 4], [7, 24000, 6], [8, 36000, 8]].map(([tier, nivel, m]) => ({ tier, rotulo: `Outland ${tier}`, nivel, mult: m }));
+      return json({ account: "acc1", level: 2104, current: "bellsprout", hunts: list, outland: { tiers, tier: accs[0].map?.outland?.tier ?? 1 } });
     }
     if (path === "/api/market/rules") {
       // Sniper do mock: uma regra antiga (1 conta) e uma com as contas todas.
@@ -156,6 +161,23 @@ function installMockApi(accs: AccountSnapshot[]) {
         id: 1, speciesId: 212, nome: "Scizor", looktype: 370, level: 100, shiny: false, quality: 1.796, potencia: 3, tmAoe: false, trainerLevel: 300,
         stats: { hp: 188, atk: 264, def: 190, spAtk: 202, spDef: 218, speed: 175 }, ivs: { hp: 14, atk: 10, def: 4, spAtk: 30, spDef: 22, speed: 13 },
       });
+    }
+    const passClaim = path.match(/^\/api\/accounts\/(\d+)\/pass\/claim$/);
+    if (passClaim && init?.method === "POST") {
+      await wait();
+      return json({ ok: true, confirmed: true, claim: { degrau: 7, premios: [{ trilha: "free", tipo: "coins", qtd: 1_000_000 }, { trilha: "free", tipo: "boost", boost: "loot", horas: 1 }] } });
+    }
+    const tierRoute = path.match(/^\/api\/accounts\/(\d+)\/outland-tier$/);
+    if (tierRoute && init?.method === "POST") {
+      await wait();
+      const tier = JSON.parse(String(init.body)).tier as number;
+      const a = accs[Number(tierRoute[1]) - 1];
+      if (a?.map?.outland) a.map = { region: "outland", label: `Outland ${tier}`, outland: { tier, label: `Outland ${tier}`, mult: 1 + (tier - 1) * 0.25 } };
+      return json({ ok: true, confirmed: true, tier });
+    }
+    if (path === "/api/settings") {
+      if (init?.method === "PUT") Object.assign(mockSettings, JSON.parse(String(init.body)));
+      return json(mockSettings);
     }
     if (path === "/api/session/reset" && init?.method === "POST") {
       await wait();

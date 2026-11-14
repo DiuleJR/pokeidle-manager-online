@@ -34,6 +34,16 @@ export interface SessionInfo {
   startedAt: number | null;
   items: { boss: number; key: number; shinyStone: number; bike: number };
   shinies?: { seen: number; captured: number } | null;
+  /** true/false se a hunt atual é de Outland; null se não dá para saber. */
+  outland?: boolean | null;
+}
+
+/** Mapa onde a conta caça; em Outland traz também o nível (tier) e o multiplicador de itens raros. */
+export interface MapInfo {
+  region: string;
+  /** "Kanto", "Hoenn"... ou "Outland 2" quando é Outland. */
+  label: string;
+  outland: { tier: number; label: string; mult: number } | null;
 }
 
 export interface AccountSnapshot {
@@ -50,6 +60,9 @@ export interface AccountSnapshot {
   xpPerHour: number;
   goldPerHour: number;
   hunt?: { slug: string | null; kills: number; minutes: number } | null;
+  map?: MapInfo | null;
+  /** Estado do Passe de Batalha da conta (null até o jogo mandar). */
+  pass?: import("./pass").PassRaw | null;
   huntName?: string | null;
   /** Em combate a conta não troca de hunt: tempo (ms) até poder, e a hunt que está esperando na fila. */
   combatLockMs?: number;

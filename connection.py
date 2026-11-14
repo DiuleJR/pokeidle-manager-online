@@ -30,6 +30,8 @@ from balls import BallManager
 from config import AccountConfig, Settings
 from hunt import HuntManager
 from inventory import InventoryView
+from battle_pass import PASSE_NIVEL_MIN, pode_resgatar
+from maps import effective_tier, normalize_tiers
 from market import MarketClient
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
 from game_data import item_name
@@ -78,6 +80,22 @@ BLOCKING_KEYS: dict[str, tuple[str, str]] = {
 }
 NETWORK_FULL_KEYS = {"login.limiteOnlineIp", "login.limiteOnlineIpLista"}
 NETWORK_FULL_RETRY_S = 30
+
+
+def friendly_reason(e: BaseException) -> str:
+    """Motivo da queda em linguagem simples (vai para o Discord e o painel; o detalhe técnico fica só no log)."""
+    if isinstance(e, ConnectionClosed):
+        code = e.rcvd.code if e.rcvd else None
+        if code == 1012:
+            return "O jogo reiniciou o servidor."
+        return "A conexão com o jogo foi interrompida."
+    if isinstance(e, ProxyError):
+        return "O proxy da conta não respondeu."
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError, ConnectionError)):
+        return "O jogo demorou demais para responder."
+    if isinstance(e, (OSError, aiohttp.ClientError)):
+        return "Sem conexão com o jogo (rede instável ou servidor fora do ar)."
+    return "Erro inesperado na conexão; reconectando."
 
 
 def build_hello(acc: AccountConfig) -> str:
@@ -163,6 +181,10 @@ class AccountConnection:
         self._was_online = False          # já esteve ONLINE (evita alertar falha de 1ª conexão)
         self._down_since: float | None = None
         self._down_alerted = False
+        self._silent_close = False                # o vigia de frames fechou a sessão (motivo próprio no aviso)
+        self._online_since: float | None = None   # quando a sessão atual ficou ONLINE (None = não chegou)
+        self._down_timer = None            # alerta de queda agendado (cancelado se a conta voltar logo)
+        self._down_reason = ""
         self.state = State.DISCONNECTED
         self.block: dict | None = None    # {kind, detail} quando BLOCKED
         self.last_reason = ""             # último motivo de queda/pausa, para o painel
@@ -175,6 +197,9 @@ class AccountConnection:
         self.hunts: list = []
         self.mercado_cfg: dict = {}               # welcome.mercado (catálogo, preços mínimos...)
         self._rare_last: dict[int, int] | None = None   # baseline dos itens raros do servidor (ids >= 70000)
+        self.pass_claim: dict | None = None        # último resgate do passe (resposta do jogo)
+        self.pass_claim_seq = 0
+        self.outland_tiers: list[dict] = normalize_tiers(None)   # welcome.outlandTiers (nível de cada tier de Outland)
         self.itens_nossos: dict[int, dict] = {}   # welcome.itensNossos: itens só do servidor (nome/ícone)
         self.session_started: float | None = None  # epoch do 1º ONLINE deste processo
         self.session_items = SessionItems()
@@ -229,6 +254,7 @@ class AccountConnection:
         """Avisa no Discord a queda (1x por queda) e a volta, com o tempo fora.
         Título = nick da conta (sem o prefixo ACCn: usado só nos logs)."""
         if state == State.ONLINE:
+            self._cancel_down_timer()
             if self._down_alerted and self._down_since is not None:
                 self.notifier.send(
                     self.acc.nick, "🟢 Voltou ao ar.", GREEN,
@@ -237,10 +263,34 @@ class AccountConnection:
         elif state in (State.DISCONNECTED, State.PAUSED_COOLDOWN, State.BLOCKED) and self._was_online:
             if self._down_since is None:
                 self._down_since = time.time()
-            if not self._down_alerted:
-                self._down_alerted = True
-                self.notifier.send(self.acc.nick, "🔴 Caiu.", RED,
-                                   [("Motivo", reason or "queda de conexão", False)])
+            if self._down_alerted:
+                return
+            # Queda comum (o jogo reinicia o servidor e a conta volta em ~10s): só avisa se continuar fora depois de
+            # DOWN_ALERT_DELAY_S. Pausa e bloqueio precisam do usuário: avisam na hora.
+            if state == State.DISCONNECTED and config.down_alert_delay() > 0:
+                self._down_reason = reason
+                if self._down_timer is None:
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop is not None:
+                        self._down_timer = loop.call_later(config.down_alert_delay(), self._send_down_alert)
+                        return
+            self._send_down_alert(reason)
+
+    def _send_down_alert(self, reason: str | None = None) -> None:
+        self._cancel_down_timer()
+        if self._down_alerted:
+            return
+        self._down_alerted = True
+        motivo = reason or self._down_reason or "queda de conexão"
+        self.notifier.send(self.acc.nick, "🔴 Caiu.", RED, [("Motivo", motivo, False)])
+
+    def _cancel_down_timer(self) -> None:
+        if self._down_timer is not None:
+            self._down_timer.cancel()
+            self._down_timer = None
 
     # ----------------------------------------------------------- proxy utils
     async def _probe_exit_ip(self) -> str:
@@ -319,6 +369,7 @@ class AccountConnection:
                 self.hunts.extend(welcome.get("hunts", []))
                 self.itens_nossos = {int(i["id"]): i for i in welcome.get("itensNossos", [])
                                      if isinstance(i, dict) and "id" in i}
+                self.outland_tiers = normalize_tiers(welcome.get("outlandTiers"))
                 m = welcome.get("mercado")  # catálogo da vitrine + limites (preço mínimo, espera de compra)
                 self.mercado_cfg = m if isinstance(m, dict) else {}
                 if self.session_started is None:
@@ -330,6 +381,7 @@ class AccountConnection:
                 self._rare_last = self._rare_counts()
                 self.block = None
                 self.last_reason = ""
+                self._online_since = time.monotonic()
                 self._set(State.ONLINE, f"welcome ok level={self.estado.get('level')}")
                 if self.on_auth_status:
                     self.on_auth_status(self.acc.index, "ok", "")
@@ -384,6 +436,8 @@ class AccountConnection:
                     if self.on_token_renewed:
                         self.on_token_renewed(self.acc.index, self.acc.token)
                     continue
+                if msg.get("t") == "passe":
+                    self._on_pass(msg)
                 self._track_shinies(msg)
                 self.hunt.handle_frame(msg)
                 self.balls.handle_frame(msg)
@@ -417,9 +471,36 @@ class AccountConnection:
             quiet = time.monotonic() - self._last_frame
             if quiet >= config.FRAME_SILENCE_S:
                 log.warning("[%s] sem frames do jogo há %.0fs (sessão travada); reconectando", self.acc.name, quiet)
-                self.last_reason = f"sem resposta do jogo há {quiet:.0f}s; reconectando"
+                self.last_reason = "O jogo parou de responder; reconectando."
+                self._silent_close = True
                 await ws.close(code=4000, reason="sem frames")
                 return
+
+    def _on_pass(self, msg: dict) -> None:
+        r = msg.get("resgate")
+        if isinstance(r, dict):
+            self.pass_claim = {"degrau": r.get("degrau"), "premios": r.get("premios") or []}
+            self.pass_claim_seq += 1
+            log.info("[%s] passe resgatado: dia %s", self.acc.name, r.get("degrau"))
+
+    def server_now_ms(self) -> int:
+        return self.market.server_now_ms()
+
+    def pass_status(self) -> str:
+        """'ok' se dá para resgatar agora; senão o motivo ('nivel', 'ja_resgatado')."""
+        if (self.estado.get("level") or 0) < PASSE_NIVEL_MIN:
+            return "nivel"
+        return "ok" if pode_resgatar(self.estado.get("passe"), self.server_now_ms()) else "ja_resgatado"
+
+    async def claim_pass(self) -> None:
+        if not self.can_send:
+            raise RuntimeError("conta offline")
+        await self.hunt._ws.send(json.dumps({"t": "passe.resgatar"}))
+        log.info("[%s] passe.resgatar enviado", self.acc.name)
+
+    def outland_tier(self) -> dict:
+        """O tier de Outland em vigor nesta conta (o escolhido, limitado pelo nível do treinador)."""
+        return effective_tier(self.outland_tiers, self.estado.get("outlandTier"), self.estado.get("level"))
 
     def _save_session(self) -> None:
         self.session_store.save(self._session_key, self.session_started, self.session_items.gained,
@@ -611,9 +692,12 @@ class AccountConnection:
     async def run_forever(self) -> None:
         """Mantém a conta conectada; aplica cooldown de 5 min em rejeição."""
         while True:
+            self._online_since = None
             try:
                 await self._session()
-                self._set(State.DISCONNECTED, "sessão encerrada", "servidor encerrou a sessão")
+                motivo = "O jogo parou de responder; reconectando." if self._silent_close else "O jogo encerrou a conexão."
+                self._silent_close = False
+                self._set(State.DISCONNECTED, "sessão encerrada", motivo)
             except AccountBlocked as e:
                 self.block = {"kind": e.kind, "detail": e.detail}
                 self.last_reason = e.detail
@@ -623,26 +707,38 @@ class AccountConnection:
                 while True:  # só o painel (editar/reiniciar a conta) tira daqui, cancelando a task
                     await asyncio.sleep(3600)
             except NetworkFull:
-                self.last_reason = "rede no limite de contas online"
+                self.last_reason = "A rede atingiu o limite de contas online."
                 self._set(State.DISCONNECTED, f"rede cheia; nova tentativa em {NETWORK_FULL_RETRY_S}s",
-                          "rede no limite de contas online")
+                          "A rede atingiu o limite de contas online; nova tentativa em instantes.")
                 await asyncio.sleep(NETWORK_FULL_RETRY_S)
                 continue
             except AuthRejected as e:
-                self.last_reason = str(e)
-                self._set(State.PAUSED_COOLDOWN,
-                          f"{e}; aguardando {config.COOLDOWN_SECONDS}s",
-                          f"{e}; nova tentativa em {config.COOLDOWN_SECONDS // 60}min")
-                await asyncio.sleep(config.COOLDOWN_SECONDS)
+                externo = "login externo" in str(e)
+                motivo = ("A conta foi aberta em outro lugar (login externo)." if externo
+                          else "O jogo recusou o login da conta.")
+                # Login externo: o tempo de espera é uma configuração do painel (padrão 5 min).
+                wait = config.external_login_wait_s() if externo else config.COOLDOWN_SECONDS
+                self.last_reason = motivo
+                self._set(State.PAUSED_COOLDOWN, f"{e}; aguardando {wait}s",
+                          f"{motivo} Nova tentativa em {wait / 60:g} min.")
+                await asyncio.sleep(wait)
                 continue
             except asyncio.CancelledError:
                 raise
             except (ProxyError, OSError, aiohttp.ClientError) as e:
-                self._set(State.DISCONNECTED, f"falha de proxy/rede: {e!r}",
-                          f"falha de proxy/rede ({type(e).__name__})")
+                self._set(State.DISCONNECTED, f"falha de proxy/rede: {e!r}", friendly_reason(e))
             except Exception as e:  # noqa: BLE001 - supervisor não pode morrer
-                self._set(State.DISCONNECTED, f"erro: {e!r}", f"erro: {type(e).__name__}")
-            await asyncio.sleep(config.RECONNECT_DELAY)
+                self._set(State.DISCONNECTED, f"erro: {e!r}", friendly_reason(e))
+            await asyncio.sleep(self._reconnect_delay())
+
+    def _reconnect_delay(self) -> float:
+        """Caiu uma sessão que estava funcionando (ex.: o jogo reiniciou o servidor): tenta voltar na hora, uma vez.
+        Se essa tentativa falhar (manutenção, servidor fora), nunca chegou a ficar ONLINE: espera RECONNECT_DELAY
+        entre as tentativas seguintes."""
+        up = self._online_since
+        if up is not None and time.monotonic() - up >= config.MIN_UPTIME_FOR_FAST_RETRY_S:
+            return 0.0
+        return config.RECONNECT_DELAY
 
 
 def _parse(raw) -> dict:

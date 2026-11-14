@@ -280,3 +280,42 @@ def test_pokemon_sheet_for_hunt_calculator(env):
     j = c.get(f"/api/accounts/{acc_id}/sheet", headers=H).json()
     assert j["speciesId"] == 212 and j["stats"]["atk"] == 264 and j["trainerLevel"] == 300 and j["potencia"] == 3
     assert c.get("/api/accounts/99/sheet", headers=H).status_code == 404
+
+
+def test_hunts_catalog_lists_outland_tiers(env):
+    c, conn, _, _ = env
+    conn.estado["level"] = 1500
+    conn.estado["outlandTier"] = 2
+    j = c.get("/api/hunts", headers=H).json()
+    assert [t["tier"] for t in j["outland"]["tiers"]] == list(range(1, 9)) and j["outland"]["tier"] == 2
+
+
+def test_select_outland_tier_confirmed_by_game_state(env, monkeypatch):
+    c, conn, acc_id, _ = env
+    monkeypatch.setattr(actions_api, "HUNT_CONFIRM_TIMEOUT_S", 1.0)
+    conn.estado.update({"level": 1500, "outlandTier": 2})     # o jogo já confirmou (estado.outlandTier)
+    r = c.post(f"/api/accounts/{acc_id}/outland-tier", json={"tier": 2}, headers=H).json()
+    assert r == {"ok": True, "confirmed": True, "tier": 2}
+    assert conn.hunt._ws.sent == [{"t": "outland.tier", "tier": 2}]
+
+
+def test_select_outland_tier_not_confirmed_and_rejections(env, monkeypatch):
+    c, conn, acc_id, _ = env
+    monkeypatch.setattr(actions_api, "HUNT_CONFIRM_TIMEOUT_S", 0.5)
+    conn.estado.update({"level": 1500, "outlandTier": 1})
+    assert c.post(f"/api/accounts/{acc_id}/outland-tier", json={"tier": 2}, headers=H).json()["confirmed"] is False
+    r = c.post(f"/api/accounts/{acc_id}/outland-tier", json={"tier": 8}, headers=H)
+    assert r.status_code == 400 and "36000" in r.json()["error"]          # nível de treinador insuficiente
+    assert c.post(f"/api/accounts/{acc_id}/outland-tier", json={"tier": 99}, headers=H).status_code == 400
+    conn.state = State.DISCONNECTED
+    assert c.post(f"/api/accounts/{acc_id}/outland-tier", json={"tier": 1}, headers=H).status_code == 409
+
+
+def test_snapshot_reports_map_and_outland_tier(env):
+    from telemetry import account_snapshot
+    c, conn, _, _ = env
+    assert account_snapshot(conn)["map"] == {"region": "kanto", "label": "Kanto", "outland": None}
+    conn.estado.update({"level": 2500, "outlandTier": 3})
+    conn.hunt.session = HuntSession(slug="lapras")
+    m = account_snapshot(conn)["map"]
+    assert m["region"] == "outland" and m["label"] == "Outland 3" and m["outland"] == {"tier": 3, "label": "Outland 3", "mult": 1.5}

@@ -87,6 +87,13 @@ class HuntManager:
         await self._ws.send(json.dumps({"t": "hunt.select", "slug": slug}))
         log.info("[%s] hunt.select slug=%s enviado", self.account_name, slug)
 
+    async def select_outland_tier(self, tier: int) -> None:
+        """Cliente → Servidor: outland.tier (visto no cliente oficial: seletor de nível no mapa de Outland)."""
+        if self._ws is None:
+            raise RuntimeError("HuntManager.bind(ws) não foi chamado")
+        await self._ws.send(json.dumps({"t": "outland.tier", "tier": int(tier)}))
+        log.info("[%s] outland.tier tier=%s enviado", self.account_name, tier)
+
     async def go_to_center(self) -> None:
         """Cliente → Servidor: centro.ir (✅ confirmado por captura real)."""
         if self._ws is None:
@@ -168,6 +175,8 @@ class HuntManager:
                 self._wild_hp[slot] = hp_alvo
         elif k == "morte" and ev.get("quem") == "selvagem":
             self._on_wild_death(ev)
+        elif k == "outlandTier":
+            log.info("[%s] Outland trocado: %s", self.account_name, ev.get("nome"))
         elif k == "centro":
             log.info("[%s] centro.ir confirmado (motivo=%s)", self.account_name,
                      ev.get("motivo"))

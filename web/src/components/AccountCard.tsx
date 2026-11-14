@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useDragControls, type PanInfo } from "framer-motion";
-import { Clock, Crosshair, Star, Swords } from "lucide-react";
+import { Clock, Crosshair, MapPin, Star, Swords } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { EquipPopover } from "@/components/EquipPopover";
@@ -9,6 +9,7 @@ import { serverNow, useAccount } from "@/lib/telemetry";
 import type { EquippedItem } from "@/lib/types";
 import { dragState, justDragged } from "@/lib/useCardOrder";
 import { fmtDuration, fmtShort } from "@/lib/utils";
+import type { MapInfo } from "@/lib/types";
 
 export type CardMode = "resumo" | "sessao";
 
@@ -89,6 +90,22 @@ function Tile({
       <div className="label hidden sm:block">{label}</div>
       <div className="min-w-0 truncate text-sm font-bold leading-tight sm:text-lg">{children}</div>
     </motion.div>
+  );
+}
+
+/** Mapa onde a conta caça. Em Outland mostra o nível dela e o multiplicador de itens raros (como no jogo). */
+function MapChip({ map }: { map?: MapInfo | null }) {
+  if (!map) return null;
+  const o = map.outland;
+  return (
+    <span
+      className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-bold leading-none sm:text-xs ${o ? "border-[#7a5a1c] bg-[#33260e] text-poke-gold" : "border-line bg-void text-fg"}`}
+      title={o ? `${map.label}: itens raros ×${o.mult}` : `Mapa: ${map.label}`}
+    >
+      <MapPin className="size-3 shrink-0" aria-hidden />
+      <span className="truncate">{map.label}</span>
+      {o && <span className="tnum font-semibold opacity-80">×{String(o.mult).replace(".", ",")}</span>}
+    </span>
   );
 }
 
@@ -181,6 +198,12 @@ function ResumoBody({ id }: { id: string }) {
 function SessaoBody({ id }: { id: string }) {
   const acc = useAccount(id);
   if (!acc) return null;
+  // Outland só dropa itens raros e as outras áreas só têm shinies: mostra o que faz sentido para a hunt atual.
+  // O que já rendeu na sessão continua aparecendo, mesmo ao trocar de área, até zerar a sessão.
+  const sh = acc.session?.shinies;
+  const outland = acc.session?.outland ?? null;
+  const showShinies = !!sh && (outland === false || sh.seen + sh.captured > 0);
+  const showItems = outland !== false || SESSION_ITEMS.some((it) => (acc.session?.items[it.key] ?? 0) > 0);
   return (
     <div className="space-y-1.5 sm:space-y-2.5">
       <Tile icon={<Clock className="size-full text-poke-gold" />} label="Tempo da sessão" className="tile-gold">
@@ -188,17 +211,18 @@ function SessaoBody({ id }: { id: string }) {
           <SessionClock startedAt={acc.session?.startedAt} />
         </span>
       </Tile>
-      {acc.session?.shinies && (
+      {showShinies && sh && (
         <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
           <Tile icon={<span className="text-2xl">✨</span>} label="Shinies vistos">
-            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={acc.session.shinies.seen} /></span>
+            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={sh.seen} /></span>
           </Tile>
           <Tile icon={<span className="text-2xl">✨</span>} label="Shinies capturados">
-            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={acc.session.shinies.captured} /></span>
+            <span className="font-extrabold sm:text-2xl"><AnimatedNumber value={sh.captured} /></span>
           </Tile>
         </div>
       )}
-      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-2.5">
+      {showItems && (
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-2.5">
         {SESSION_ITEMS.map((it) => (
           <Tile key={it.key} icon={<ItemSprite icon={it.icon} size={32} alt={it.label} />} label={it.label}>
             <span className="font-extrabold sm:text-2xl">
@@ -206,7 +230,8 @@ function SessaoBody({ id }: { id: string }) {
             </span>
           </Tile>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -355,13 +380,23 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
             </h3>
             <StatusPill status={acc.status} />
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-mute sm:mt-1 sm:gap-2 sm:text-sm">
-            <span className="tnum">Nv. {fmtShort(acc.level)}</span>
-            <span aria-hidden>·</span>
-            <span className="truncate">{pk?.name ?? "—"}</span>
-            {pk?.shiny && <ShinyMark />}
-            {/* Celular: o rodapé some, então a hunt atual fica aqui, na mesma linha. */}
-            <span className="flex min-w-0 flex-1 items-center justify-end gap-1 sm:hidden">
+          <div className="mt-0.5 flex items-center gap-x-2 text-xs text-mute sm:mt-1 sm:text-sm">
+            <span className="tnum shrink-0" title="Nível do treinador">
+              <span className="sm:hidden">Trein. </span>
+              <span className="hidden sm:inline">Treinador </span>
+              Nv. {fmtShort(acc.level)}
+            </span>
+            <span className="flex min-w-0 items-center gap-1" title="Pokémon equipado">
+              <span aria-hidden className="text-line">|</span>
+              <span className="truncate">{pk?.name ?? "—"}</span>
+              {pk?.level != null && <span className="tnum shrink-0">Nv. {fmtShort(pk.level)}</span>}
+              {pk?.shiny && <ShinyMark />}
+            </span>
+          </div>
+          {/* Mapa (e, no celular, a hunt atual: o rodapé some por falta de espaço). */}
+          <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-mute">
+            <MapChip map={acc.map} />
+            <span className="flex min-w-0 flex-1 items-center gap-1 sm:hidden">
               <Crosshair className="size-3.5 shrink-0 text-poke-gold" aria-hidden />
               <span className="sr-only">Hunt atual: </span>
               <b className="truncate font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>

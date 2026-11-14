@@ -5,7 +5,7 @@ import { BestHuntCard } from "@/components/BestHuntCard";
 import { HuntRow, TypeChip } from "@/components/HuntRow";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
-import { actions, useCreatures, useHuntCatalog, type Creature, type Hunt } from "@/lib/actions";
+import { actions, useCreatures, useHuntCatalog, type Creature, type Hunt, type OutlandTier } from "@/lib/actions";
 import { type HuntOrder, rankLines, useBestHunts } from "@/lib/huntAdvisor";
 import { inRegion, REGIONS, regionOfHunt } from "@/lib/regions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
@@ -15,6 +15,48 @@ import { fmtInt } from "@/lib/utils";
 const EASE = [0.22, 1, 0.36, 1] as const;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+
+const mult = (n: number) => String(n).replace(".", ",");
+
+/**
+ * Nível de Outland da conta (o mesmo seletor do mapa do jogo): quanto maior, mais raros caem.
+ * Cada nível pede um nível de treinador; os que a conta ainda não alcança ficam trancados.
+ */
+function OutlandTiers({ tiers, current, level, canChange, busy, onPick }: { tiers: OutlandTier[]; current: number; level: number; canChange: boolean; busy: boolean; onPick: (t: OutlandTier) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="label">Nível de Outland</span>
+        <span className="text-xs text-mute">Quanto maior o nível, mais itens raros caem. Vale para a conta escolhida.</span>
+      </div>
+      <div className="-mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-1" role="radiogroup" aria-label="Nível de Outland">
+        {tiers.map((t) => {
+          const locked = level < t.nivel;
+          const on = t.tier === current;
+          return (
+            <button
+              key={t.tier}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={locked || (!on && (!canChange || busy))}
+              className="btn shrink-0 flex-col !gap-0 !py-1.5"
+              data-active={on}
+              onClick={() => !on && onPick(t)}
+              title={locked ? `Pede nível ${fmtInt(t.nivel)} de treinador` : `${t.rotulo}: itens raros ×${mult(t.mult)}`}
+            >
+              <span className="flex items-center gap-1">
+                {locked && <Lock className="size-3 opacity-70" aria-hidden />}
+                {t.rotulo}
+              </span>
+              <span className="tnum text-[10px] font-semibold opacity-70">{locked ? `Nv ${fmtInt(t.nivel)}` : `raros ×${mult(t.mult)}`}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 type Mode = "own" | "weak" | "strong";
 const MODES: { id: Mode; label: string; hint: string }[] = [
@@ -127,6 +169,8 @@ export function MapaView() {
   const [focus, setFocus] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>(null);
   const [order, setOrder] = useState<HuntOrder>("xp");
+  const [tierMsg, setTierMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [tierBusy, setTierBusy] = useState(false);
 
   const level = acc?.level ?? cat?.level ?? 0;
   const currentSlug = acc?.hunt?.slug ?? cat?.current ?? null;
@@ -197,6 +241,32 @@ export function MapaView() {
     }
   }, [status, acc?.huntPending?.slug, acc?.hunt?.slug, acc?.nick, pendingName]);
 
+  const pickTier = useCallback(
+    async (t: OutlandTier) => {
+      if (!selected) return;
+      setTierBusy(true);
+      setTierMsg(null);
+      try {
+        const r = await actions.selectOutlandTier(selected, t.tier);
+        setTierMsg(
+          r.confirmed
+            ? { ok: true, text: `${acc?.nick ?? "A conta"} agora caça em ${t.rotulo}.` }
+            : { ok: false, text: "O jogo não aceitou a troca. A conta pode estar em combate (espere alguns segundos) e tente de novo." },
+        );
+      } catch (e) {
+        setTierMsg({ ok: false, text: e instanceof Error ? e.message : "Não foi possível trocar o nível de Outland." });
+      } finally {
+        setTierBusy(false);
+      }
+    },
+    [selected, acc?.nick],
+  );
+  useEffect(() => {
+    if (!tierMsg?.ok) return;
+    const t = setTimeout(() => setTierMsg(null), 5000);
+    return () => clearTimeout(t);
+  }, [tierMsg]);
+
   const cancelQueue = useCallback(async () => {
     if (!selected) return;
     setStatus(null);
@@ -231,6 +301,7 @@ export function MapaView() {
                 onClick={() => {
                   setPicked(id);
                   setStatus(null);
+                  setTierMsg(null);
                   setFocus(null);
                 }}
               >
@@ -298,6 +369,24 @@ export function MapaView() {
           ))}
         </div>
       </Reveal>
+
+      {region.id === "outland" && cat?.outland && (
+        <Reveal index={1}>
+          <OutlandTiers
+            tiers={cat.outland.tiers}
+            current={acc?.map?.outland?.tier ?? cat.outland.tier}
+            level={level}
+            canChange={online}
+            busy={tierBusy}
+            onPick={(t) => void pickTier(t)}
+          />
+          {tierMsg && (
+            <p className={`mt-1.5 text-sm ${tierMsg.ok ? "text-poke-green" : "text-poke-gold"}`} role="status">
+              {tierMsg.text}
+            </p>
+          )}
+        </Reveal>
+      )}
 
       {/* Filtros */}
       <Reveal index={2}>
@@ -412,8 +501,8 @@ export function MapaView() {
 
       {cat && cat.hunts.length > 0 && (
         <Reveal index={3}>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <ul key={area} className="space-y-1.5 lg:max-h-[calc(100vh-22rem)] lg:overflow-y-auto lg:pr-1">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <ul key={area} className="min-w-0 space-y-1.5 lg:max-h-[calc(100vh-22rem)] lg:overflow-y-auto lg:pr-1">
               {list.length === 0 && (
                 <li className="card p-8 text-center text-sm text-mute">
                   {query || types.length || onlyOpen ? "Nenhuma área com esses filtros." : `${region.label} ainda não tem áreas no jogo.`}

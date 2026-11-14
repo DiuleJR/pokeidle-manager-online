@@ -42,6 +42,8 @@ export const actions = {
   equip: (accId: string, kind: "ball" | "potion", id: number) =>
     call<EquipResult>("POST", `/api/accounts/${numId(accId)}/equip`, { kind, id }),
   selectHunt: (accId: string, slug: string) => call<HuntResult>("POST", `/api/accounts/${numId(accId)}/hunt`, { slug }),
+  selectOutlandTier: (accId: string, tier: number) =>
+    call<{ ok: boolean; confirmed: boolean; tier: number }>("POST", `/api/accounts/${numId(accId)}/outland-tier`, { tier }),
   sheet: (accId: string) => call<PokemonSheet>("GET", `/api/accounts/${numId(accId)}/sheet`),
   resetSession: () => call<{ ok: boolean; reset: string[] }>("POST", "/api/session/reset"),
   cancelHuntQueue: (accId: string) => call<{ ok: boolean }>("DELETE", `/api/accounts/${numId(accId)}/hunt/queue`),
@@ -63,11 +65,19 @@ export interface Hunt {
   totalSpawns: number;
   especies: HuntSpecies[];
 }
+/** Um nível (tier) de Outland: `nivel` é o nível de treinador que libera, `mult` o multiplicador de itens raros. */
+export interface OutlandTier {
+  tier: number;
+  rotulo: string;
+  nivel: number;
+  mult: number;
+}
 export interface HuntCatalog {
   account: string | null;
   level: number;
   current: string | null;
   hunts: Hunt[];
+  outland?: { tiers: OutlandTier[]; tier: number };
 }
 /** Dados do jogo por espécie: nome, tipos, nomes do loot e looktype. */
 export interface Creature {

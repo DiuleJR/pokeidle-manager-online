@@ -24,7 +24,6 @@ from session_stats import ITEM_LABELS
 log = logging.getLogger("notify")
 
 RED, GREEN, GOLD, BLUE = 0xE74C3C, 0x2ECC71, 0xF1C40F, 0x3498DB
-BOT_NAME = "Link Kun"
 
 # Base pública do dashboard (ex.: https://seu-dominio.exemplo), usada para
 # montar a URL do ícone (thumbnail) nos embeds — ex.: item raro obtido. Sem ela,
@@ -82,7 +81,7 @@ class Notifier:
         if thumbnail:
             embed["thumbnail"] = {"url": thumbnail}
         try:
-            self._queue.put_nowait({"username": BOT_NAME, "embeds": [embed]})
+            self._queue.put_nowait({"embeds": [embed]})   # sem "username": vale o nome/avatar que o usuário configurou no Discord
         except asyncio.QueueFull:
             log.warning("fila de notificações cheia; mensagem descartada")
 

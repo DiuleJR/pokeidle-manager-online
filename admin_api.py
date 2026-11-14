@@ -84,6 +84,7 @@ class SettingsIn(BaseModel):
     alert_sell: bool | None = None
     alert_sell_pct: int | None = Field(None, ge=5, le=500)
     alert_sold: bool | None = None
+    external_login_wait_min: int | None = Field(None, ge=1, le=1440)   # espera após login em outro lugar
 
 
 # ----------------------------------------------------------------- parser da importação
@@ -319,6 +320,7 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
         return {**s, "report_hour": int(s["report_hour"] or 0), "hasWebhook": bool(hook),
                 "alert_sell": s["alert_sell"] == "1", "alert_sold": s["alert_sold"] == "1",
                 "alert_sell_pct": int(s["alert_sell_pct"] or 30),
+                "external_login_wait_min": int(s["external_login_wait_min"] or 5),
                 "webhookHint": mask(hook, 6), "defaultWsUrl": config.DEFAULT_WS_URL}
 
     @app.get("/api/settings")
@@ -364,6 +366,8 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
             store.set_setting("alert_sell", "1" if body.alert_sell else "0")
         if "alert_sold" in sent and body.alert_sold is not None:
             store.set_setting("alert_sold", "1" if body.alert_sold else "0")
+        if "external_login_wait_min" in sent and body.external_login_wait_min is not None:
+            store.set_setting("external_login_wait_min", str(body.external_login_wait_min))
         if "alert_sell_pct" in sent and body.alert_sell_pct is not None:
             store.set_setting("alert_sell_pct", str(body.alert_sell_pct))
         await manager.apply_global_settings()

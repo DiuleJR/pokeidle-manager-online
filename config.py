@@ -30,8 +30,11 @@ PING_INTERVAL = 30        # s entre pings
 PING_TIMEOUT = 90         # s sem resposta -> conexão considerada morta
 FRAME_SILENCE_S = 150     # s sem NENHUM frame do jogo com hunt ativa -> sessão travada: reconecta
 FRAME_CHECK_S = 15        # s entre verificações do vigia de frames
+EXTERNAL_LOGIN_WAIT_MIN = 5   # min de espera antes de reconectar uma conta aberta em outro lugar (configurável no painel)
+DOWN_ALERT_DELAY_S = 120  # s: queda que volta antes disso não avisa no Discord (o jogo reinicia o servidor várias vezes por dia)
 COOLDOWN_SECONDS = 300    # PAUSED_COOLDOWN (5 min)
-RECONNECT_DELAY = 10      # s de espera em quedas comuns (rede)
+RECONNECT_DELAY = 10      # s entre tentativas quando o servidor não responde (manutenção, rede fora)
+MIN_UPTIME_FOR_FAST_RETRY_S = 5  # sessão que durou isso ou mais e caiu: 1ª nova tentativa é imediata
 STATUS_LOG_INTERVAL = 30     # s entre linhas de status da hunt (Pokémon/HP/XP-h/Gold-h)
 INVENTORY_LOG_INTERVAL = 300 # s entre relatórios detalhados de inventário (5 min)
 
@@ -209,3 +212,28 @@ def load_env_accounts() -> list[dict]:
 def parse_close_codes() -> frozenset[int]:
     codes = os.getenv("EXTERNAL_LOGIN_CLOSE_CODES", "4001,4003,1008")
     return frozenset(int(c) for c in codes.split(",") if c.strip())
+
+
+def down_alert_delay() -> float:
+    """Segundos fora antes de avisar 'Caiu' no Discord. DOWN_ALERT_DELAY_S no .env muda (0 = avisa toda queda)."""
+    try:
+        return max(0.0, float(os.getenv("DOWN_ALERT_DELAY_S", DOWN_ALERT_DELAY_S)))
+    except ValueError:
+        return float(DOWN_ALERT_DELAY_S)
+
+
+_external_login_wait_min = float(EXTERNAL_LOGIN_WAIT_MIN)
+
+
+def set_external_login_wait_min(minutes) -> None:
+    """Define (em minutos) quanto esperar antes de reconectar uma conta aberta em outro lugar. Valor inválido = padrão."""
+    global _external_login_wait_min
+    try:
+        v = float(minutes)
+    except (TypeError, ValueError):
+        v = float(EXTERNAL_LOGIN_WAIT_MIN)
+    _external_login_wait_min = min(max(v, 1.0), 1440.0)
+
+
+def external_login_wait_s() -> float:
+    return _external_login_wait_min * 60

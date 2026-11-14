@@ -1,11 +1,12 @@
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { LayoutDashboard, Map as MapIcon, Package, RotateCcw, Settings, Store } from "lucide-react";
+import { LayoutDashboard, Map as MapIcon, Package, RotateCcw, Settings, Store, Ticket } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AccountCard, type CardDrag, type CardMode } from "@/components/AccountCard";
 import { ConnectionIndicator } from "@/components/ConnectionIndicator";
 import { AccountSelect, InventoryView } from "@/components/InventoryView";
 import { MapaView } from "@/components/MapaView";
 import { MarketView } from "@/components/market/MarketView";
+import { PassView } from "@/components/PassView";
 import { SettingsView } from "@/components/SettingsView";
 import { SummaryBar } from "@/components/SummaryBar";
 import { UpdateBanner } from "@/components/UpdateCard";
@@ -15,14 +16,17 @@ import { actions } from "@/lib/actions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { useCardOrder } from "@/lib/useCardOrder";
 
-type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "config";
+type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "passe" | "config";
 const TABS: { id: Tab; label: string; Icon: typeof Package }[] = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { id: "inventario", label: "Inventários", Icon: Package },
   { id: "mapa", label: "Mapa", Icon: MapIcon },
   { id: "mercado", label: "Mercado", Icon: Store },
+  { id: "passe", label: "Passe", Icon: Ticket },
   { id: "config", label: "Configurações", Icon: Settings },
 ];
+/** Barra de baixo do celular, em duas fileiras de três: Mapa, Mercado e Passe em cima; Dashboard, Inventários e Configurações embaixo. */
+const MOBILE_TABS = (["mapa", "mercado", "passe", "dashboard", "inventario", "config"] as Tab[]).map((id) => TABS.find((t) => t.id === id)!);
 const MODES: { id: CardMode; label: string }[] = [
   { id: "resumo", label: "Resumo" },
   { id: "sessao", label: "Sessão" },
@@ -30,8 +34,8 @@ const MODES: { id: CardMode; label: string }[] = [
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const readTab = (): Tab =>
-  location.hash === "#inventario" ? "inventario" : location.hash === "#mapa" ? "mapa" : location.hash === "#mercado" ? "mercado" : location.hash === "#config" ? "config" : "dashboard";
-const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", mapa: "Mapa", mercado: "Mercado", config: "Configurações" };
+  location.hash === "#inventario" ? "inventario" : location.hash === "#mapa" ? "mapa" : location.hash === "#mercado" ? "mercado" : location.hash === "#passe" ? "passe" : location.hash === "#config" ? "config" : "dashboard";
+const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", mapa: "Mapa", mercado: "Mercado", passe: "Passe de Batalha", config: "Configurações" };
 
 /** Seletor segmentado com "pílula" que desliza entre as opções. */
 function Segmented<T extends string>({
@@ -173,7 +177,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen px-1.5 py-2 pb-24 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-4 sm:pb-4">
+      <div className="min-h-screen px-1.5 py-2 pb-32 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-4 sm:pb-4">
         {/* Barra de abas: fica sempre no mesmo lugar, acima da janela principal (só no computador). */}
         <div className="sticky top-2 z-30 mx-auto mb-3 hidden w-full max-w-7xl items-center justify-between gap-3 sm:flex">
           <LayoutGroup id="nav">
@@ -263,7 +267,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25, ease: EASE }}
               >
-                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : tab === "mapa" ? <MapaView /> : tab === "mercado" ? <MarketView /> : <SettingsView />}
+                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : tab === "mapa" ? <MapaView /> : tab === "mercado" ? <MarketView /> : tab === "passe" ? <PassView /> : <SettingsView />}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -276,15 +280,15 @@ export default function App() {
 
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
       >
-        {TABS.map((t) => (
+        {MOBILE_TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => go(t.id)}
             aria-current={tab === t.id ? "page" : undefined}
-            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-bold transition-colors ${
-              tab === t.id ? "text-poke-gold shadow-[inset_0_2px_0_0_theme(colors.poke.gold)]" : "text-mute"
+            className={`flex min-w-0 flex-col items-center gap-0.5 py-1.5 text-xs font-bold transition-colors ${
+              tab === t.id ? "bg-[#2a1e0e] text-poke-gold" : "text-mute"
             }`}
           >
             <t.Icon className="size-5" aria-hidden />

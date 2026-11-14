@@ -62,12 +62,15 @@ class SessionItems:
         self._last = now
 
 
-def show_session_shinies(hunts: list, slug: str | None) -> bool:
+def hunt_is_outland(hunts: list, slug: str | None) -> bool | None:
+    """True/False se a hunt é de Outland; None se não dá para saber (hunt fora do catálogo ou sem área)."""
     hunt = next((h for h in hunts if isinstance(h, dict) and h.get("slug") == slug), None)
     if not hunt:
-        return False
+        return None
     area, region = hunt.get("area"), hunt.get("regiao")
-    return bool(area or region) and not any(str(v or "").lower().startswith("outland") for v in (area, region))
+    if not (area or region):
+        return None
+    return any(str(v or "").lower().startswith("outland") for v in (area, region))
 
 class ShinyTracker:
     """Conta resultados por slot e associa uma fuga à tentativa falha correspondente."""

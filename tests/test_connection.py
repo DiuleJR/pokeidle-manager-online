@@ -117,3 +117,87 @@ def test_frame_watchdog_ignores_account_without_hunt(conn, monkeypatch):
     with pytest.raises(asyncio.TimeoutError):
         asyncio.run(asyncio.wait_for(conn._frame_watchdog(ws), 0.3))
     assert ws.closed is None
+
+
+def _alert_conn(monkeypatch, delay):
+    monkeypatch.setattr(connection.config, "DOWN_ALERT_DELAY_S", delay)
+    c = AccountConnection(ACC, SET)
+    sent = []
+    c.notifier = type("N", (), {"send": lambda self, *a, **k: sent.append(a[1])})()
+    c._set(connection.State.ONLINE, "ok")
+    return c, sent
+
+
+def test_short_drop_does_not_alert(monkeypatch):
+    """O jogo reinicia o servidor e a conta volta em segundos: sem 'Caiu'/'Voltou' no Discord."""
+    async def go():
+        c, sent = _alert_conn(monkeypatch, 0.2)
+        c._set(connection.State.DISCONNECTED, "x", "erro")
+        await asyncio.sleep(0.05)
+        c._set(connection.State.ONLINE, "ok")
+        await asyncio.sleep(0.3)
+        return sent
+    assert asyncio.run(go()) == []
+
+
+def test_long_drop_alerts_down_and_back(monkeypatch):
+    async def go():
+        c, sent = _alert_conn(monkeypatch, 0.05)
+        c._set(connection.State.DISCONNECTED, "x", "erro")
+        await asyncio.sleep(0.2)
+        c._set(connection.State.ONLINE, "ok")
+        return sent
+    assert asyncio.run(go()) == ["🔴 Caiu.", "🟢 Voltou ao ar."]
+
+
+def test_block_alerts_immediately(monkeypatch):
+    async def go():
+        c, sent = _alert_conn(monkeypatch, 60)
+        c._set(connection.State.BLOCKED, "x", "conta banida")
+        return sent
+    assert asyncio.run(go()) == ["🔴 Caiu."]
+
+
+def test_reconnect_delay_is_immediate_only_after_a_working_session(conn, monkeypatch):
+    """Caiu uma sessão que funcionava: volta na hora. Se a tentativa falha (manutenção), espera 10s entre as seguintes."""
+    import time as _t
+    conn._online_since = None                      # a tentativa nem chegou a ficar ONLINE
+    assert conn._reconnect_delay() == connection.config.RECONNECT_DELAY == 10
+    conn._online_since = _t.monotonic() - 60       # estava online há 1 min
+    assert conn._reconnect_delay() == 0
+    conn._online_since = _t.monotonic()            # caiu logo depois de conectar: não fica em laço apertado
+    assert conn._reconnect_delay() == 10
+
+
+def test_friendly_reasons_have_no_technical_codes():
+    from websockets.frames import Close
+    from websockets.exceptions import ConnectionClosedError
+    restart = ConnectionClosedError(Close(1012, "reinicio"), Close(1012, "reinicio"), True)
+    assert connection.friendly_reason(restart) == "O jogo reiniciou o servidor."
+    cut = ConnectionClosedError(None, None, None)
+    assert connection.friendly_reason(cut) == "A conexão com o jogo foi interrompida."
+    assert "rede" in connection.friendly_reason(OSError("x"))
+    for e in (restart, cut, OSError("x"), TimeoutError(), RuntimeError("x")):
+        txt = connection.friendly_reason(e)
+        assert "Error" not in txt and "1012" not in txt
+
+
+def test_discord_payload_keeps_webhook_name():
+    """O aviso não manda 'username': o Discord usa o nome e o avatar que o usuário configurou no webhook."""
+    import notify
+    n = notify.Notifier("https://discord.example/api/webhooks/1/x")
+    n.send("Conta", "texto", notify.GREEN)
+    payload = n._queue.get_nowait()
+    assert "username" not in payload and payload["embeds"]
+
+
+def test_external_login_wait_is_configurable():
+    import config as cfg
+    assert cfg.external_login_wait_s() == 300             # padrão: 5 min
+    cfg.set_external_login_wait_min(12)
+    assert cfg.external_login_wait_s() == 720
+    cfg.set_external_login_wait_min("lixo")                # inválido volta ao padrão
+    assert cfg.external_login_wait_s() == 300
+    cfg.set_external_login_wait_min(0)                     # nunca menos de 1 min (evita martelar o login)
+    assert cfg.external_login_wait_s() == 60
+    cfg.set_external_login_wait_min(5)
