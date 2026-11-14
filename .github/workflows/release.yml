@@ -67,11 +67,18 @@ jobs:
           pip install -r requirements.txt pyinstaller pystray pillow
           python scripts/build_windows.py
       - name: Gerar o instalador
-        shell: bash
+        shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          V=$(python -c "from version import VERSION; print(VERSION)")
-          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=$V" deploy/windows/installer.iss
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-ChildItem "C:\Program Files*" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          Write-Host "ISCC: $iscc"
+          $v = (python -c "from version import VERSION; print(VERSION)").Trim()
+          & $iscc "/DAppVersion=$v" deploy\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou (código $LASTEXITCODE)" }
+          Get-ChildItem dist | Format-Table Name, Length
       - name: Versão portátil (zip, sem instalar)
         shell: pwsh
         run: Compress-Archive -Path dist/PokeIdleManager -DestinationPath dist/PokeIdleManager-portatil.zip
@@ -95,4 +102,5 @@ jobs:
       - name: Postar o changelog no Discord
         env:
           DISCORD_CHANGELOG_WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}
+          CHANGELOG_PING: none   # TEMPORÁRIO (reenvio da 1.7.0): sem @everyone. Remover depois.
         run: python3 scripts/post_changelog.py --tag "${GITHUB_REF_NAME}"
