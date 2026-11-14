@@ -102,5 +102,4 @@ jobs:
       - name: Postar o changelog no Discord
         env:
           DISCORD_CHANGELOG_WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}
-          CHANGELOG_PING: none   # TEMPORÁRIO (reenvio da 1.7.0): sem @everyone. Remover depois.
         run: python3 scripts/post_changelog.py --tag "${GITHUB_REF_NAME}"
