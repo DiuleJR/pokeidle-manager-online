@@ -90,3 +90,30 @@ def test_server_rare_item_notifies_once_per_gain(conn):
     conn.estado["items"]["70091"] = 3                                  # gastar não avisa
     conn._check_server_rares()
     assert len(sent) == 1
+
+
+class ClosableWS:
+    def __init__(self):
+        self.closed = None
+
+    async def close(self, code=1000, reason=""):
+        self.closed = (code, reason)
+
+
+def test_frame_watchdog_reconnects_silent_session(conn, monkeypatch):
+    """Sessão 'zumbi' (ping ok, nenhum frame do jogo com hunt ativa) é fechada para o supervisor reconectar."""
+    monkeypatch.setattr(connection.config, "FRAME_CHECK_S", 0.01)
+    monkeypatch.setattr(connection.config, "FRAME_SILENCE_S", 0.05)
+    conn.estado["huntSlug"] = "larvitar"
+    ws = ClosableWS()
+    asyncio.run(asyncio.wait_for(conn._frame_watchdog(ws), 2))
+    assert ws.closed and ws.closed[0] == 4000
+
+
+def test_frame_watchdog_ignores_account_without_hunt(conn, monkeypatch):
+    monkeypatch.setattr(connection.config, "FRAME_CHECK_S", 0.01)
+    monkeypatch.setattr(connection.config, "FRAME_SILENCE_S", 0.05)
+    ws = ClosableWS()
+    with pytest.raises(asyncio.TimeoutError):
+        asyncio.run(asyncio.wait_for(conn._frame_watchdog(ws), 0.3))
+    assert ws.closed is None

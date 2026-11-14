@@ -149,6 +149,7 @@ class MarketService:
         self._medias_at = 0.0
         self._ov_lock = asyncio.Lock()
         self._dead: dict[int, float] = {}            # anúncio -> até quando ignorar
+        self._last_loop_err = ""                     # último erro do laço (loga só quando muda)
         self._inflight: set[tuple[int, int]] = set()  # (anúncio, conta) com compra agendada
         self._reserved: dict[tuple[int, int], float] = {}   # (regra, conta) -> orçamento reservado em compras no ar
         self._notified: dict[int, set[int]] = {}     # regra -> anúncios já avisados
@@ -751,6 +752,12 @@ class MarketService:
         while True:
             try:
                 await self.tick()
+            except MarketError as e:      # conta do mercado offline/sem resposta: esperado, volta sozinho
+                if str(e) != self._last_loop_err:
+                    log.warning("mercado indisponível: %s (tenta de novo sozinho)", e)
+                self._last_loop_err = str(e)
             except Exception:  # noqa: BLE001
                 log.exception("laço do mercado")
+            else:
+                self._last_loop_err = ""
             await asyncio.sleep(TICK_S)

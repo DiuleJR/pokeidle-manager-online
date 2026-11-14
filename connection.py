@@ -169,6 +169,7 @@ class AccountConnection:
         self.on_auth_status = None        # callback(acc_id, status, detail): painel/banco
         self.on_token_renewed = None      # callback(acc_id, novo_token)
         self.exit_ip = "?"
+        self._last_frame = time.monotonic()
         self._no_proxy = account.proxy is None
         self.estado: dict = {}   # snapshot do welcome, mutado pelo HuntManager
         self.hunts: list = []
@@ -338,6 +339,7 @@ class AccountConnection:
                 # viver; quando a sessão acaba (com ou sem erro), são canceladas.
                 background = [
                     asyncio.create_task(self._status_logger()),
+                    asyncio.create_task(self._frame_watchdog(ws)),
                     asyncio.create_task(self._inventory_logger()),
                     asyncio.create_task(self._hunt_queue_loop()),
                 ]
@@ -363,8 +365,10 @@ class AccountConnection:
     async def _recv_loop(self, ws) -> None:
         """Loop de leitura. Frames de hunt/combate/estado vão para o HuntManager;
         futuros handlers (inventário, balls, etc.) plugam aqui do mesmo jeito."""
+        self._last_frame = time.monotonic()
         try:
             async for raw in ws:
+                self._last_frame = time.monotonic()
                 msg = _parse(raw)
                 self._check_erro(msg)
                 if msg.get("t") == "sessao.renovada" and msg.get("token"):
@@ -392,6 +396,22 @@ class AccountConnection:
                 sufixo = " (login externo)" if code == 4001 else ""
                 raise AuthRejected(f"close code {code}{sufixo}") from e
             raise
+
+    async def _frame_watchdog(self, ws) -> None:
+        """Reconecta uma sessão "zumbi": o servidor do jogo continua respondendo ao ping, mas para de mandar
+        frames (a conta fica ONLINE e sem farmar, sem nenhum erro). Com hunt ativa o jogo manda frames o tempo
+        todo; passando FRAME_SILENCE_S sem nenhum, fecha o socket e o supervisor reconecta (novo welcome)."""
+        while True:
+            await asyncio.sleep(config.FRAME_CHECK_S)
+            if not self.estado.get("huntSlug"):
+                self._last_frame = time.monotonic()      # sem hunt não há o que esperar
+                continue
+            quiet = time.monotonic() - self._last_frame
+            if quiet >= config.FRAME_SILENCE_S:
+                log.warning("[%s] sem frames do jogo há %.0fs (sessão travada); reconectando", self.acc.name, quiet)
+                self.last_reason = f"sem resposta do jogo há {quiet:.0f}s; reconectando"
+                await ws.close(code=4000, reason="sem frames")
+                return
 
     # Itens raros do próprio servidor (Mystery Egg, fichas novas...): ids >= 70000 marcados como raros no
     # `welcome.itensNossos`. Os 4 acompanhados em session_stats têm tratamento próprio; o Boss Token não avisa.
