@@ -41,6 +41,47 @@ jobs:
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
 
+  # App do Windows: empacota o bot + dashboard num executável, gera o instalador (Inno Setup) e anexa à Release.
+  # O painel do app baixa esse instalador sozinho quando sai versão nova.
+  windows:
+    needs: dashboard
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Compilar o dashboard
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Empacotar o app (PyInstaller)
+        run: |
+          pip install -r requirements.txt pyinstaller pystray pillow
+          python scripts/build_windows.py
+      - name: Gerar o instalador
+        shell: bash
+        run: |
+          choco install innosetup -y --no-progress
+          V=$(python -c "from version import VERSION; print(VERSION)")
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=$V" deploy/windows/installer.iss
+      - name: Versão portátil (zip, sem instalar)
+        shell: pwsh
+        run: Compress-Archive -Path dist/PokeIdleManager -DestinationPath dist/PokeIdleManager-portatil.zip
+      - name: Anexar o instalador e a versão portátil à Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/PokeIdleManager-Setup.exe
+            dist/PokeIdleManager-portatil.zip
+
   # Depois de publicar a Release, avisa no canal de changelog do Discord (texto das notas + imagens de
   # changelog/<tag>/). Sem o segredo DISCORD_CHANGELOG_WEBHOOK, não envia nada; uma falha aqui não derruba a Release.
   changelog:

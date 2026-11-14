@@ -3,6 +3,27 @@
 Este guia leva você do zero até o painel funcionando, no **Windows**, no **Linux/macOS** ou
 numa **VPS**. Se algo não funcionar, veja [Problemas comuns](#problemas-comuns) no final.
 
+## Jeito mais fácil: app do Windows
+
+Para quem usa o **Windows** e não quer instalar Git, Python nem Node:
+
+1. Baixe o `PokeIdleManager-Setup.exe` na [página de Releases](https://github.com/DiuleJR/pokeidle-manager-online/releases/latest) e instale (não pede administrador). Se preferir não instalar, baixe o `PokeIdleManager-portatil.zip`, extraia e abra o `PokeIdleManager.exe`.
+2. Abra o **PokeIdle Manager**: o painel abre no navegador e o ícone fica na bandeja, perto do relógio.
+3. Em **Configurações → Adicionar conta**, use **Entrar com o jogo**: o jogo abre numa janela, você entra na conta
+   (e-mail, Discord ou Google) e o painel lê a sessão sozinho. Não precisa copiar token.
+4. **Acesso de longe (Tailscale):** o app já escuta na rede, então com o Tailscale instalado no PC e no celular
+   basta abrir `http://IP-DO-TAILSCALE:8080` (o IP aparece no app do Tailscale). Na primeira vez que o Windows
+   perguntar sobre o Firewall, permita em **redes privadas**. O painel sempre pede a senha. Em Wi-Fi público,
+   use só pelo Tailscale e, se preferir que o painel fique só neste PC, crie o arquivo
+   `%LOCALAPPDATA%\PokeIdleManager\.env` com a linha `TELEMETRY_HOST=127.0.0.1`.
+5. Atualizações: o painel avisa quando sai versão nova e atualiza com um clique, sem baixar nada à mão.
+
+O Windows pode mostrar o aviso "O Windows protegeu o computador" na primeira vez, porque o instalador não é
+assinado: clique em **Mais informações → Executar assim mesmo**. Suas contas ficam em
+`%LOCALAPPDATA%\PokeIdleManager` e continuam lá ao atualizar ou reinstalar.
+
+O restante deste guia é para quem prefere instalar pelo código (Windows, Linux/macOS) ou usar uma VPS.
+
 ## Antes de começar
 
 - **Use uma pasta nova.** Não reaproveite pastas ou arquivos `.env` de outras instalações:

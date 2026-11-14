@@ -3,4 +3,4 @@
 O workflow de Release recusa a tag se este número não bater, e o painel usa ele para saber
 se há versão nova no GitHub.
 """
-VERSION = "1.6.0"
+VERSION = "1.7.0"

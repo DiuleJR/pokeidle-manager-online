@@ -56,8 +56,10 @@ def _digest(token: str) -> str:
 
 
 class Auth:
-    def __init__(self, store: "Store", exposed: bool = False, env_token: str | None = None) -> None:
+    def __init__(self, store: "Store", exposed: bool = False, env_token: str | None = None,
+                 desktop: bool = False) -> None:
         self.store = store
+        self.desktop = desktop  # app do Windows: escuta na rede, mas sem proxy; quem vem do loopback é o dono do PC
         self.exposed = exposed  # o servidor escuta fora do loopback
         self.env_token = (os.getenv("TELEMETRY_TOKEN", "") if env_token is None else env_token).strip()
         self._fails: dict[str, list[float]] = {}
@@ -78,7 +80,7 @@ class Auth:
     def local_direct(self, request: Request) -> bool:
         """Acesso direto do próprio computador (sem proxy reverso por cima)."""
         host = request.client.host if request.client else ""
-        return (not self.exposed and host in LOOPBACK
+        return ((not self.exposed or self.desktop) and host in LOOPBACK
                 and not any(h in request.headers for h in _FORWARD_HEADERS))
 
     # ---------------------------------------------------------- limite de tentativas

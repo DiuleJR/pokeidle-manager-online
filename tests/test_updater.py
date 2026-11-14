@@ -231,3 +231,65 @@ def test_download_reads_whole_file_not_just_first_chunk(monkeypatch):
 def test_download_rejects_too_big(monkeypatch):
     with pytest.raises(up.UpdateError, match="grande demais"):
         _download(b"x" * 50_000, monkeypatch, max_bytes=10_000)
+
+
+# ---------------------------------------------------------------- app do Windows (instalador)
+INSTALLER = up.ASSET_PREFIX + "v1.0.1/PokeIdleManager-Setup.exe"
+
+
+def installer_release(digest=""):
+    r = release()
+    r["assets"].append({"name": up.INSTALLER_NAME, "browser_download_url": INSTALLER, "digest": digest})
+    return r
+
+
+def test_frozen_update_needs_the_installer_asset(monkeypatch):
+    monkeypatch.setattr(up, "FROZEN", True)
+    u = up.Updater(current="1.0.0")
+    u._read_release(release())                       # só o zip do dashboard: instalador ainda não saiu
+    assert not u.available
+    u._read_release(installer_release("sha256:" + "a" * 64))
+    assert u.available and u.installer_sha256 == "a" * 64
+    assert u.git_reason() == ""                      # não depende de git clone
+
+
+def test_frozen_update_rejects_foreign_installer_url(monkeypatch):
+    monkeypatch.setattr(up, "FROZEN", True)
+    u = up.Updater(current="1.0.0")
+    r = installer_release()
+    r["assets"][1]["browser_download_url"] = "https://evil.example/PokeIdleManager-Setup.exe"
+    u._read_release(r)
+    assert not u.available and u.installer_url == ""
+
+
+def test_frozen_apply_refuses_a_download_that_does_not_match(monkeypatch):
+    monkeypatch.setattr(up, "FROZEN", True)
+    u = up.Updater(current="1.0.0")
+    u._read_release(installer_release("sha256:" + "0" * 64))
+
+    class Resp:
+        status = 200
+
+        class content:
+            @staticmethod
+            async def iter_chunked(n):
+                yield b"MZ" + b"x" * 100
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    class Sess:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        def get(self, *a, **k): return Resp()
+
+    started = []
+    monkeypatch.setattr(up.aiohttp, "ClientSession", Sess)
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: started.append(a))
+    with pytest.raises(up.UpdateError, match="não confere"):
+        asyncio.run(u.apply())
+    assert started == []                             # instalador adulterado nunca é executado

@@ -149,3 +149,72 @@ def test_alert_settings_roundtrip(client):
     r = client.put("/api/settings", headers=H, json={"alert_sell": False, "alert_sell_pct": 50}).json()
     assert r["alert_sell"] is False and r["alert_sell_pct"] == 50
     assert client.put("/api/settings", headers=H, json={"alert_sell_pct": 1}).status_code == 422
+
+
+# ----------------------------------------------------------------- login pela janela do jogo
+@pytest.fixture
+def local(monkeypatch):
+    monkeypatch.setattr(admin_api, "LOOPBACK_CLIENTS", ("testclient",))
+    monkeypatch.setattr(admin_api.login_window, "available", lambda: True)
+
+
+def test_login_window_only_for_local_clients(client):
+    assert client.get("/api/login-window", headers=H).json() == {"available": False}   # "testclient" não é loopback
+    assert client.post("/api/login-window", headers=H).status_code == 400
+
+
+def test_login_window_flow_keeps_token_server_side(client, local, monkeypatch):
+    async def fake_run(timeout=300.0, center=None):
+        return {"nick": "Ash", "token": TOKEN, "dispositivo": "dev-12345678"}
+
+    monkeypatch.setattr(admin_api.login_window, "run", fake_run)
+    assert client.get("/api/login-window", headers=H).json() == {"available": True}
+    r = client.post("/api/login-window", headers=H)
+    assert r.status_code == 200 and r.json()["nick"] == "Ash"
+    assert TOKEN not in r.text                                   # o token nunca volta ao painel
+    login_id = r.json()["loginId"]
+    ok = client.post("/api/accounts/import", json={"login_id": login_id}, headers=H).json()
+    assert ok["ok"] and ok["account"]["nick"] == "ASH"
+    again = client.post("/api/accounts/import", json={"login_id": login_id}, headers=H)
+    assert again.status_code == 400                              # o código vale uma vez só
+
+
+def test_login_window_failures_and_unknown_id(client, local, monkeypatch):
+    async def closed(timeout=300.0, center=None):
+        raise admin_api.login_window.LoginError("closed")
+
+    monkeypatch.setattr(admin_api.login_window, "run", closed)
+    r = client.post("/api/login-window", headers=H)
+    assert r.status_code == 409 and "fechada" in r.json()["error"]
+    bad = client.post("/api/accounts/import", json={"login_id": "nao-existe"}, headers=H)
+    assert bad.status_code == 400 and "expirou" in bad.json()["error"]
+
+
+def test_parse_session_reads_game_storage():
+    from login_window import parse_session
+    raw = json.dumps({"s": json.dumps({"nick": "Ash", "token": TOKEN}), "d": "dev-12345678"})
+    assert parse_session(raw) == {"nick": "Ash", "token": TOKEN, "dispositivo": "dev-12345678"}
+    assert parse_session(json.dumps({"s": None, "d": None})) is None          # ainda sem login
+    assert parse_session("lixo") is None
+
+
+def test_login_window_opens_centered_over_the_panel(client, local, monkeypatch):
+    seen = {}
+
+    async def fake_run(timeout=300.0, center=None):
+        seen["center"] = center
+        return {"nick": "Ash", "token": TOKEN, "dispositivo": "dev-12345678"}
+
+    monkeypatch.setattr(admin_api.login_window, "run", fake_run)
+    client.post("/api/login-window", json={"cx": 960, "cy": 540, "dpr": 1.25}, headers=H)
+    assert seen["center"] == (960, 540, 1.25)
+    client.post("/api/login-window", headers=H)                # sem posição: abre onde o sistema quiser
+    assert seen["center"] is None
+
+
+def test_centered_origin_accounts_for_screen_scaling():
+    from login_window import WIN_H, WIN_W, centered_origin
+    assert centered_origin(1000, 600, 1) == (1000 - WIN_W // 2, 600 - WIN_H // 2)
+    assert centered_origin(1000, 600, 1.5) == (round((1000 - WIN_W / 2) * 1.5), round((600 - WIN_H / 2) * 1.5))
+    assert centered_origin(100, 100, 1) == (0, 0)              # nunca fora da tela
+    assert centered_origin(1000, 600, 99) == centered_origin(1000, 600, 1)   # escala absurda é ignorada

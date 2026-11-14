@@ -6,8 +6,11 @@ Tokens do jogo e senhas de proxy NUNCA saem pela API: só dicas mascaradas.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import secrets
+import time
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Query, Request
@@ -15,6 +18,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import config
+import login_window
 from auth import Auth
 from config import ProxyConfig, build_account_config
 from connection import State, probe_account, probe_exit_ip
@@ -26,6 +30,8 @@ if TYPE_CHECKING:
 
 DISCORD_WEBHOOK_RE = re.compile(r"^https://(?:canary\.|ptb\.)?(?:discord|discordapp)\.com/api/webhooks/\d+/[\w-]+/?$")
 TOKEN_RE = re.compile(r"^\S{10,4096}$")
+LOGIN_TTL_S = 600          # tempo para concluir o cadastro depois do login na janela
+LOOPBACK_CLIENTS = ("127.0.0.1", "::1", "localhost")
 
 
 # ----------------------------------------------------------------- modelos
@@ -51,7 +57,15 @@ class OptionsIn(BaseModel):
     ball_restock_qty: int | None = Field(None, ge=1, le=100000)
 
 
+class LoginWindowIn(BaseModel):
+    """Onde está a janela do navegador com o painel (px CSS), para a janela do jogo abrir por cima."""
+    cx: float | None = Field(None, ge=-20000, le=20000)
+    cy: float | None = Field(None, ge=-20000, le=20000)
+    dpr: float | None = Field(None, ge=0.5, le=4)
+
+
 class ImportIn(BaseModel):
+    login_id: str | None = None        # sessão lida pela janela de login (fica só no servidor)
     text: str | None = None            # o que o bookmarklet/snippet copiou (ou o JSON do hello)
     nick: str | None = None            # alternativa: campos soltos
     token: str | None = None
@@ -190,12 +204,59 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
             return r
         return {"max": config.MAX_ACCOUNTS, "accounts": [_public(r) for r in store.list_accounts()]}
 
+    # --- login pela janela do jogo: a sessão lida fica aqui e só um código (login_id) vai ao painel
+    pending_logins: dict[str, tuple[dict, float]] = {}
+    login_lock = asyncio.Lock()
+
+    def _is_local(request: Request) -> bool:
+        return bool(request.client) and request.client.host in LOOPBACK_CLIENTS
+
+    @app.get("/api/login-window")
+    async def login_window_status(request: Request, tok: str | None = Query(None, alias="token")):
+        if (r := guard(request, tok)):
+            return r
+        return {"available": _is_local(request) and login_window.available()}
+
+    def _store_login(found: dict) -> str:
+        now = time.monotonic()
+        for k in [k for k, (_, exp) in pending_logins.items() if exp < now]:
+            pending_logins.pop(k, None)
+        login_id = secrets.token_urlsafe(16)
+        pending_logins[login_id] = (found, now + LOGIN_TTL_S)
+        return login_id
+
+    @app.post("/api/login-window")
+    async def login_window_open(request: Request, body: LoginWindowIn | None = None,
+                                tok: str | None = Query(None, alias="token")):
+        """Abre o login do jogo neste computador; devolve o nick e um código para cadastrar."""
+        if (r := guard(request, tok)):
+            return r
+        if not _is_local(request):
+            return JSONResponse({"error": "A janela de login só abre no computador onde o bot roda."}, status_code=400)
+        if login_lock.locked():
+            return JSONResponse({"error": "Já existe uma janela de login aberta."}, status_code=409)
+        async with login_lock:
+            try:
+                center = (body.cx, body.cy, body.dpr or 1.0) if body and body.cx is not None and body.cy is not None else None
+                found = await login_window.run(center=center)
+            except login_window.LoginError as e:
+                msg = {"closed": "A janela foi fechada antes de entrar na conta.",
+                       "timeout": "Tempo esgotado. Abra a janela e entre na conta de novo.",
+                       "unavailable": "O navegador embutido não está disponível neste computador."}.get(e.reason, "Falha no login.")
+                return JSONResponse({"error": msg, "reason": e.reason}, status_code=409 if e.reason == "closed" else 400)
+        return {"ok": True, "nick": found["nick"], "loginId": _store_login(found)}
+
     @app.post("/api/accounts/import")
     async def import_account(body: ImportIn, request: Request, tok: str | None = Query(None, alias="token")):
         if (r := guard(request, tok)):
             return r
         try:
-            if body.text:
+            if body.login_id:
+                got = pending_logins.get(body.login_id)
+                if not got or got[1] < time.monotonic():
+                    raise ValueError("O login expirou. Abra a janela do jogo e entre na conta de novo.")
+                creds = {"nick": got[0]["nick"], "token": got[0]["token"], "device_id": got[0]["dispositivo"]}
+            elif body.text:
                 creds = parse_import(body.text)
             else:
                 creds = {"nick": (body.nick or "").strip(), "token": (body.token or "").strip(),
@@ -225,6 +286,7 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
             if test.get("nick"):
                 data["nick"] = test["nick"]  # o jogo é a fonte da verdade (maiúsculas etc.)
         acc_id = manager.add(data)
+        pending_logins.pop(body.login_id or "", None)
         return {"ok": True, "account": _public(store.get_account(acc_id)), "test": test,
                 "generatedDevice": generated_device, "warnings": _warnings(creds, proxy, acc_id)}
 

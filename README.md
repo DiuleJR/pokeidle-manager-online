@@ -49,6 +49,10 @@ navegador), com um painel web para acompanhar e configurar tudo.
 
 ## Instalação
 
+**Windows, sem complicação:** baixe o `PokeIdleManager-Setup.exe` na
+[página de Releases](https://github.com/DiuleJR/pokeidle-manager-online/releases/latest). Ele já traz tudo, entra
+na conta pela janela do jogo e se atualiza sozinho. Detalhes em [INSTALACAO.md](INSTALACAO.md#jeito-mais-fácil-app-do-windows).
+
 Guia completo, passo a passo (Windows, Linux/macOS, Android/Termux e VPS), com solução dos problemas
 comuns: **[INSTALACAO.md](INSTALACAO.md)**.
 

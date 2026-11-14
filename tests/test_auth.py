@@ -176,3 +176,17 @@ def test_hunt_worker_is_confined_by_its_own_csp(store, tmp_path, monkeypatch):
     worker = c.get("/hunt-worker.js").headers["content-security-policy"]
     assert "pokeidle-gg.pages.dev" in worker and "'self'" not in worker   # não alcança a nossa API
     assert "'self'" in c.get("/").headers["content-security-policy"]       # o painel segue com a CSP normal
+
+
+def test_desktop_app_exposed_on_network_still_trusts_its_own_pc(store, tmp_path, monkeypatch):
+    """App do Windows escuta em 0.0.0.0 (Tailscale): o dono, no próprio PC, cria a senha sem código;
+    quem chega pela rede (IP do Tailscale/LAN) precisa do código."""
+    monkeypatch.setattr(AccountManager, "_spawn", lambda self, row: None)
+    mgr = AccountManager(store, Notifier(""), DailyStats(path=str(tmp_path / "d.json")))
+    app = create_app(mgr.connections, Auth(store, exposed=True, env_token="", desktop=True), manager=mgr, store=store)
+    own = TestClient(app, client=("127.0.0.1", 50000)).get("/api/auth/status").json()
+    assert own["needsCode"] is False
+    remote = TestClient(app, client=("100.101.102.103", 50000)).get("/api/auth/status").json()
+    assert remote["needsCode"] is True
+    via_proxy = TestClient(app, client=("127.0.0.1", 50000)).get("/api/auth/status", headers={"x-forwarded-for": "8.8.8.8"})
+    assert via_proxy.json()["needsCode"] is True                  # atrás de proxy não vale como "dono do PC"

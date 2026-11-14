@@ -266,7 +266,7 @@ function ProxyFields({ value, onChange, accountId, hasSavedPassword }: { value: 
 }
 
 // ------------------------------------------------------------------ adicionar conta
-type Method = "bookmarklet" | "console" | "manual";
+type Method = "janela" | "bookmarklet" | "console" | "manual";
 
 /** Passo a passo para copiar nick/token/dispositivo do jogo (bookmarklet ou console). */
 function CopyGuide({ method }: { method: "bookmarklet" | "console" }) {
@@ -305,6 +305,9 @@ function CopyGuide({ method }: { method: "bookmarklet" | "console" }) {
 
 function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [method, setMethod] = useState<Method>("bookmarklet");
+  const [canWindow, setCanWindow] = useState(false);
+  const [login, setLogin] = useState<{ id: string; nick: string } | null>(null);
+  const [opening, setOpening] = useState(false);
   const [text, setText] = useState("");
   const [manual, setManual] = useState({ nick: "", token: "", device: "" });
   const [proxy, setProxy] = useState<ProxyForm>(EMPTY_PROXY);
@@ -313,6 +316,31 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  useEffect(() => {
+    // A janela do jogo só existe quando o painel roda no próprio computador (app do Windows).
+    admin.loginWindowStatus().then((s) => {
+      setCanWindow(s.available);
+      if (s.available) setMethod("janela");
+    }).catch(() => {});
+  }, []);
+  const openWindow = async () => {
+    setOpening(true);
+    setError(null);
+    setFailed(null);
+    try {
+      // Centro da janela do navegador (px CSS): a janela do jogo abre centralizada sobre o painel.
+      const r = await admin.openLoginWindow({
+        cx: window.screenX + window.outerWidth / 2,
+        cy: window.screenY + window.outerHeight / 2,
+        dpr: window.devicePixelRatio || 1,
+      });
+      setLogin({ id: r.loginId, nick: r.nick });
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setOpening(false);
+    }
+  };
   const submit = async (skipTest: boolean) => {
     setBusy(true);
     setError(null);
@@ -320,7 +348,7 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
     try {
       const p = useProxy ? proxyInput(proxy) : null;
       if (useProxy && (!p || !p.port)) throw new Error("Preencha o host e a porta do proxy (ou desmarque a opção).");
-      const base = method === "manual" ? { nick: manual.nick, token: manual.token, device_id: manual.device } : { text };
+      const base = method === "janela" ? { login_id: login?.id } : method === "manual" ? { nick: manual.nick, token: manual.token, device_id: manual.device } : { text };
       const r = await admin.importAccount({ ...base, proxy: p, skip_test: skipTest });
       if (!r.ok) {
         setFailed(r.test?.detail || "O teste de conexão falhou.");
@@ -360,7 +388,7 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
     );
   }
 
-  const canSubmit = method === "manual" ? !!manual.nick && !!manual.token : !!parsePaste(text)?.token;
+  const canSubmit = method === "janela" ? !!login : method === "manual" ? !!manual.nick && !!manual.token : !!parsePaste(text)?.token;
   return (
     <Modal title="Adicionar conta" onClose={onClose} wide>
       <Notice tone="warn">
@@ -370,6 +398,7 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
       <div className="flex gap-1.5" role="tablist">
         {(
           [
+            ...(canWindow ? ([["janela", "Entrar com o jogo"]] as [Method, string][]) : []),
             ["bookmarklet", "Bookmarklet (1 clique)"],
             ["console", "Console (F12)"],
             ["manual", "Manual"],
@@ -381,9 +410,25 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
         ))}
       </div>
 
-      {method !== "manual" && <CopyGuide method={method} />}
+      {method === "janela" ? (
+        <div className="space-y-2.5">
+          <p className="text-sm text-mute">
+            Abre o jogo numa janela do painel. Entre na conta como de costume (e-mail, Discord ou Google): ao terminar, a janela fecha sozinha e a conta é lida.
+          </p>
+          {login ? (
+            <Notice tone="ok">
+              Conta <b>{login.nick}</b> lida. Falta só testar e salvar.
+            </Notice>
+          ) : null}
+          <button className="btn" data-active={!login} onClick={openWindow} disabled={opening || busy}>
+            {opening ? "Aguardando o login na janela…" : login ? "Entrar com outra conta" : "Abrir o jogo para entrar"}
+          </button>
+        </div>
+      ) : method !== "manual" ? (
+        <CopyGuide method={method} />
+      ) : null}
 
-      {method === "manual" ? (
+      {method === "janela" ? null : method === "manual" ? (
         <div className="space-y-2.5">
           <Labeled label="Nick">
             <input className="field w-full" value={manual.nick} onChange={(e) => setManual({ ...manual, nick: e.target.value })} autoComplete="off" />
@@ -406,7 +451,7 @@ function AddAccountDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
           />
         </Labeled>
       )}
-      {method !== "manual" && text.trim() && !parsePaste(text) && <Notice tone="error">Não reconheci esse formato. Cole o JSON copiado pelo favorito ou pelo console.</Notice>}
+      {method !== "manual" && method !== "janela" && text.trim() && !parsePaste(text) && <Notice tone="error">Não reconheci esse formato. Cole o JSON copiado pelo favorito ou pelo console.</Notice>}
 
       <div className="space-y-2.5 rounded-lg border border-line p-3">
         <Check2 checked={useProxy} onChange={setUseProxy}>

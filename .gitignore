@@ -33,3 +33,8 @@ data/
 # Ferramentas locais de IA (nao fazem parte do bot)
 skills-lock.json
 CLAUDE.local.md
+
+dist/
+build/
+*.spec
+dist_novo/

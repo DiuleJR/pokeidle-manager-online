@@ -28,16 +28,21 @@ LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
 
 async def amain() -> None:
-    load_dotenv()
+    desktop = os.getenv("POKEIDLE_DESKTOP") == "1"
+    # App do Windows: configuração só da própria pasta de dados; nunca puxa o .env de outro projeto.
+    load_dotenv(os.path.join(os.path.dirname(os.getenv("DATA_DIR", "")), ".env") if desktop else None)
+    if desktop:                         # Tailscale e rede local chegam pelo IP do PC: escuta em todas as interfaces
+        os.environ.setdefault("TELEMETRY_HOST", "0.0.0.0")      # mude em %LOCALAPPDATA%\PokeIdleManager\.env
     store = Store()
-    store.import_env_once()
+    if not desktop:
+        store.import_env_once()
 
     host = os.getenv("TELEMETRY_HOST", "127.0.0.1")
     port = int(os.getenv("TELEMETRY_PORT", "8080"))
     interval = float(os.getenv("TELEMETRY_INTERVAL_S", "1"))
     origins = [o.strip() for o in os.getenv("TELEMETRY_CORS_ORIGINS", "").split(",") if o.strip()]
     exposed = host not in LOOPBACK
-    auth = Auth(store, exposed=exposed)
+    auth = Auth(store, exposed=exposed, desktop=desktop)
 
     notifier = Notifier(store.get_setting("discord_webhook"))
     daily = DailyStats(report_hour=int(store.get_setting("report_hour") or 0),
@@ -78,6 +83,9 @@ def reset_password() -> None:
 
 
 def main() -> None:
+    if "--login-window" in sys.argv:        # o executável reaproveita a si mesmo para abrir a janela
+        import login_window
+        sys.exit(login_window.main())
     if "--reset-password" in sys.argv:
         reset_password()
         return

@@ -33,6 +33,9 @@ log = logging.getLogger("updater")
 REPO = "DiuleJR/pokeidle-manager-online"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 ASSET_NAME = "web_dist.zip"
+INSTALLER_NAME = "PokeIdleManager-Setup.exe"      # app do Windows: o instalador vai na Release
+MAX_INSTALLER_BYTES = 250 * 1024 * 1024
+FROZEN = bool(getattr(sys, "frozen", False))
 ASSET_PREFIX = f"https://github.com/{REPO}/releases/download/"
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +73,8 @@ class Updater:
         self.notes = ""
         self.url = ""
         self.asset_url = ""
+        self.installer_url = ""
+        self.installer_sha256 = ""
         self.checked_at: float | None = None
         self.error = ""
         self.step = ""          # o que a atualização está fazendo agora (vazio = nada)
@@ -79,10 +84,12 @@ class Updater:
     @property
     def available(self) -> bool:
         a, b = parse_version(self.latest or ""), parse_version(self.current)
-        return bool(a and b and a > b and self.asset_url)
+        return bool(a and b and a > b and (self.installer_url if FROZEN else self.asset_url))
 
     def git_reason(self) -> str:
         """Vazio se esta instalação pode se atualizar sozinha; senão, o motivo."""
+        if FROZEN:                      # app do Windows: atualiza pelo instalador da Release
+            return ""
         if not os.path.isdir(os.path.join(self.root, ".git")):
             return "Esta instalação não foi feita com git clone. Baixe a versão nova pela página da Release."
         if not shutil.which("git"):
@@ -137,6 +144,11 @@ class Updater:
         self.url = str(data.get("html_url") or "")
         # Sem o zip do dashboard a Release ainda está sendo preparada pelo workflow: não oferece.
         self.asset_url = url if url.startswith(ASSET_PREFIX) else ""
+        inst = next((a for a in data.get("assets") or [] if a.get("name") == INSTALLER_NAME), None) or {}
+        inst_url = str(inst.get("browser_download_url") or "")
+        self.installer_url = inst_url if inst_url.startswith(ASSET_PREFIX) else ""
+        digest = str(inst.get("digest") or "")           # "sha256:<hex>", fornecido pelo próprio GitHub
+        self.installer_sha256 = digest[7:].lower() if re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest) else ""
 
     async def run(self) -> None:
         """Checagem em segundo plano: 20 s depois de iniciar e depois a cada hora."""
@@ -205,6 +217,8 @@ class Updater:
         tag = f"v{self.latest}"
         if not TAG_RE.match(tag):
             raise UpdateError("Versão inválida.")
+        if FROZEN:
+            return await self._apply_installer()
         if await self._git("status", "--porcelain", "--untracked-files=no"):
             raise UpdateError("Há arquivos do projeto modificados nesta pasta. Salve ou desfaça as mudanças "
                               "(git status) antes de atualizar.")
@@ -238,6 +252,47 @@ class Updater:
         self.done_msg = (f"Atualizado para a versão {self.latest}. Feche e abra o bot de novo "
                          "(iniciar.bat / iniciar.sh) para usar a versão nova.")
         return {"ok": True, "restarting": False, "message": self.done_msg}
+
+    async def _apply_installer(self) -> dict[str, Any]:
+        """App do Windows: baixa o instalador da Release, confere e roda em silêncio. O instalador
+        fecha este programa, troca os arquivos (os dados ficam em %LOCALAPPDATA%) e abre de novo."""
+        import hashlib
+        import tempfile
+        if not self.installer_url.startswith(ASSET_PREFIX):
+            raise UpdateError("O instalador desta versão ainda não foi publicado. Tente de novo em alguns minutos.")
+        self.step = "Baixando a versão nova…"
+        sha, size = hashlib.sha256(), 0
+        folder = tempfile.mkdtemp(prefix="pokeidle-update-")
+        path = os.path.join(folder, INSTALLER_NAME)
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=600)) as s,                     s.get(self.installer_url, headers={"User-Agent": f"pokeidle-manager/{self.current}"}) as r:
+                if r.status != 200:
+                    raise UpdateError(f"Não consegui baixar a atualização (HTTP {r.status}).")
+                with open(path, "wb") as f:
+                    async for chunk in r.content.iter_chunked(256 * 1024):
+                        size += len(chunk)
+                        if size > MAX_INSTALLER_BYTES:
+                            raise UpdateError("O instalador é maior do que o esperado.")
+                        sha.update(chunk)
+                        f.write(chunk)
+        except UpdateError:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise
+        except Exception as e:  # noqa: BLE001
+            shutil.rmtree(folder, ignore_errors=True)
+            raise UpdateError(f"Não consegui baixar a atualização ({type(e).__name__}).") from None
+        if self.installer_sha256 and sha.hexdigest() != self.installer_sha256:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise UpdateError("O arquivo baixado não confere com o publicado. Nada foi instalado.")
+        self.step = "Instalando…"
+        import subprocess
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        subprocess.Popen([path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+                         creationflags=flags, close_fds=True)
+        log.info("Instalador da versão %s iniciado; este programa vai fechar.", self.latest)
+        self.done_msg = f"Instalando a versão {self.latest}. O programa fecha e abre de novo sozinho."
+        asyncio.get_running_loop().call_later(2.0, lambda: (logging.shutdown(), os._exit(0)))
+        return {"ok": True, "restarting": True, "message": self.done_msg}
 
     def _schedule_restart(self) -> None:
         def _exit() -> None:

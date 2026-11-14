@@ -167,6 +167,14 @@ function installMockApi(accs: AccountSnapshot[]) {
       await wait();
       return json({ ok: true, confirmed: true, claim: { degrau: 7, premios: [{ trilha: "free", tipo: "coins", qtd: 1_000_000 }, { trilha: "free", tipo: "boost", boost: "loot", horas: 1 }] } });
     }
+    if (path === "/api/accounts" && (!init?.method || init.method === "GET")) return json({ max: 4, accounts: [] });
+    if (path === "/api/login-window") {
+      if (init?.method === "POST") {
+        await wait();
+        return json({ ok: true, nick: "Ash_Ketchum", loginId: "mock-login" });
+      }
+      return json({ available: true });
+    }
     const tierRoute = path.match(/^\/api\/accounts\/(\d+)\/outland-tier$/);
     if (tierRoute && init?.method === "POST") {
       await wait();
