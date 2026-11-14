@@ -12,6 +12,8 @@ Nunca expõe token/proxy/device_id das contas. As rotas de gestão ficam em admi
 """
 from __future__ import annotations
 
+from session_stats import show_session_shinies
+
 import asyncio
 import json
 import os
@@ -161,6 +163,8 @@ def account_snapshot(c: "AccountConnection") -> dict:
     s = c.hunt.session
     inv = c.inventory
     summary = inv.pokemon_summary()
+    slug = s.slug if s else est.get("huntSlug")
+    show_shinies = show_session_shinies(c.hunts, slug)
     return {
         "id": f"acc{c.acc.index}",
         "nick": c.acc.nick,
@@ -189,6 +193,7 @@ def account_snapshot(c: "AccountConnection") -> dict:
         "session": {
             "startedAt": int(c.session_started * 1000) if c.session_started else None,
             "items": dict(c.session_items.gained),
+            "shinies": {"seen": c.shinies.seen, "captured": c.shinies.captured} if show_shinies else None,
         },
         "equipped": equipped_rows(c),
         "gold": est.get("gold") or 0,

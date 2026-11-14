@@ -33,6 +33,7 @@ export interface EquippedItem {
 export interface SessionInfo {
   startedAt: number | null;
   items: { boss: number; key: number; shinyStone: number; bike: number };
+  shinies?: { seen: number; captured: number } | null;
 }
 
 export interface AccountSnapshot {
