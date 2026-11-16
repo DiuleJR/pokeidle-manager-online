@@ -111,6 +111,7 @@ export interface Atlas {
   cell: number;
   cols: number;
   rows: number;
+  version?: string;
   image: string;
   slots: Record<string, [number, number]>;
 }
@@ -119,16 +120,25 @@ let atlas: Atlas | null = null;
 let atlasPromise: Promise<void> | null = null;
 const atlasListeners = new Set<() => void>();
 
-function loadAtlas() {
-  atlasPromise ??= fetch(apiUrl("/api/sprite-atlas"))
-    .then((r) => r.json())
+const ATLAS_REFRESH_MS = 5 * 60_000;
+
+function fetchAtlas(): Promise<void> {
+  return fetch(apiUrl("/api/sprite-atlas"), { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error("atlas"))))
     .then((j: Atlas) => {
+      if (atlas && j.version && j.version === atlas.version) return; // nada novo: não redesenha
       atlas = j;
       atlasListeners.forEach((l) => l());
-    })
-    .catch(() => {
-      atlasPromise = null; // tenta de novo na próxima montagem
     });
+}
+
+function loadAtlas() {
+  if (atlasPromise) return;
+  atlasPromise = fetchAtlas().catch(() => {
+    atlasPromise = null; // tenta de novo na próxima montagem
+  });
+  // O jogo troca o atlas a cada atualização: sem isto, o painel aberto fica com retratos trocados até recarregar.
+  setInterval(() => void fetchAtlas().catch(() => {}), ATLAS_REFRESH_MS);
 }
 
 /** Índice de retratos (looktype -> célula do atlas do jogo), carregado uma vez. */

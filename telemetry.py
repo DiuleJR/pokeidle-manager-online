@@ -111,6 +111,20 @@ def pokemon_rows(c: "AccountConnection") -> list[dict]:
     return rows
 
 
+ATLAS_TTL_S = 300   # curto: o jogo troca o atlas a cada atualização e posições velhas + imagem nova embaralham os retratos
+
+
+def atlas_payload(j: dict) -> dict:
+    """Índice de retratos do jogo. A imagem sempre leva `?v=<versão>`: sem isso o navegador reaproveita a
+    imagem antiga (cache de horas) com as posições novas."""
+    image = j.get("image") or "/assets/site/assets/maps/marker-atlas.png"
+    version = str(j.get("version") or "")
+    if version and "v=" not in image:
+        image += ("&" if "?" in image else "?") + "v=" + version
+    return {"cell": j.get("cell", 64), "cols": j.get("cols", 16), "rows": j.get("rows", 1),
+            "version": version, "image": SITE + image, "slots": j.get("slots", {})}
+
+
 def equipped_rows(c: "AccountConnection") -> dict:
     """Poção e Ball equipadas no momento (com quantidade), p/ os cards do dashboard."""
     from shop import KNOWN_POTION_IDS  # evita ciclo em import-time
@@ -120,9 +134,9 @@ def equipped_rows(c: "AccountConnection") -> dict:
     auto = est.get("automation") or {}
 
     held = pk.get("heldItemId") if pk else None
-    potion_id = c.acc.potion_id or (held if held in KNOWN_POTION_IDS else None)
-    if potion_id is None:
-        potion_id = next((i for i in auto.get("potionIds", []) if i in KNOWN_POTION_IDS), None)
+    # A automação do jogo é a verdade (o jogador pode trocar a poção lá): só cai na escolha guardada se ela vier vazia.
+    potion_id = next((i for i in auto.get("potionIds", []) if i in KNOWN_POTION_IDS), None)
+    potion_id = potion_id or c.acc.potion_id or (held if held in KNOWN_POTION_IDS else None)
     potion = None
     if potion_id is not None:
         nos = c.itens_nossos.get(potion_id) or {}
@@ -319,15 +333,17 @@ def create_app(
         import aiohttp
 
         if atlas_cache.get("exp", 0) < time.time():
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
-                async with s.get(f"{SITE}/assets/site/assets/maps/marker-atlas.json") as r:
-                    j = json.loads(await r.text())
-            atlas_cache.update(exp=time.time() + 3600, data={
-                "cell": j.get("cell", 64), "cols": j.get("cols", 16), "rows": j.get("rows", 1),
-                "image": SITE + j.get("image", "/assets/site/assets/maps/marker-atlas.png"),
-                "slots": j.get("slots", {}),
-            })
-        return JSONResponse(atlas_cache["data"], headers={"Cache-Control": "max-age=3600"})
+            try:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+                    async with s.get(f"{SITE}/assets/site/assets/maps/marker-atlas.json") as r:
+                        j = json.loads(await r.text())
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                if "data" not in atlas_cache:
+                    return JSONResponse({"error": "atlas indisponível"}, status_code=502)
+                atlas_cache["exp"] = time.time() + 60   # mantém o último bom e tenta de novo logo
+            else:
+                atlas_cache.update(exp=time.time() + ATLAS_TTL_S, data=atlas_payload(j))
+        return JSONResponse(atlas_cache["data"], headers={"Cache-Control": f"max-age={ATLAS_TTL_S}"})
 
     @app.get("/api/pokemons")
     async def pokemons(request: Request, tok: str | None = Query(None, alias="token"),
