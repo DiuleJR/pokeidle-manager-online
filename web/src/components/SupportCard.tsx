@@ -120,48 +120,30 @@ function useTypewriter(text: string) {
   return { shown: text.slice(0, n), done: n >= text.length };
 }
 
-/** Card lateral (telas largas): um para o Pix, outro para o USDT. A fala troca com o tempo. */
-export function SupportSide({ kind }: { kind: Kind }) {
+/** Cafezinho pequeno para a coluna lateral (telas largas): Pix e USDT juntos, sem ocupar a coluna toda. */
+export function CoffeeMini() {
   const [qr, setQr] = useState(false);
-  const [i, setI] = useState(kind === "pix" ? 0 : 2);
-  const pix = kind === "pix";
-  useEffect(() => {
-    const id = setInterval(() => setI((v) => (v + 1) % MESSAGES.length), 15_000);
-    return () => clearInterval(id);
-  }, []);
   return (
-    <aside
-      aria-label={pix ? "Apoie com Pix" : "Apoie com USDT"}
-      className="card fixed top-32 z-10 hidden w-[260px] flex-col items-center gap-2.5 p-4 text-center min-[1860px]:flex"
-      style={pix ? { left: "calc(50vw - 640px - 276px)" } : { left: "calc(50vw + 640px + 16px)" }}
-    >
-      <Mascot flip={!pix} />
-      <div className="flex items-center gap-1.5 text-sm font-extrabold uppercase tracking-wide text-poke-gold">
-        <Coffee className="size-4" aria-hidden /> Me pague um café
+    <section aria-label="Apoie o projeto" className="card flex flex-col gap-2.5 p-3">
+      <div className="flex items-center gap-2.5">
+        <Mascot height={48} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-poke-gold">
+            <Coffee className="size-3.5 shrink-0" aria-hidden /> Me pague um café
+          </div>
+          <p className="mt-0.5 text-[11px] leading-snug text-mute">Grátis, sem anúncios. Se ajudou, retribua.</p>
+        </div>
       </div>
-      <div className="flex min-h-[4.5rem] items-center">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.p
-            key={i}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.25 }}
-            className="text-xs leading-snug text-mute"
-          >
-            {MESSAGES[i]}
-          </motion.p>
-        </AnimatePresence>
+      {qr && <img src="/support/pix-qr.png" alt="QR Code do Pix" className="mx-auto size-36 rounded-lg bg-white p-1.5" />}
+      <div className="grid grid-cols-2 gap-2">
+        <CopyButton kind="pix" label="Pix" />
+        <CopyButton kind="usdt" label="USDT" />
       </div>
-      {pix && qr && <img src="/support/pix-qr.png" alt="QR Code do Pix" className="size-40 rounded-lg bg-white p-1.5" />}
-      <CopyButton kind={kind} label={pix ? "Copiar Pix copia e cola" : "Copiar endereço USDT"} />
-      {pix && (
-        <button type="button" onClick={() => setQr((v) => !v)} className="btn w-full">
-          <QrCode className="size-4" aria-hidden /> {qr ? "Ocultar QR Code" : "Mostrar QR Code"}
-        </button>
-      )}
-      {!pix && <p className="text-[11px] leading-snug text-mute">Somente rede Solana. Outras redes podem perder o valor.</p>}
-    </aside>
+      <button type="button" onClick={() => setQr((v) => !v)} className="btn w-full">
+        <QrCode className="size-4 shrink-0" aria-hidden /> {qr ? "Ocultar QR Code" : "QR Code do Pix"}
+      </button>
+      <p className="text-[10px] leading-snug text-mute">USDT somente na rede Solana. Outras redes podem perder o valor.</p>
+    </section>
   );
 }
 
@@ -175,7 +157,7 @@ export function SupportStrip() {
       onClick={() => {
         location.hash = "config"; // a seção "Apoie o projeto" fica no topo de Configurações
       }}
-      className="mx-auto mt-3 flex w-full max-w-7xl items-center justify-center gap-2 rounded-xl border border-line bg-tile/60 px-3 py-2 text-xs font-semibold text-mute transition-colors hover:border-edge/70 hover:text-poke-gold min-[1860px]:hidden sm:mt-4 sm:text-sm"
+      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-tile/60 px-3 py-2 text-xs font-semibold text-mute transition-colors hover:border-edge/70 hover:text-poke-gold sm:text-sm"
     >
       <Coffee className="size-4 shrink-0 text-poke-gold" aria-hidden /> Gostando do painel? Apoie o projeto
     </button>
@@ -271,7 +253,7 @@ export function SupportPopup({ disabled = false }: { disabled?: boolean }) {
           onPointerLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}
           onBlurCapture={() => setPaused(false)}
-          className="fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-end justify-end gap-1 min-[1860px]:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[400px]"
+          className="fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-end justify-end gap-1 min-[1800px]:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[400px]"
         >
           {/* Caixa de diálogo estilo jogo */}
           <div className="card relative min-w-0 flex-1 p-3 pr-3.5 sm:p-3.5" style={{ borderRadius: 14 }}>

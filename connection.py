@@ -190,6 +190,9 @@ class AccountConnection:
         self.last_reason = ""             # último motivo de queda/pausa, para o painel
         self.on_auth_status = None        # callback(acc_id, status, detail): painel/banco
         self.on_token_renewed = None      # callback(acc_id, novo_token)
+        self.on_chat = None               # callback(conn, frame): frames de chat (ChatHub)
+        self.on_online = None             # async callback(conn): a conta acabou de ficar online
+        self.chat_mute_until = 0.0        # ms epoch: mute de chat aplicado pelo jogo
         self.exit_ip = "?"
         self._last_frame = time.monotonic()
         self._no_proxy = account.proxy is None
@@ -393,6 +396,11 @@ class AccountConnection:
                 self.market.bind(ws)
                 if self.acc.hunt_slug and self.acc.hunt_slug != self.estado.get("huntSlug"):
                     await self.hunt.select_hunt(self.acc.hunt_slug)
+                if self.on_online:
+                    try:
+                        await self.on_online(self)
+                    except Exception:           # o chat é acessório: nunca derruba a conta
+                        log.exception("[%s] falha ao preparar o chat", self.acc.name)
 
                 # Tarefas de background rodam em paralelo só enquanto a conexão
                 # viver; quando a sessão acaba (com ou sem erro), são canceladas.
@@ -438,6 +446,8 @@ class AccountConnection:
                     continue
                 if msg.get("t") == "passe":
                     self._on_pass(msg)
+                if self.on_chat and str(msg.get("t", "")).startswith("chat"):
+                    self.on_chat(self, msg)
                 self._track_shinies(msg)
                 self.hunt.handle_frame(msg)
                 self.balls.handle_frame(msg)
@@ -605,6 +615,12 @@ class AccountConnection:
     @property
     def can_send(self) -> bool:
         return self.state == State.ONLINE and self.hunt._ws is not None
+
+    async def send_frame(self, frame: dict) -> None:
+        """Manda um frame qualquer ao jogo por esta conta (só online)."""
+        if not self.can_send:
+            raise RuntimeError("conta offline")
+        await self.hunt._ws.send(json.dumps(frame, ensure_ascii=False))
 
     async def set_automation(self, patch: dict) -> None:
         """auto.set (confirmado em conta real): clona a automação atual inteira, troca só `patch` e envia.

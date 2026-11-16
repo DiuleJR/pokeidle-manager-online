@@ -9,6 +9,7 @@ import asyncio
 import logging
 
 import config
+from chat import ChatHub
 from config import Settings, build_account_config
 from connection import AccountConnection
 from market_service import MarketService
@@ -32,6 +33,7 @@ class AccountManager:
         self._tasks: dict[int, asyncio.Task] = {}
         self._codes = config.parse_close_codes()
         self.market = MarketService(self, store, notifier)
+        self.chat = ChatHub()
 
     # ------------------------------------------------------------ estado
     def settings(self) -> Settings:
@@ -57,6 +59,8 @@ class AccountManager:
         conn = AccountConnection(acc, self.settings(), self.notifier, self.daily)
         conn.on_auth_status = self._on_auth_status
         conn.on_token_renewed = self._on_token_renewed
+        conn.on_chat = self.chat.handle_frame
+        conn.on_online = self.chat.on_online
         self._conns[acc.index] = conn
         self._tasks[acc.index] = asyncio.create_task(conn.run_forever(), name=f"acc{acc.index}")
 

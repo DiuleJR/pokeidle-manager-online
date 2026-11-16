@@ -116,6 +116,89 @@
   }
 }
 
+/* Largura do painel central. A partir de 1800px ele cede espaço às colunas laterais (Comunidade e Chat):
+   em 100% de zoom num monitor Full HD ele fica com ~1160px; com mais tela, volta aos 1280px de sempre. */
+.frame-w {
+  max-width: 80rem;
+}
+@media (min-width: 1800px) {
+  .frame-w {
+    max-width: min(80rem, calc(100vw - 760px));
+  }
+}
+
+/* Chat: as mesmas cores do chat do jogo (texto amarelo, nick por cargo, tag de guild colorida, menções em destaque). */
+.cm-list {
+  background:
+    radial-gradient(120% 160% at 88% -30%, rgba(10, 200, 185, 0.08), transparent 55%),
+    linear-gradient(180deg, #0a141c, #060c14);
+}
+.cm {
+  --cm-fala: #ffff00;
+  --cm-hora: #ffec78;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--cm-fala);
+  word-break: break-word;
+}
+.cm .cm-t { color: var(--cm-hora); opacity: 0.55; font-weight: 600; margin-right: 5px; font-variant-numeric: tabular-nums; }
+.cm .cm-de { font-weight: 700; }
+.cm .cm-nv { opacity: 0.6; font-weight: 600; }
+.cm .cm-guild {
+  color: var(--gt, #ffd166);
+  font-weight: 800;
+  margin-right: 3px;
+  text-shadow: -1px -1px 0 #14040a, 1px -1px 0 #14040a, -1px 1px 0 #14040a, 1px 1px 0 #14040a;
+}
+.cm .cm-guild::before { content: "["; opacity: 0.65; }
+.cm .cm-guild::after { content: "]"; opacity: 0.65; }
+.cm.vip .cm-de { color: #7fd4ff; font-weight: 800; text-shadow: 0 0 6px rgba(127, 212, 255, 0.85), 0 0 2px #7fd4ff; }
+.cm.tutor .cm-de { color: #4dff88; font-weight: 800; text-shadow: 0 0 6px rgba(77, 255, 136, 0.85), 0 0 2px #4dff88; }
+.cm.moderador .cm-de { color: #4dff88; font-weight: 800; }
+.cm.helper .cm-de { color: #ffb6c8; font-weight: 800; }
+.cm.streamer .cm-de { color: #b47dff; font-weight: 800; }
+.cm.admin .cm-de { color: #ff4d4d; font-weight: 800; }
+.cm.admin .cm-tx { color: #b86a6a; }
+.cm.anuncio .cm-de { color: #5fd48a; font-weight: 800; text-shadow: 0 0 8px rgba(77, 255, 136, 0.6), 0 0 2px #4dff88; }
+.cm.anuncio .cm-tx { color: #7fd4a0; font-weight: 700; text-shadow: 0 0 10px rgba(77, 255, 136, 0.27); }
+.cm.compartilhar .cm-tx { color: #e8622a; font-weight: 700; }
+.cm.shiny .cm-de { color: #c89bff; font-weight: 800; text-shadow: 0 0 8px rgba(155, 89, 214, 0.6), 0 0 2px #b87cff; }
+.cm.shiny .cm-tx { color: #d4b3ff; font-weight: 700; text-shadow: 0 0 10px rgba(155, 89, 214, 0.27); }
+.cm.rare .cm-tx { color: #ffd166; font-weight: 800; text-shadow: 0 0 10px rgba(255, 179, 0, 0.45), 0 0 2px #ffb300; }
+/* Anúncio do mercado: cartão dourado com a oferta em destaque. */
+.cm.ad {
+  margin: 4px 0;
+  padding: 6px 8px 7px 10px;
+  border-radius: 6px;
+  background: linear-gradient(100deg, rgba(255, 159, 28, 0.24) 0%, rgba(255, 209, 102, 0.14) 50%, rgba(255, 209, 102, 0.05) 100%);
+  box-shadow: inset 3px 0 0 #ffb300, inset 0 0 0 1px rgba(255, 179, 0, 0.32), 0 0 12px rgba(255, 159, 28, 0.14);
+}
+.cm.ad .cm-de { color: #ffd166; font-weight: 800; text-shadow: 0 0 8px rgba(255, 179, 0, 0.6), 0 0 2px #ffb300; }
+.cm.ad .cm-tx { color: #ffe9b8; font-weight: 700; }
+.cm .cm-ad-nome { color: #fff; font-weight: 800; }
+.cm .cm-ad-preco { color: #ffd166; font-weight: 800; white-space: nowrap; }
+.cm .cm-ad-preco.gemas { color: #ff7ac8; }
+/* Menções: @alguém em ciano; @uma das suas contas em dourado, e a linha inteira ganha uma faixa. */
+.cm .cm-menc {
+  color: #5fe6db;
+  font-weight: 800;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(10, 200, 185, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(10, 200, 185, 0.25);
+}
+.cm .cm-menc.eu { color: #17110a; background: #ffd76a; box-shadow: 0 0 8px rgba(255, 215, 106, 0.35); text-shadow: none; }
+.cm.cm-para-mim {
+  margin: 0 -5px 0 -8px;
+  padding: 2px 5px;
+  border-left: 3px solid #ffd76a;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(90deg, rgba(255, 215, 106, 0.19), rgba(255, 215, 106, 0.07) 55%, transparent);
+}
+.cm a.cm-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+.cm a.cm-link:hover { text-decoration-thickness: 2px; }
+
 /* Mercado no celular: alvos de toque de pelo menos 40px (só em tela de toque, só nesta aba). */
 @media (pointer: coarse) {
   .mkt .btn,

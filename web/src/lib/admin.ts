@@ -109,7 +109,10 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
   });
   const j = await r.json().catch(() => null);
   if (r.status === 401) throw new AuthError("Chave do painel inválida");
-  if (!r.ok) throw new Error(j?.error || (Array.isArray(j?.detail) ? "Dados inválidos" : `HTTP ${r.status}`));
+  if (!r.ok) {
+    // `body` leva o JSON do erro inteiro (ex.: `code` e `wait` do chat) para quem precisar além da mensagem.
+    throw Object.assign(new Error(j?.error || (Array.isArray(j?.detail) ? "Dados inválidos" : `HTTP ${r.status}`)), { body: j });
+  }
   return j as T;
 }
 

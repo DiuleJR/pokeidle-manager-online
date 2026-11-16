@@ -90,6 +90,39 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
   setInterval(tick, 1000);
 }
 
+// ------------------------------------------------------------ chat de mentira (modo de demonstração)
+type ChatEvent = { type: string; [k: string]: unknown };
+let chatEmit: ((ev: ChatEvent) => void) | null = null;
+let chatSeq = 1000;
+let lastSendAt = 0;
+const mockMsg = (canal: string, de: string, nivel: number | null, text: string, kind = "msg", agoMin = 0, extra: Record<string, unknown> = {}) => ({
+  id: ++chatSeq, ts: Date.now() - agoMin * 60_000, canal, de, nivel, cargo: null, guild: null, guildColor: null, ad: null, kind, text, ...extra,
+});
+
+export function startMockChat(emit: (ev: ChatEvent) => void) {
+  chatEmit = emit;
+  const seed = {
+    mundo: [
+      mockMsg("mundo", "Vanz1n", 539, "brabo, bater em área ajuda mt", "msg", 12, { cargo: "vip", guild: "DL", guildColor: "#4dd0ff" }),
+      mockMsg("mundo", "burnato", 4157, "Dúvidas onde farmar? pokeidleguide.io/#hunt Acesse aqui e informe seu pokemon!", "msg", 11, { cargo: "helper", guild: "TFT", guildColor: "#ff9f43" }),
+      mockMsg("mundo", "Wakewakee", 1901, "⚔️ Derrotei 31.216 Riolu, ✅ capturei 755, ✨ vi 6 shinys e ✨ capturei 0 shinys!", "msg", 10, { cargo: "compartilhar" }),
+      mockMsg("mundo", "Diule_JR", 1306, "clk", "msg", 9, { guild: "FON", guildColor: "#6fd47c" }),
+      mockMsg("mundo", "JalyTorey", 3312, "", "ad", 8, { cargo: "anuncio", ad: { qtd: 1, nome: "Blastoise Nv 80", preco: "450", moeda: "gemas" } }),
+      mockMsg("mundo", "Dubas", 2944, "", "ad", 7, { cargo: "anuncio", ad: { qtd: 3, nome: "Rare Candy", preco: "100.000", moeda: "gold" } }),
+      mockMsg("mundo", "✨ Shiny", null, "✨ Luskashi33 capturou um Gengar shiny!", "shiny", 5, { cargo: "shiny" }),
+      mockMsg("mundo", "🏷️ Tag IDLE", null, "🏷️ O jogador Mhynx resgatou 5 diamantes utilizando a TAG IDLE no Discord, venha receber também!", "msg", 4, { cargo: "anuncio" }),
+      mockMsg("mundo", "Noyan", 257, "@Treinador1 saquei, vlw", "msg", 2, { guild: "DL", guildColor: "#4dd0ff" }),
+      mockMsg("mundo", "Syfras999", 2110, "@junitsu bora trocar aquela Rare Candy?", "msg", 1),
+    ],
+    comercio: [mockMsg("comercio", "Dubas", 2944, "vendo Sun Stone 69k cada, chama no privado", "msg", 5), mockMsg("comercio", "Ana", 1200, "compro Leaf Stone até 49k", "msg", 3)],
+    duvidas: [mockMsg("duvidas", "Novato", 45, "como eu troco de hunt quando está em combate?", "msg", 7)],
+  };
+  emit({ type: "init", messages: seed });
+  const pool = ["alguém sabe quando abre a próxima raid?", "boa noite, treinadores", "vendi meu Dragonite por 30k", "esse mapa de Outland tá rendendo muito", "compro Revive em quantidade"];
+  let n = 0;
+  setInterval(() => emit({ type: "chat", msg: mockMsg("mundo", ["Pedro", "Marina", "Kaue"][n % 3], 500 + n * 13, pool[n++ % pool.length]) }), 9000);
+}
+
 /** Simula as rotas de ação do backend (equipar, caçar, mapa) para o modo de dados falsos. */
 function installMockApi(accs: AccountSnapshot[]) {
   const SPECIES = [
@@ -153,6 +186,17 @@ function installMockApi(accs: AccountSnapshot[]) {
       return json({ ts: Date.now(), days: 7, online: [1], items: [it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
     }
     if (path === "/api/creatures") return json(creatures);
+    if (path === "/api/community") return json({ url: "https://discord.gg/pFVashEjtH", name: "Pokeidle Manager", online: 8, members: 32 });
+    if (path === "/api/chat/send" && init?.method === "POST") {
+      await wait();
+      const b = JSON.parse(String(init.body)) as { account: number; canal: string; texto: string };
+      if (Date.now() - lastSendAt < 3000) return json({ error: "Calma: aguarde 3 s para enviar de novo.", code: "rate", wait: 3 }, 429);
+      if (/https?:\/\/|www\./i.test(b.texto)) return json({ error: "Links não são permitidos no chat.", code: "link", wait: 0 }, 400);
+      lastSendAt = Date.now();
+      const a = accs[b.account - 1];
+      chatEmit?.({ type: "chat", msg: mockMsg(b.canal, a?.nick ?? "Você", a?.level ?? 1, b.texto) });
+      return json({ ok: true });
+    }
     const sheetM = path.match(/^\/api\/accounts\/(\d+)\/sheet$/);
     if (sheetM) {
       await wait();

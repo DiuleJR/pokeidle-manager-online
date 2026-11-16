@@ -399,6 +399,8 @@ def create_app(
         register_market_routes(app, manager, store, auth)
         from actions_api import register_action_routes
         register_action_routes(app, manager, store, auth)
+        from chat_api import register_chat_routes
+        register_chat_routes(app, manager, auth)
     if updater is not None:
         from updater import register_update_routes
         register_update_routes(app, updater, auth)
