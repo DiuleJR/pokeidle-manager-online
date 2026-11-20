@@ -76,56 +76,108 @@ function ChartCard({ title, hint, children }: { title: string; hint: string; chi
   );
 }
 
+/** "03h às 04h" (e o dia, quando não é hoje) a partir da chave "AAAA-MM-DD HH:00" em horário de Brasília. */
+const hourRange = (k: string) => {
+  const h = Number(k.slice(11, 13));
+  return `${k.slice(8, 10)}/${k.slice(5, 7)}, ${String(h).padStart(2, "0")}h às ${String((h + 1) % 24).padStart(2, "0")}h`;
+};
+
+/** Valor vendido a cada hora nas últimas 24 horas. Toque numa barra para ver os números daquela hora. */
 function VolumeChart({ stats }: { stats: MarketStats }) {
   const data = useMemo(() => fill(stats.series, stats.now), [stats.series, stats.now]);
   const [pick, setPick] = useState<number | null>(null);
+  const unit = stats.moeda === "orb" ? "Gemas" : "Gold";
+  const total = data.reduce((s, b) => s + b.volume, 0);
+  const sales = data.reduce((s, b) => s + b.sales, 0);
   const max = Math.max(...data.map((b) => b.volume), 1);
-  const W = 600;
-  const H = 140;
-  const gap = 4;
-  const bw = (W - gap * 23) / 24;
-  const sel = pick != null ? data[pick] : null;
+  const best = data.reduce((a, b) => (b.volume > a.volume ? b : a));
+  const startedAt = stats.coverage.first;
+  const collectedFor = startedAt ? stats.now - startedAt : 0;
+  const partial = collectedFor > 0 && collectedFor < 24 * 3_600_000;
+  const hourStart = (k: string) => Date.parse(`${k.replace(" ", "T")}:00-03:00`);
+  const shown = pick != null ? data[pick] : best;
+  const labelAt = new Set([0, 6, 12, 18, 23]);
+  if (!total) return <p className="text-sm text-mute">Nenhuma venda em {unit} nas últimas 24 horas.</p>;
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full touch-manipulation" role="img" aria-label={`Valor vendido por hora nas últimas 24 horas`}>
-        {[0.25, 0.5, 0.75].map((t) => (
-          <line key={t} x1={0} x2={W} y1={H * t} y2={H * t} stroke={GRID} strokeWidth="1" />
-        ))}
-        {data.map((b, i) => {
-          const x = i * (bw + gap);
-          const hi = (b.itemVolume / max) * (H - 4);
-          const hp = (b.pokemonVolume / max) * (H - 4);
-          return (
-            <g key={b.k} onMouseEnter={() => setPick(i)} onClick={() => setPick(i)} opacity={pick == null || pick === i ? 1 : 0.5}>
-              <rect x={x - gap / 2} y={0} width={bw + gap} height={H} fill="transparent" />
-              <rect x={x} y={H - hi} width={bw} height={Math.max(hi, 0)} fill={BLUE} rx="1.5" />
-              <rect x={x} y={H - hi - hp} width={bw} height={Math.max(hp, 0)} fill={GOLD} rx="1.5" />
-            </g>
-          );
-        })}
-      </svg>
-      <div className="mt-1 flex justify-between text-[11px] text-mute">
-        {[0, 6, 12, 18, 23].map((i) => (
-          <span key={i}>{dayLabel(data[i].k)}</span>
-        ))}
-      </div>
-      <p className="mt-2 min-h-8 text-xs text-mute" aria-live="polite">
-        {sel ? (
-          <>
-            <b className="text-fg">{dayTitle(sel.k)}</b> · {fmtInt(sel.sales)} vendas · <Money v={sel.volume} moeda={stats.moeda} short />
-          </>
-        ) : (
-          "Toque numa barra para ver os números daquela hora."
-        )}
+    <div className="space-y-3">
+      <p className="text-sm">
+        Nas últimas 24 horas foram vendidos <b className="text-poke-gold"><Money v={total} moeda={stats.moeda} short /></b> em <b className="tnum">{fmtInt(sales)}</b> vendas.
+        <span className="text-mute"> A hora mais forte foi {String(Number(best.k.slice(11, 13))).padStart(2, "0")}h.</span>
       </p>
-      <div className="flex gap-4 text-xs text-mute">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm" style={{ background: BLUE }} /> Itens
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm" style={{ background: GOLD }} /> Pokémon
-        </span>
+
+      <div>
+        <div className="flex gap-1.5">
+          {/* Escala: o maior valor e a metade dele, numa coluna própria para não ficar sob as barras */}
+          <div className="tnum relative w-9 shrink-0 text-right text-[10px] leading-none text-mute" aria-hidden>
+            <span className="absolute right-0 top-0">{fmtShort(max)}</span>
+            <span className="absolute right-0 top-1/2 -translate-y-1/2">{fmtShort(max / 2)}</span>
+          </div>
+          <div className="relative min-w-0 flex-1">
+            {[0, 50, 100].map((p) => (
+              <div key={p} className="pointer-events-none absolute inset-x-0 border-t border-line" style={{ top: `${p}%` }} />
+            ))}
+            <div className="relative flex h-40 items-stretch gap-[3px] sm:h-48" role="group" aria-label={`Valor vendido por hora em ${unit}`}>
+              {data.map((b, i) => {
+                const empty = startedAt != null && hourStart(b.k) + 3_600_000 <= startedAt;   // antes de o painel começar a coletar
+                return (
+                  <button
+                    key={b.k}
+                    type="button"
+                    onClick={() => setPick(pick === i ? null : i)}
+                    onMouseEnter={() => setPick(i)}
+                    onFocus={() => setPick(i)}
+                    aria-label={`${hourRange(b.k)}: ${fmtInt(b.sales)} vendas, ${fmtInt(b.volume)} ${unit}`}
+                    aria-pressed={pick === i}
+                    className="relative flex min-w-0 flex-1 flex-col-reverse rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-edge"
+                  >
+                    {empty ? (
+                      <span className="block w-full rounded-sm bg-line/60" style={{ height: 3 }} title="Antes de o painel começar a coletar" />
+                    ) : (
+                      <>
+                        <span className="block w-full" style={{ height: `${(b.itemVolume / max) * 100}%`, background: BLUE, opacity: pick != null && pick !== i ? 0.45 : 1 }} />
+                        <span className="block w-full rounded-t-sm" style={{ height: `${(b.pokemonVolume / max) * 100}%`, background: GOLD, opacity: pick != null && pick !== i ? 0.45 : 1 }} />
+                        {b.volume === 0 && <span className="block w-full rounded-sm bg-line" style={{ height: 3 }} />}
+                      </>
+                    )}
+                    {pick === i && <span className="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-fg/80" aria-hidden />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-1 flex gap-[3px] text-[11px] text-mute" aria-hidden>
+              {data.map((b, i) => (
+                <span key={b.k} className="relative min-w-0 flex-1">
+                  {labelAt.has(i) && <span className="absolute top-0 -translate-x-1/2 whitespace-nowrap" style={{ left: i === 0 ? "30%" : i === 23 ? "70%" : "50%" }}>{b.k.slice(11, 13)}h</span>}
+                  &nbsp;
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div className="rounded-lg bg-tile px-3 py-2.5" aria-live="polite">
+        <p className="text-xs font-semibold text-mute">{pick != null ? hourRange(shown.k) : `Hora mais forte: ${hourRange(shown.k)}`}</p>
+        <p className="tnum mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm">
+          <b className="text-base"><Money v={shown.volume} moeda={stats.moeda} short /></b>
+          <span className="text-mute">{fmtInt(shown.sales)} vendas</span>
+        </p>
+        <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm" style={{ background: BLUE }} /> Itens <Money v={shown.itemVolume} moeda={stats.moeda} short />
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm" style={{ background: GOLD }} /> Pokémon <Money v={shown.pokemonVolume} moeda={stats.moeda} short />
+          </span>
+        </p>
+        {pick == null && <p className="mt-1.5 text-[11px] text-mute">Toque ou passe o mouse numa barra para ver outra hora.</p>}
+      </div>
+
+      {partial && (
+        <p className="rounded-lg bg-tile px-2.5 py-2 text-xs text-mute">
+          O painel começou a coletar há <b className="text-fg">{spanLabel(collectedFor)}</b>. As horas anteriores aparecem como um traço fino porque ainda não foram coletadas.
+        </p>
+      )}
     </div>
   );
 }
@@ -543,7 +595,7 @@ export function StatsTab() {
 
               <div className={`grid gap-3 sm:gap-4 ${(s.source === "local" && s.hourly) || s.index ? "lg:grid-cols-[3fr_2fr]" : ""}`}>
                 {s.source === "local" && s.hourly ? (
-                  <ChartCard title="Quanto foi vendido" hint={`Valor em ${unit} vendido a cada hora, nas últimas 24 horas.`}>
+                  <ChartCard title="Quanto foi vendido" hint={`Valor em ${unit} vendido a cada hora (horário de Brasília).`}>
                     <VolumeChart stats={s} />
                   </ChartCard>
                 ) : s.index ? (

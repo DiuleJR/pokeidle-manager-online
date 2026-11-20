@@ -190,17 +190,18 @@ function installMockApi(accs: AccountSnapshot[]) {
       const orb = q.get("moeda") === "orb";
       const hub = days > 1;
       const wave = (i: number) => 0.6 + 0.4 * Math.sin(i * 1.3) + (i % 5) * 0.08;
+      const sparse = location.search.includes("sparse");   // simula uma coleta recente: vendas só nas últimas horas
       const series = hub ? [] : Array.from({ length: 24 }, (_, i) => {
         const iv = Math.round((orb ? 900 : 4_800_000) * wave(i)), pv = Math.round((orb ? 2400 : 21_000_000) * wave(i + 2));
         const d = new Date(Date.now() - 3 * 3_600_000 - (23 - i) * 3_600_000).toISOString();
         return { k: `${d.slice(0, 10)} ${d.slice(11, 13)}:00`, sales: Math.round(60 * wave(i)), volume: iv + pv, itemVolume: iv, pokemonVolume: pv };
-      });
+      }).filter((_, i) => !sparse || i >= 20);
       const k = orb ? 1 / 12000 : 1;
       const g = (name: string, kind: "item" | "pokemon", sales: number, avg: number, change: number | null, extra: object = {}) => ({ name, kind, shiny: false, look: null, icon: null, sales, units: sales * 4, volume: Math.round(sales * 4 * avg), typical: avg, low: Math.round(avg * 0.88), high: Math.round(avg * 1.12), change, spark: change === null ? [] : Array.from({ length: 7 }, (_, i) => Math.round(avg * (1 - (change / 100) * (1 - i / 6) + 0.02 * Math.sin(i * 2)))), ...extra });
       const groups = [g("Earth Stone", "item", 412, 49_600 * k, 3.2), g("Rock Stone", "item", 368, 60_500 * k, -2.1), g("Cocoon Stone", "item", 290, 18_800 * k, 0.4), g("Fire Stone", "item", 190, 97_300 * k, 12.9), g("Furious Scizor", "pokemon", 141, 47_800_000 * k, null, { look: 60212 }), g("Sun Stone", "item", 96, 88_100 * k, -11.3), g("Garchomp", "pokemon", 88, 42_000_000 * k, 3.1, { look: 60445 }), g("Moon Stone", "item", 61, 81_000 * k, null), g("Pikachu", "pokemon", 44, 5_200_000 * k, -8.7, { shiny: true, look: 60003 }), g("Leaf Stone", "item", 40, 84_700 * k, 1.5), g("Water Stone", "item", 33, 118_600 * k, 0.2), g("Metal Stone", "item", 28, 31_400 * k, -0.8)];
       const idx = Array.from({ length: Math.max(days, 7) }, (_, i) => { const d = new Date(Date.now() - 3 * 3_600_000 - (Math.max(days, 7) - 1 - i) * 86_400_000).toISOString().slice(0, 10); return { day: d, index: Math.round((100 + i * 0.35 + 3 * Math.sin(i / 2)) * 10) / 10 }; });
       const hours = Array.from({ length: 24 }, (_, h) => ({ h, sales: Math.round(40 * (0.5 + 0.5 * Math.sin((h - 6) / 3.8)) + 8), volume: 0 }));
-      return json({ source: hub ? "hub" : "local", priceKind: hub ? "median" : "avg", moeda: orb ? "orb" : "gold", period: q.get("period") ?? "7d", days, now: Date.now(), coverage: { first: Date.now() - 43 * 86_400_000, last: Date.now() - 40_000, count: 1_670_971 }, totals: { sales: 64_000 * days, volume: orb ? 3_000_000 * days / 7 : 1_400_000_000_000 * days / 7, prevSales: 60_000 * days, prevVolume: orb ? 3_300_000 * days / 7 : 1_250_000_000_000 * days / 7 }, series, hoursFrom: Date.now() - 2 * 86_400_000, hourly: !hub, index: hub && !orb ? { points: idx, change: Math.round((idx[idx.length - 1].index / idx[0].index - 1) * 1000) / 10 } : null, hours, groups, up: [groups[3], groups[6], groups[9]], down: [groups[5], groups[8], groups[1]] });
+      return json({ source: hub ? "hub" : "local", priceKind: hub ? "median" : "avg", moeda: orb ? "orb" : "gold", period: q.get("period") ?? "7d", days, now: Date.now(), coverage: { first: Date.now() - (location.search.includes("sparse") ? 4 * 3_600_000 : 43 * 86_400_000), last: Date.now() - 40_000, count: 1_670_971 }, totals: { sales: 64_000 * days, volume: orb ? 3_000_000 * days / 7 : 1_400_000_000_000 * days / 7, prevSales: 60_000 * days, prevVolume: orb ? 3_300_000 * days / 7 : 1_250_000_000_000 * days / 7 }, series, hoursFrom: Date.now() - 2 * 86_400_000, hourly: !hub, index: hub && !orb ? { points: idx, change: Math.round((idx[idx.length - 1].index / idx[0].index - 1) * 1000) / 10 } : null, hours, groups, up: [groups[3], groups[6], groups[9]], down: [groups[5], groups[8], groups[1]] });
     }
     if (path === "/api/market/stats/detail") {
       const q = new URL(url, "http://x").searchParams;
