@@ -101,10 +101,10 @@ function MapChip({ map }: { map?: MapInfo | null }) {
   const o = map.outland;
   return (
     <span
-      className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-bold leading-none sm:text-xs ${o ? "border-[#7a5a1c] bg-[#33260e] text-poke-gold" : "border-line bg-void text-fg"}`}
+      className={`inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-bold leading-none sm:text-sm ${o ? "border-[#7a5a1c] bg-[#33260e] text-poke-gold" : "border-line bg-void text-fg"}`}
       title={o ? `${map.label}: itens raros ×${o.mult}` : `Mapa: ${map.label}`}
     >
-      <MapPin className="size-3 shrink-0" aria-hidden />
+      <MapPin className="size-3.5 shrink-0 sm:size-4" aria-hidden />
       <span className="truncate">{map.label}</span>
       {o && <span className="tnum font-semibold opacity-80">×{String(o.mult).replace(".", ",")}</span>}
     </span>
@@ -470,12 +470,21 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate text-base font-extrabold leading-tight tracking-tight sm:text-xl">
-              {acc.nick}
-              {acc.vip && (
-                <span className="ml-1.5 rounded bg-poke-gold px-1 py-0.5 align-middle text-[9px] font-black leading-none text-void sm:ml-2 sm:px-1.5 sm:text-[10px]">VIP</span>
-              )}
-            </h3>
+            {/* Nome, mapa e hunt na mesma linha; se faltar largura (celular), o que não couber desce junto. */}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-1.5">
+              <h3 className="max-w-full truncate text-base font-extrabold leading-tight tracking-tight sm:text-xl">
+                {acc.nick}
+                {acc.vip && (
+                  <span className="ml-1.5 rounded bg-poke-gold px-1 py-0.5 align-middle text-[9px] font-black leading-none text-void sm:ml-2 sm:px-1.5 sm:text-[10px]">VIP</span>
+                )}
+              </h3>
+              <MapChip map={acc.map} />
+              <span className="flex min-w-0 items-center gap-1.5 text-sm text-mute sm:hidden">
+                <Crosshair className="size-4 shrink-0 text-poke-gold" aria-hidden />
+                <span className="sr-only">Hunt atual: </span>
+                <b className="truncate font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
+              </span>
+            </div>
             <StatusPill status={acc.status} />
           </div>
           {/* Os níveis já aparecem no bloco de XP do Resumo; na aba Sessão continuam aqui. */}
@@ -490,15 +499,6 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
               <span className="truncate">{pk?.name ?? "—"}</span>
               {pk?.level != null && <span className="tnum shrink-0">Nv. {fmtShort(pk.level)}</span>}
               {pk?.shiny && <ShinyMark />}
-            </span>
-          </div>
-          {/* Mapa (e, no celular, a hunt atual: o rodapé some por falta de espaço). */}
-          <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-mute">
-            <MapChip map={acc.map} />
-            <span className="flex min-w-0 flex-1 items-center gap-1 sm:hidden">
-              <Crosshair className="size-3.5 shrink-0 text-poke-gold" aria-hidden />
-              <span className="sr-only">Hunt atual: </span>
-              <b className="truncate font-semibold text-fg">{acc.huntName ?? prettySlug(acc.hunt?.slug)}</b>
             </span>
           </div>
           <div
