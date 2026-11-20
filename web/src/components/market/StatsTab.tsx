@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { type MarketStats, type Moeda, type StatsBucket, type StatsDetail, type StatsGroup, type StatsPeriod, marketApi } from "@/lib/market";
 import { fmtInt, fmtShort } from "@/lib/utils";
-import { zmoveName } from "@/lib/zmove";
+import { useItemLabel } from "@/lib/lang";
 import { CurrencyToggle, ErrorBox, Loading, Money, Seg, useAsync } from "./shared";
 
 const PERIODS: { id: StatsPeriod; label: string }[] = [
@@ -324,6 +324,7 @@ function HoursChart({ hours, from, now }: { hours: MarketStats["hours"]; from: n
 
 /** Preço de um item ao longo do tempo: linha = preço típico, faixa clara = onde a maioria das vendas ficou. */
 function PriceChart({ detail }: { detail: StatsDetail }) {
+  const L = useItemLabel();
   const pts = detail.points.filter((p) => p.avg != null);
   const [pick, setPick] = useState<number | null>(null);
   if (pts.length < 2) return <p className="text-sm text-mute">Poucas vendas neste período para traçar o preço.</p>;
@@ -341,7 +342,7 @@ function PriceChart({ detail }: { detail: StatsDetail }) {
   const kind = detail.source === "hub" ? "mediana" : "média";
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full touch-manipulation" role="img" aria-label={`Preço de ${zmoveName(detail.name)}: de ${price(pts[0].avg)} a ${price(pts[pts.length - 1].avg)}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full touch-manipulation" role="img" aria-label={`Preço de ${L(detail.name)}: de ${price(pts[0].avg)} a ${price(pts[pts.length - 1].avg)}`}>
         {[0.25, 0.5, 0.75].map((t) => (
           <line key={t} x1={pad} x2={W - pad} y1={H * t} y2={H * t} stroke={GRID} strokeWidth="1" />
         ))}
@@ -388,13 +389,14 @@ function Thumb({ g }: { g: StatsGroup }) {
 const tone = (c: number | null): "up" | "down" | "flat" => (c == null ? "flat" : c > 0.05 ? "up" : c < -0.05 ? "down" : "flat");
 
 const GroupRow = memo(function GroupRow({ g, moeda, open, onToggle, trailing = "price", children }: { g: StatsGroup; moeda: Moeda; open: boolean; onToggle: () => void; trailing?: "price" | "move"; children?: React.ReactNode }) {
+  const L = useItemLabel();
   return (
     <li>
       <button
         className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-tile focus-visible:bg-tile focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-edge ${open ? "bg-tile" : ""}`}
         onClick={onToggle}
         aria-expanded={open}
-        aria-label={`${zmoveName(g.name)}: ${open ? "esconder" : "ver"} o preço ao longo do tempo`}
+        aria-label={`${L(g.name)}: ${open ? "esconder" : "ver"} o preço ao longo do tempo`}
       >
         <span className="grid size-10 shrink-0 place-items-center">
           <Thumb g={g} />
@@ -402,7 +404,7 @@ const GroupRow = memo(function GroupRow({ g, moeda, open, onToggle, trailing = "
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1 font-bold">
             {g.shiny && <ShinyMark />}
-            <span className="truncate">{zmoveName(g.name)}</span>
+            <span className="truncate">{L(g.name)}</span>
           </span>
           <span className="tnum block truncate text-xs text-mute">
             {trailing === "move" ? `${fmtInt(g.sales)} vendas` : g.low != null && g.high != null ? `${fmtInt(g.sales)} vendas · faixa ${price(g.low)}–${price(g.high)}` : `${fmtInt(g.sales)} vendas`}
@@ -456,10 +458,11 @@ function Ranking({ s, openKey, onToggle }: { s: MarketStats; openKey: string | n
   const [kind, setKind] = useState<"all" | "item" | "pokemon">("all");
   const [q, setQ] = useState("");
   const [all, setAll] = useState(false);
+  const L = useItemLabel();
   const list = useMemo(() => {
     const n = q.trim().toLowerCase();
-    return s.groups.filter((g) => (kind === "all" || g.kind === kind) && (!n || g.name.toLowerCase().includes(n) || zmoveName(g.name).toLowerCase().includes(n)));
-  }, [s.groups, kind, q]);
+    return s.groups.filter((g) => (kind === "all" || g.kind === kind) && (!n || g.name.toLowerCase().includes(n) || L(g.name).toLowerCase().includes(n)));
+  }, [s.groups, kind, q, L]);
   const shown = all || q ? list : list.slice(0, SHOW_FIRST);
   return (
     <section className="space-y-2">

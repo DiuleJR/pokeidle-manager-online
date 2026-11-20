@@ -4,6 +4,7 @@ import { ItemSprite } from "@/components/Sprites";
 import { AnimatedNumber, Coin } from "@/components/ui";
 import type { Valuation } from "@/lib/valuation";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
+import { useItemLabel } from "@/lib/lang";
 import { fmtShort } from "@/lib/utils";
 
 type Group = "potions" | "balls" | "stones" | "others";
@@ -149,6 +150,7 @@ function ItemTile({ row, showAccounts, index, settled }: { row: Row; showAccount
 export function ItemsView({ account, valuation }: { account: string; valuation?: Valuation | null }) {
   const accounts = useAccountsMap();
   const ids = useAccountIds();
+  const L = useItemLabel();
   const [query, setQuery] = useState("");
   const [onlyRare, setOnlyRare] = useState(false);
   const [group, setGroup] = useState<Group | "all">("all");
@@ -167,11 +169,11 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
       if (!a?.inventory) continue;
       for (const b of a.inventory.balls) if (b.qty > 0) add(`b${b.id}`, b.name, "balls", false, b.icon, b.qty, id);
       for (const i of a.inventory.items)
-        if (i.qty > 0) add(`i${i.id}`, i.name, groupOf(i.category ?? "loot"), !!i.rare, i.icon, i.qty, id);
+        if (i.qty > 0) add(`i${i.id}`, L(i.name, i.id), groupOf(i.category ?? "loot"), !!i.rare, i.icon, i.qty, id);
     }
     for (const r of map.values()) if (r.key.startsWith("i")) r.unit = r.rare ? valuation?.items[r.key.slice(1)]?.gems : undefined;
     return [...map.values()];
-  }, [accounts, ids, account, valuation]);
+  }, [accounts, ids, account, valuation, L]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -64,6 +64,10 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
       items: [
         ...shared.filter((_, n) => (n + i) % 3 !== 0).map((it, n) => ({ ...it, qty: 12_000 * (i + 1) + n * 311 })),
         ...(i === 1 ? [{ id: 9001, name: "Item Exclusivo", category: "loot", icon: null, qty: 42 }] : []),
+        // Itens do servidor: o nome muda com o idioma escolhido nas Configurações.
+        { id: 70080, name: "Bicicleta Comum", category: "special", rare: true, icon: null, qty: 3 + i },
+        { id: 70011, name: "Fragmento de Chave", category: "special", rare: true, icon: null, qty: 120 + i * 7 },
+        { id: 59194, name: "Fragmento de Z-Move", category: "fragment", icon: "/img/itens/zmove/fragmento.png", qty: 44 + i },
       ],
     };
   });
@@ -242,7 +246,7 @@ function installMockApi(accs: AccountSnapshot[]) {
     }
     if (path === "/api/market/overview") {
       const it = (id: number, name: string, minGold: number | null, minOrb: number | null, avgGold: number | null, avgOrb: number | null) => ({ id, name, category: "stone", icon: null, ads: 3, units: 12, minGold, minOrb, avgGold, avgOrb, fav: false });
-      return json({ ts: Date.now(), days: 7, online: [1], items: [it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
+      return json({ ts: Date.now(), days: 7, online: [1], items: [{ ...it(59194, "Fragmento de Z-Move", 850000000, 152, 700000000, 131), category: "fragment" }, it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
     }
     if (path === "/api/creatures") return json(creatures);
     if (path === "/api/pvp" && (!init?.method || init.method === "GET")) {

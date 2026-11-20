@@ -7,6 +7,7 @@ import { ItemSprite } from "@/components/Sprites";
 import { useAccountsMap } from "@/lib/telemetry";
 import { type Deal, type Listing, type MarketItem, type Moeda, dealLabel, marketApi, secondsUntil } from "@/lib/market";
 import { fmtInt, fmtShort } from "@/lib/utils";
+import { useItemLabel } from "@/lib/lang";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
 import { CurrencyToggle, ErrorBox, LineChart, Loading, Money, type MoedaSel, fmtCountdown, useAsync, useTick } from "./shared";
@@ -44,6 +45,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 /** Detalhe de um item: anúncios, gráfico de preço e atalhos (alerta, sniper, compra). */
 function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: MarketItem; moeda: Moeda; account: number | undefined; onClose: () => void; onFav: () => void }) {
+  const L = useItemLabel();
   const [moeda, setMoeda] = useState<Moeda>(initial);
   const [buy, setBuy] = useState<Listing | null>(null);
   const [rule, setRule] = useState<"alert" | "snipe" | null>(null);
@@ -60,7 +62,7 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
   const best = rows[0]?.preco;
 
   return (
-    <Modal title={item.name} onClose={onClose} wide>
+    <Modal title={L(item.name, item.id)} onClose={onClose} wide>
       <div className="flex flex-wrap items-center gap-3">
         <ItemSprite icon={item.icon} size={44} alt="" />
         <div className="min-w-0 flex-1">
@@ -168,7 +170,7 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
       )}
 
       <AnimatePresence>
-        {buy && <BuyDialog listing={buy} name={item.name} onClose={() => setBuy(null)} onDone={() => void ls.reload()} />}
+        {buy && <BuyDialog listing={buy} name={L(item.name, item.id)} onClose={() => setBuy(null)} onDone={() => void ls.reload()} />}
         {rule && <RuleDialog kind={rule} preset={{ target: "item", item_id: item.id, name: item.name, moeda }} onClose={() => setRule(null)} onSaved={() => setRule(null)} />}
       </AnimatePresence>
     </Modal>
@@ -176,6 +178,7 @@ function ItemDetail({ item, moeda: initial, account, onClose, onFav }: { item: M
 }
 
 export function PricesTab() {
+  const L = useItemLabel();
   const [moeda, setMoeda] = useState<MoedaSel>("gold");
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
@@ -208,13 +211,13 @@ export function PricesTab() {
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const out = items.filter((i) => price(i) != null && (!t || i.name.toLowerCase().includes(t)) && (!cat || i.category === cat) && (!onlyFav || i.fav));
+    const out = items.filter((i) => price(i) != null && (!t || i.name.toLowerCase().includes(t) || L(i.name, i.id).toLowerCase().includes(t)) && (!cat || i.category === cat) && (!onlyFav || i.fav));
     out.sort((a, b) =>
-      sort === "discount" ? discount(b) - discount(a) : sort === "premium" ? premium(b) - premium(a) : sort === "cheap" ? (price(a) ?? 0) - (price(b) ?? 0) : sort === "supply" ? b.units - a.units : a.name.localeCompare(b.name),
+      sort === "discount" ? discount(b) - discount(a) : sort === "premium" ? premium(b) - premium(a) : sort === "cheap" ? (price(a) ?? 0) - (price(b) ?? 0) : sort === "supply" ? b.units - a.units : L(a.name, a.id).localeCompare(L(b.name, b.id)),
     );
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, cat, onlyFav, sort, moeda]);
+  }, [items, q, cat, onlyFav, sort, moeda, L]);
 
   const toggleFav = async (i: MarketItem) => {
     setFavs((f) => ({ ...f, [i.id]: !i.fav }));
@@ -276,7 +279,7 @@ export function PricesTab() {
                   <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left sm:gap-3" onClick={() => setOpen(i)}>
                     <ItemSprite icon={i.icon} size={36} alt="" />
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 break-words text-[15px] font-bold leading-tight">{i.name}</span>
+                      <span className="line-clamp-2 break-words text-[15px] font-bold leading-tight">{L(i.name, i.id)}</span>
                       <span className="mt-1 flex items-center gap-1.5 text-xs text-mute">
                         <DealBadge d={deal(i)} />
                         <span className="truncate">{i.ads} anúncios</span>

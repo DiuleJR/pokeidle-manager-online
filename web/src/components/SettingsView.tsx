@@ -1,3 +1,4 @@
+import { LanguageSection } from "@/components/LanguageSection";
 import { AnimatePresence, motion } from "framer-motion";
 import { useScrollLock } from "@/lib/scrollLock";
 import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
@@ -1065,6 +1066,10 @@ export function SettingsView() {
         <div className="tile p-3 sm:p-4">
           <GlobalForm />
         </div>
+      </Reveal>
+
+      <Reveal index={5}>
+        <LanguageSection />
       </Reveal>
 
       <Reveal index={5}>

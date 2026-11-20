@@ -9,6 +9,7 @@ import { MOEDA_LABEL, type LogRow, type MarketItem, type Moeda, type Rule, type 
 import { type Creature, useCreatures } from "@/lib/actions";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { fmtInt } from "@/lib/utils";
+import { useItemLabel } from "@/lib/lang";
 import { CurrencyToggle, ErrorBox, Loading, Seg, errMsg, fmtWhen, useAsync } from "./shared";
 
 const ELEMENTS = ["", "NORMAL", "FIRE", "WATER", "GRASS", "ELECTRIC", "ICE", "FIGHTING", "POISON", "GROUND", "FLYING", "PSYCHIC", "BUG", "ROCK", "GHOST", "DRAGON", "DARK", "STEEL", "FAIRY"];
@@ -54,8 +55,9 @@ function MoneyField({ value, onChange, placeholder }: { value: number; onChange:
 
 /** Escolha do item: busca por nome, mostra o menor preço de cada um na moeda escolhida. */
 function ItemPicker({ items, loading, text, onText, selected, moeda, onPick }: { items: MarketItem[]; loading: boolean; text: string; onText: (t: string) => void; selected?: MarketItem; moeda: Moeda; onPick: (i: MarketItem) => void }) {
+  const L = useItemLabel();
   const q = text.trim().toLowerCase();
-  const matches = useMemo(() => (q && !selected ? items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 6) : []), [items, q, selected]);
+  const matches = useMemo(() => (q && !selected ? items.filter((i) => i.name.toLowerCase().includes(q) || L(i.name, i.id).toLowerCase().includes(q)).slice(0, 6) : []), [items, q, selected, L]);
   const unit = MOEDA_LABEL[moeda];
   return (
     <div className="space-y-2">
@@ -72,7 +74,7 @@ function ItemPicker({ items, loading, text, onText, selected, moeda, onPick }: {
                   <span className="grid size-8 shrink-0 place-items-center">
                     <ItemSprite icon={i.icon} size={28} />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{i.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{L(i.name, i.id)}</span>
                   <span className="tnum shrink-0 text-xs text-mute">{f ? `${fmtInt(f)} ${unit}` : "sem anúncio"}</span>
                 </button>
               </li>
@@ -87,7 +89,7 @@ function ItemPicker({ items, loading, text, onText, selected, moeda, onPick }: {
             <ItemSprite icon={selected.icon} size={34} alt="" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-bold leading-tight">{selected.name}</p>
+            <p className="truncate font-bold leading-tight">{L(selected.name, selected.id)}</p>
             {floorOf(selected, moeda) ? (
               <p className="mt-0.5 text-xs text-mute">
                 Menor preço agora: <b className="tnum text-sm text-poke-gold">{fmtInt(floorOf(selected, moeda) ?? 0)}</b> {unit}
@@ -167,6 +169,7 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const L = useItemLabel();
   const [itemText, setItemText] = useState(preset?.name ?? rule?.label ?? "");
   const ov = useAsync(() => marketApi.overview(), []);
   const creatures = useCreatures();
@@ -185,11 +188,11 @@ export function RuleDialog({ kind: initialKind, rule, preset, onClose, onSaved }
 
   const onText = (t: string) => {
     setItemText(t);
-    const hit = items.find((i) => i.name.toLowerCase() === t.trim().toLowerCase());
+    const hit = items.find((i) => i.name.toLowerCase() === t.trim().toLowerCase() || L(i.name, i.id).toLowerCase() === t.trim().toLowerCase());
     setSpec((s) => ({ ...s, item_id: hit?.id ?? null, name: hit?.name ?? s.name }));
   };
   const pickItem = (i: MarketItem) => {
-    setItemText(i.name);
+    setItemText(L(i.name, i.id));
     setSpec((s) => ({ ...s, item_id: i.id, name: i.name }));
   };
 

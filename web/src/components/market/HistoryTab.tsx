@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Moeda, type TapeRow, marketApi } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
-import { zmoveName } from "@/lib/zmove";
+import { useItemLabel } from "@/lib/lang";
 import { AccountPicker, ErrorBox, Loading, Money, Pager, Seg, dayHeading, fmtTime, useAsync } from "./shared";
 
 type Mode = "global" | "vendas" | "compras";
@@ -31,6 +31,7 @@ function Variation({ row }: { row: TapeRow }) {
 }
 
 function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
+  const L = useItemLabel();
   const openSheet = useSheet();
   const when = r.em ? fmtTime(r.em) : "";
   if (r.tipo === "deposito" || r.tipo === "saque") {
@@ -61,7 +62,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-bold">
-          <span className="truncate">{zmoveName(r.descricao) ?? "—"}</span>
+          <span className="truncate">{L(r.descricao) || "—"}</span>
           {f?.shiny && <ShinyMark />}
         </p>
         {r.tipo === "pokemon" && f && <PokemonSelos pk={f as never} compact className="my-1" />}

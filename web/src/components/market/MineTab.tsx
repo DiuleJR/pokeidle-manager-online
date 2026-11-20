@@ -9,6 +9,7 @@ import { fmtUsd } from "@/lib/valuation";
 import { fmtInt } from "@/lib/utils";
 import { PokemonSelos } from "@/components/PokemonSelos";
 import { sheetTrigger, useSheet } from "@/lib/sheet";
+import { useItemLabel } from "@/lib/lang";
 import { CalcCard } from "./CalcTab";
 import { AccountPicker, ErrorBox, Loading, Money, fmtWhen, secondsLabel, useAsync, useOnlineAccounts } from "./shared";
 
@@ -75,10 +76,11 @@ function premiumOf(it: MarketItem, moeda: Moeda): { floor: number; avg: number; 
 
 /** Uma linha por anúncio: o que é, de qual conta, quando expira; à direita o preço e como ele está no mercado. */
 function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
+  const L = useItemLabel();
   const { l, drift } = r;
   const left = l.expiraEm ? Math.max(0, Math.round((l.expiraEm - (Date.now() + drift)) / 1000)) : null;
   const isMon = l.tipo === "pokemon";
-  const name = isMon ? `${l.ficha?.nome ?? "Pokémon"} nv. ${l.ficha?.level ?? "?"}` : (l.ficha?.nome ?? it?.name ?? `item #${l.itemId}`);
+  const name = isMon ? `${l.ficha?.nome ?? "Pokémon"} nv. ${l.ficha?.level ?? "?"}` : (l.ficha?.nome ?? (it ? L(it.name, it.id) : `item #${l.itemId}`));
   const floor = !isMon && it ? (l.moeda === "orb" ? it.minOrb : it.minGold) : null;
   const avg = !isMon && it ? (l.moeda === "orb" ? it.avgOrb : it.avgGold) : null;
   const vsAvg = avg ? l.preco / avg - 1 : null;
