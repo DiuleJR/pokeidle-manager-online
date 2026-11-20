@@ -95,13 +95,13 @@ export function HistoryTab() {
   const canSearch = tipo === "" || tipo === "item" || tipo === "pokemon";
   const ov = useAsync(() => marketApi.overview(), [], { every: 300000, skip: !(tipo === "" || tipo === "item") });
   const names = useAsync(() => marketApi.pokemonNames(), [], { skip: !(tipo === "" || tipo === "pokemon") });
-  type Hit = { kind: "item"; id: number; name: string; icon: string | null } | { kind: "pokemon"; name: string };
+  type Hit = { kind: "item"; id: number; name: string; icon: string | null } | { kind: "pokemon"; name: string; id: number };
   const hits = useMemo<Hit[]>(() => {
     const q = busca.trim().toLowerCase();
     if (!q || item || applied) return [];
     const out: Hit[] = [];
     if (tipo !== "pokemon") for (const i of ov.data?.items ?? []) if (i.name.toLowerCase().includes(q) || L(i.name, i.id).toLowerCase().includes(q)) out.push({ kind: "item", id: i.id, name: i.name, icon: i.icon });
-    if (tipo !== "item") for (const n of names.data?.names ?? []) if (n.toLowerCase().includes(q)) out.push({ kind: "pokemon", name: n });
+    if (tipo !== "item") for (const n of names.data?.names ?? []) if (n.name.toLowerCase().includes(q)) out.push({ kind: "pokemon", name: n.name, id: n.id });
     // quem começa com o texto vem primeiro
     return out.sort((a, b) => Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q))).slice(0, 8);
   }, [ov.data, names.data, busca, item, applied, tipo, L]);
@@ -227,9 +227,9 @@ export function HistoryTab() {
               {showList && hits.length > 0 && (
                 <ul role="listbox" className="absolute left-0 top-full z-30 mt-1 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-auto rounded-xl border border-edge bg-surface p-1 shadow-xl">
                   {hits.map((h) => (
-                    <li key={h.kind === "item" ? `i${h.id}` : `p${h.name}`} role="option" aria-selected="false">
+                    <li key={`${h.kind}${h.id}`} role="option" aria-selected="false">
                       <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(h)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold hover:bg-tile">
-                        {h.kind === "item" ? <ItemSprite icon={h.icon} size={26} alt="" /> : <span className="grid size-[26px] shrink-0 place-items-center text-base" aria-hidden>🐾</span>}
+                        {h.kind === "item" ? <ItemSprite icon={h.icon} size={26} alt="" /> : <PokemonSprite species={h.id} size={30} />}
                         <span className="min-w-0 flex-1 truncate">{h.kind === "item" ? L(h.name, h.id) : h.name}</span>
                         {tipo === "" && <span className="shrink-0 text-[11px] font-medium text-mute">{h.kind === "item" ? "Item" : "Pokémon"}</span>}
                       </button>
