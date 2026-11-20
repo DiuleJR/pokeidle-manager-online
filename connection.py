@@ -35,7 +35,7 @@ from maps import effective_tier, normalize_tiers
 from market import MarketClient
 from pvp import PvpManager
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
-from game_data import item_name
+from item_labels import item_name
 from session_stats import ITEM_LABELS, TRACKED, SessionItems, SessionStore, ShinyTracker
 from shop import AutoRestock, ShopManager, ball_ids_resolver, potion_ids_resolver
 

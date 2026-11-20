@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 import re
 
 import market_stats
-from game_data import ITEM_NAMES, item_icon_path, item_meta, item_name
+from game_data import ITEM_NAMES, item_meta
+from item_labels import display_name, item_icon_path, item_name
 from market import MarketError
 from notify import BLUE, GOLD, GREEN
 
@@ -192,13 +193,13 @@ class MarketService:
                 if isinstance(it, dict) and it.get("id") == iid:
                     cat = it.get("categoria") or item_meta(iid)[0]
                     nos = c.itens_nossos.get(iid) or {}
-                    return {"id": iid, "name": PT_NAMES.get(iid) or it.get("nome") or item_name(iid),
+                    return {"id": iid, "name": PT_NAMES.get(iid) or display_name(it.get("nome")) or item_name(iid),
                             "category": cat, "icon": self._icon(iid, c),
                             "rare": _is_rare(cat, bool(nos.get("rare")) or item_meta(iid)[1])}
             nos = c.itens_nossos.get(iid)
             if nos:
                 cat = nos.get("category") or "special"
-                return {"id": iid, "name": PT_NAMES.get(iid) or nos.get("name") or item_name(iid),
+                return {"id": iid, "name": PT_NAMES.get(iid) or display_name(nos.get("name")) or item_name(iid),
                         "category": cat, "icon": self._abs(nos.get("icon")), "rare": _is_rare(cat, bool(nos.get("rare")))}
         cat, rare = item_meta(iid)
         return {"id": iid, "name": PT_NAMES.get(iid) or item_name(iid), "category": cat,
@@ -212,6 +213,7 @@ class MarketService:
         m: dict[str, int] = {}
         for iid, nm in ITEM_NAMES.items():
             m[str(nm).lower()] = int(iid)
+            m[display_name(nm).lower()] = int(iid)     # o nome que o jogo mostra (Fragmento de Z-Move)
         for iid, nm in PT_NAMES.items():
             m[nm.lower()] = iid
         for c in self.manager.connections():

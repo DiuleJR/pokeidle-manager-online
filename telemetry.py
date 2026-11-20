@@ -28,7 +28,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from connection import State
-from game_data import ball_name, item_icon_path, item_meta, item_name
+from game_data import ball_name, item_meta
+from item_labels import display_name, item_icon_path, item_name
 
 if TYPE_CHECKING:
     from connection import AccountConnection
@@ -84,7 +85,7 @@ def item_rows(c: "AccountConnection") -> list[dict]:
             name = item_name(iid)
             cat, rare = item_meta(iid)
             icon = item_icon_path(iid)
-        name = PT_NAMES.get(iid, name)
+        name = PT_NAMES.get(iid, display_name(name))
         if cat in NOT_RARE_CATEGORIES:  # pedras e poções não contam como raros, mesmo que o jogo marque
             rare = False
         rows.append({"id": iid, "name": name, "qty": qty, "category": cat, "rare": rare, "icon": _abs(icon)})

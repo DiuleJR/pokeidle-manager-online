@@ -14,7 +14,8 @@ nem o frontend conhece aparecem como "Item #<id>".
 """
 from __future__ import annotations
 
-from game_data import ball_name, item_name
+from game_data import ball_name
+from item_labels import item_name
 
 POTION_IDS = frozenset({200, 201, 202, 203, 204, 70070})
 POTION_NAMES = {i: item_name(i) for i in POTION_IDS}  # usado por telemetry.py

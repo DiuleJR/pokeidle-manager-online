@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Moeda, type TapeRow, marketApi } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
+import { zmoveName } from "@/lib/zmove";
 import { AccountPicker, ErrorBox, Loading, Money, Pager, Seg, dayHeading, fmtTime, useAsync } from "./shared";
 
 type Mode = "global" | "vendas" | "compras";
@@ -60,7 +61,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-bold">
-          <span className="truncate">{r.descricao ?? "—"}</span>
+          <span className="truncate">{zmoveName(r.descricao) ?? "—"}</span>
           {f?.shiny && <ShinyMark />}
         </p>
         {r.tipo === "pokemon" && f && <PokemonSelos pk={f as never} compact className="my-1" />}
