@@ -78,7 +78,13 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
         a.xpPerHour = Math.round(a.xpPerHour * (0.97 + Math.random() * 0.06));
         // XP sobe a cada tick (ritmo acelerado para dar para ver a barra e o "+ganho" andando); o Pokémon passa de nível de vez em quando.
         const gain = Math.round((a.xpPerHour / 3600) * 300);
-        if (a.xp) a.xp = { ...a.xp, atual: (a.xp.atual ?? 0) + gain };
+        if (a.xp && a.xp.atual != null && a.xp.proximo != null) {
+          const next = a.xp.atual + gain;
+          if (next >= a.xp.proximo) {
+            a.level += 1;
+            a.xp = { atual: a.xp.proximo, nivel: a.xp.proximo, proximo: a.xp.proximo + 450_000_000 };
+          } else a.xp = { ...a.xp, atual: next };
+        }
         const px = a.pokemon!.xp;
         if (px && px.atual != null && px.proximo != null) {
           const next = px.atual + Math.round(gain * 0.6);
