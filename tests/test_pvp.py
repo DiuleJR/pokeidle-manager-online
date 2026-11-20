@@ -1,0 +1,294 @@
+import asyncio
+import json
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from auth import Auth
+from config import build_account_config
+from connection import AccountConnection, State
+from manager import AccountManager
+from notify import DailyStats, Notifier
+from pvp import PvpManager
+from telemetry import create_app
+
+KEY = "chave-de-teste"
+H = {"Authorization": f"Bearer {KEY}"}
+TOKEN = "tok_" + "z" * 30
+
+INFO = {
+    "t": "pvp",
+    "rank": {"pontos": 745, "pico": 745, "vitorias": 20, "derrotas": 18, "partidas": 38, "tierId": "ouro", "divisaoNum": "II",
+             "de": 700, "ate": 800, "progresso": 0.45},
+    "posicao": None, "totalClassificados": 13509,
+    "time": [11, 12, 13], "historico": [{"id": 5, "oponente": "Rival", "delta": 10, "venci": True, "criadoEm": "2026-11-14T19:33:33Z"}],
+    "fila": {"na": False, "desde": 0, "tamanho": 6386, "cooldownMs": 0},
+    "regras": {"nivelMin": 150, "posicionamento": 5, "entrePartidasMs": 20000},
+}
+
+
+class FakeWS:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, raw):
+        self.sent.append(json.loads(raw))
+
+
+def make(auto=True, ws=None, level=300):
+    pv = PvpManager("ACC1:Ash", {"level": level}, auto=auto)
+    pv.bind(ws or FakeWS())
+    pv.handle_frame(INFO)
+    return pv
+
+
+# --------------------------------------------------------------- frames
+def test_info_frame_fills_rank_team_rules_and_history():
+    pv = make()
+    assert pv.rank["tierId"] == "ouro" and pv.team == [11, 12, 13]
+    assert pv.level_min == 150 and pv.queue["tamanho"] == 6386
+    assert pv.history[0]["id"] == 5
+
+
+def test_welcome_snapshot_is_the_starting_point():
+    pv = PvpManager("a", {"pvp": {"tierId": "bronze", "pontos": 0}, "pvpTime": [1, 2], "automation": {"pvpAutoFila": True}})
+    pv.load_from_estado()
+    assert pv.rank["tierId"] == "bronze" and pv.team == [1, 2] and pv.native_auto is True
+
+
+def test_match_result_updates_rank_counters_and_waits_between_matches():
+    async def go():
+        ws = FakeWS()
+        pv = make(ws=ws)
+        pv.handle_frame({"t": "pvp", "partida": {"id": 77, "venci": True, "delta": 11, "pontos": 756, "oponente": {"nick": "Misty"}}})
+        await asyncio.sleep(0.05)                                  # a tarefa que confirma a partida
+        assert pv.rank["pontos"] == 756 and pv.rank["partidas"] == 39 and pv.rank["vitorias"] == 21
+        assert (pv.wins, pv.losses, pv.delta) == (1, 0, 11)
+        assert pv.matches[0]["opponent"] == "Misty" and 19_000 < pv.wait_ms() <= 20_000
+        assert {"t": "pvp.partida.vista", "id": 77} in ws.sent and {"t": "pvp.info", "semLadder": 1} in ws.sent
+    asyncio.run(go())
+
+
+def test_refusal_backs_off_and_uses_the_time_the_game_gives():
+    pv = make()
+    pv.handle_frame({"t": "pvp", "filaRecusa": {"msg": "Aguarde", "restaMs": 8000}})
+    assert 7_000 < pv.wait_ms() <= 8_500 and pv.refusal["msg"] == "Aguarde"
+    pv2 = make()
+    pv2.handle_frame({"t": "pvp", "filaRecusa": {"msg": "Sem equipe"}})
+    first = pv2.wait_ms()
+    pv2.wait_until = 0
+    pv2.handle_frame({"t": "pvp", "filaRecusa": {"msg": "Sem equipe"}})
+    assert pv2.wait_ms() > first                                    # cada recusa seguida espera mais
+
+
+def test_queue_confirmation_clears_the_pending_state():
+    pv = make()
+    pv._pending_enter = True
+    pv.handle_frame({"t": "pvp", "fila": {"na": True, "desde": 123}})
+    assert pv.queue["na"] and not pv._pending_enter
+
+
+# ------------------------------------------------------------ fila automática
+def test_auto_enters_the_queue_when_ready():
+    async def go():
+        ws = FakeWS()
+        pv = make(ws=ws)
+        await pv._tick(300)
+        assert ws.sent[-1] == {"t": "pvp.fila.entrar"}
+        await pv._tick(300)                                         # espera a confirmação, não repete
+        assert [f for f in ws.sent if f["t"] == "pvp.fila.entrar"] == [{"t": "pvp.fila.entrar"}]
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("setup", ["off", "native", "in_queue", "waiting", "no_team", "low_level"])
+def test_auto_stays_quiet_when_it_should(setup):
+    async def go():
+        ws = FakeWS()
+        pv = make(auto=setup != "off", ws=ws)
+        level = 300
+        if setup == "native":
+            pv.native_auto = True
+        elif setup == "in_queue":
+            pv.queue["na"] = True
+        elif setup == "waiting":
+            pv.wait_until = time.monotonic() + 30
+        elif setup == "no_team":
+            pv.team = []
+        elif setup == "low_level":
+            level = 100
+        pv.last_info = time.monotonic()
+        await pv._tick(level)
+        assert not [f for f in ws.sent if f["t"] == "pvp.fila.entrar"]
+    asyncio.run(go())
+
+
+def test_manual_enter_reports_why_it_cannot():
+    async def go():
+        pv = make()
+        assert await pv.enter(100) == "level"
+        pv.team = []
+        assert await pv.enter(300) == "team"
+        pv.unbind()
+        assert await pv.enter(300) == "offline"
+    asyncio.run(go())
+
+
+# ------------------------------------------------------------------ rotas
+@pytest.fixture
+def env(store, tmp_path, monkeypatch):
+    mgr = AccountManager(store, Notifier(""), DailyStats(path=str(tmp_path / "d.json")))
+
+    def fake_spawn(self, row):
+        conn = AccountConnection(build_account_config(row), self.settings(), self.notifier, self.daily)
+        conn.on_pvp_table = self.pvp_ladder.handle_frame
+        self._conns[conn.acc.index] = conn
+
+    monkeypatch.setattr(AccountManager, "_spawn", fake_spawn)
+    acc_id = mgr.add({"nick": "Ash", "token": TOKEN, "device_id": "dev-12345678"})
+    conn = mgr.get(acc_id)
+    conn.state = State.ONLINE
+    conn.hunt._ws = FakeWS()
+    conn.estado.update({"level": 300, "pokemons": [{"id": 11, "nome": "Pikachu", "level": 50, "looktype": 1}]})
+    conn.pvp.bind(conn.hunt._ws)
+    conn.pvp.handle_frame(INFO)
+    app = create_app(mgr.connections, Auth(store, exposed=False, env_token=KEY), manager=mgr, store=store)
+    return TestClient(app), conn, acc_id, mgr
+
+
+def test_overview_describes_the_account(env):
+    client, conn, acc_id, _ = env
+    a = client.get("/api/pvp", headers=H).json()["accounts"][0]
+    assert a["id"] == acc_id and a["rank"]["tierId"] == "ouro" and a["blocker"] is None and a["levelMin"] == 150
+    assert a["team"][0]["name"] == "Pikachu" and a["team"][1] == {"id": 12, "missing": True}
+    assert a["history"][0]["opponent"] == "Rival" and a["queue"]["size"] == 6386
+
+
+def test_auto_toggle_is_saved_and_applied_without_restart(env, store):
+    client, conn, acc_id, _ = env
+    assert client.post(f"/api/pvp/{acc_id}/auto", json={"on": True}, headers=H).status_code == 200
+    assert conn.pvp.auto and conn.acc.pvp_auto
+    assert store.get_account(acc_id)["options"]["pvp_auto"] is True
+    assert client.post("/api/pvp/auto", json={"on": False}, headers=H).json()["accounts"] == 1
+    assert not conn.pvp.auto and store.get_account(acc_id)["options"]["pvp_auto"] is False
+
+
+def test_queue_routes(env):
+    client, conn, acc_id, _ = env
+    assert client.post(f"/api/pvp/{acc_id}/queue", json={"action": "enter"}, headers=H).json() == {"ok": True}
+    assert conn.hunt._ws.sent[-1] == {"t": "pvp.fila.entrar"}
+    assert client.post(f"/api/pvp/{acc_id}/queue", json={"action": "leave"}, headers=H).status_code == 200
+    assert conn.hunt._ws.sent[-1] == {"t": "pvp.fila.sair"}
+    conn.pvp.team = []
+    r = client.post(f"/api/pvp/{acc_id}/queue", json={"action": "enter"}, headers=H)
+    assert r.status_code == 409 and r.json()["code"] == "team"
+
+
+def test_routes_require_the_panel_key(env):
+    client, _, acc_id, _ = env
+    assert client.get("/api/pvp").status_code == 401
+    assert client.post(f"/api/pvp/{acc_id}/auto", json={"on": True}).status_code == 401
+
+
+def test_ladder_is_requested_once_and_cached(env):
+    client, conn, _, mgr = env
+    rows = [[i, f"P{i}", "diamante", "III", 5000 - i, 10, 9] for i in range(1, 4)]
+
+    class Echo(FakeWS):
+        async def send(self, raw):
+            await super().send(raw)
+            asyncio.get_running_loop().call_soon(
+                mgr.pvp_ladder.handle_frame, conn,
+                {"t": "pvpTabela", "pagina": 1, "paginas": 10, "semana": "2026-11-15", "linhas": rows})
+
+    conn.hunt._ws = Echo()
+    first = client.get("/api/pvp/ladder?pagina=1", headers=H).json()
+    assert first["pages"] == 10 and first["rows"][0] == {"pos": 1, "nick": "P1", "tier": "diamante", "division": "III", "points": 4999, "wins": 10, "losses": 9}
+    again = client.get("/api/pvp/ladder?pagina=1", headers=H).json()
+    assert again["rows"] == first["rows"]
+    assert [f for f in conn.hunt._ws.sent if f["t"] == "pvp.tabela"] == [{"t": "pvp.tabela", "pagina": 1}]
+
+
+# ------------------------------------------------- poder e tabuleiro
+import pvp_power as pw  # noqa: E402
+
+TYRANITAR = {"pokeId": 248, "baseHp": 100, "baseAtk": 134, "baseDef": 110, "baseSpAtk": 95, "baseSpDef": 100, "baseSpeed": 61,
+             "type1": "ROCK", "type2": "DARK",
+             "attacks": [{"name": "Rock Throw", "power": 96, "type": "ROCK", "category": "PHYSICAL", "cooldownMs": 29100, "learnLevel": 1},
+                         {"name": "Crumbling Rain", "power": 600, "type": "ROCK", "category": "PHYSICAL", "cooldownMs": 60000, "learnLevel": 1}]}
+TYR_PK = {"id": 3289961, "speciesId": 248, "level": 2064, "quality": 1.711, "potencia": 1, "shiny": False, "refino": {"atk": 1},
+          "ivs": {"hp": 17, "atk": 23, "def": 20, "spAtk": 28, "spDef": 32, "speed": 32},
+          "stats": {"hp": 4607, "atk": 5741, "def": 4758, "spAtk": 4789, "spDef": 5202, "speed": 4297}}
+
+
+def test_pvp_power_matches_the_game_for_a_known_pokemon():
+    assert pw.arena_level(2064) == 488 and pw.arena_level(100) == 100 and pw.arena_level(150) == 150
+    assert pw.pvp_power(TYR_PK, TYRANITAR) == 82354          # o número que o jogo mostra ("Poder no PVP")
+
+
+def test_species_range_follows_the_special_attack_gap():
+    assert pw.species_range(TYRANITAR) == 1
+    assert pw.species_range({"baseHp": 50, "baseAtk": 50, "baseSpAtk": 60}) == 2
+    assert pw.species_range({"baseHp": 50, "baseAtk": 50, "baseSpAtk": 90}) == 3
+    assert pw.species_range({"baseHp": 50, "baseAtk": 50, "baseSpAtk": 120}) == 4
+
+
+def test_fill_houses_keeps_valid_picks_and_places_the_rest_by_range():
+    assert len(pw.HOUSES) == 30
+    out = pw.fill_houses([None, None, None], [1, 4, 1])
+    assert out == [2, 23, 3] and len(set(out)) == 3                 # corpo a corpo na frente, arqueiro atrás
+    assert pw.fill_houses([5, 5, 99], [1, 1, 1])[0] == 5
+    assert len(set(pw.fill_houses([5, 5, 99], [1, 1, 1]))) == 3     # repetida/inválida é trocada
+
+
+def test_team_save_waits_for_the_game(env):
+    client, conn, acc_id, _ = env
+    conn.estado["pokemons"] = [{"id": i, "nome": f"P{i}", "level": 200, "speciesId": 1, "tipos": []} for i in (11, 12)]
+
+    class Reply(FakeWS):
+        async def send(self, raw):
+            await super().send(raw)
+            conn.pvp.handle_frame({"t": "pvp", "timeSalvo": [11, 12], "casasSalvas": {"11": 2, "12": 3}})
+
+    conn.hunt._ws = Reply()
+    conn.pvp.bind(conn.hunt._ws)
+    r = client.post(f"/api/pvp/{acc_id}/team", json={"ids": [11, 12], "casas": {"11": 2}}, headers=H)
+    assert r.status_code == 200 and r.json()["casas"]["11"] == 2
+    sent = [f for f in conn.hunt._ws.sent if f["t"] == "pvp.time.salvar"][0]
+    assert sent["pokemonIds"] == [11, 12] and set(sent["casas"]) == {"11", "12"}
+    bad = client.post(f"/api/pvp/{acc_id}/team", json={"ids": [11, 999]}, headers=H)
+    assert bad.status_code == 400
+
+
+def test_team_save_reports_the_games_refusal(env):
+    client, conn, acc_id, _ = env
+    conn.estado["pokemons"] = [{"id": 11, "nome": "P", "level": 200, "speciesId": 1}]
+
+    class Refuse(FakeWS):
+        async def send(self, raw):
+            await super().send(raw)
+            conn.pvp.handle_frame({"t": "pvp", "recusa": {"msg": "Nível baixo demais."}})
+
+    conn.hunt._ws = Refuse()
+    conn.pvp.bind(conn.hunt._ws)
+    r = client.post(f"/api/pvp/{acc_id}/team", json={"ids": [11]}, headers=H)
+    assert r.status_code == 409 and r.json()["error"] == "Nível baixo demais."
+
+
+def test_roster_filters_and_sorts(env, monkeypatch):
+    client, conn, acc_id, _ = env
+    import pvp_team_api
+
+    async def fake_catalog():
+        return {"full": {248: TYRANITAR}}
+
+    monkeypatch.setattr(pvp_team_api, "load_catalog", fake_catalog)
+    conn.estado["pokemons"] = [
+        {**TYR_PK, "nome": "Tyranitar", "tipos": ["ROCK", "DARK"], "slot": 1},
+        {**TYR_PK, "id": 2, "nome": "Pequeno", "level": 50, "tipos": ["ROCK"], "slot": None, "stats": {}, "ivs": {}, "shiny": True},
+    ]
+    r = client.get(f"/api/pvp/{acc_id}/roster?ord=poder", headers=H).json()
+    assert r["total"] == 2 and r["items"][0]["name"] == "Tyranitar" and r["items"][0]["pvpPower"] == 82354
+    assert client.get(f"/api/pvp/{acc_id}/roster?shiny=true", headers=H).json()["total"] == 1
+    assert client.get(f"/api/pvp/{acc_id}/roster?local=colecao", headers=H).json()["items"][0]["name"] == "Pequeno"
+    assert client.get(f"/api/pvp/{acc_id}/roster?q=dark", headers=H).json()["total"] == 1

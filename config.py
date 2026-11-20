@@ -98,6 +98,7 @@ class AccountConfig:
     ball_id: int | None = None       # qual Ball repor; None = automation.ballIds do jogo
     ball_restock_threshold: int = DEFAULT_BALL_RESTOCK_THRESHOLD
     ball_restock_qty: int = DEFAULT_BALL_RESTOCK_QTY
+    pvp_auto: bool = False           # entra sozinho na fila do PVP ranqueado
 
     @property
     def name(self) -> str:
@@ -124,6 +125,7 @@ OPTION_DEFAULTS: dict = {
     "ball_id": None,
     "ball_restock_threshold": DEFAULT_BALL_RESTOCK_THRESHOLD,
     "ball_restock_qty": DEFAULT_BALL_RESTOCK_QTY,
+    "pvp_auto": False,
 }
 
 
@@ -154,6 +156,7 @@ def build_account_config(d: dict) -> AccountConfig:
         ball_id=int(o["ball_id"]) if o["ball_id"] not in (None, "") else None,
         ball_restock_threshold=int(o["ball_restock_threshold"]),
         ball_restock_qty=int(o["ball_restock_qty"]),
+        pvp_auto=bool(o["pvp_auto"]),
     )
 
 

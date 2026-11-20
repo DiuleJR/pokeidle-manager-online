@@ -70,9 +70,9 @@ OUTLAND_PREFIXES = (
 CATALOG_FILES = ("creatures.json", "creatures-novos.json", "creatures-outland-novos.json", "creatures-formas.json")
 
 
-def merge_catalog(parts: list[dict], lab: dict | None = None) -> dict:
+def merge_creatures(parts: list[dict], lab: dict | None = None) -> list[dict]:
     """Junta os arquivos de espécies do jogo como o cliente oficial faz: lista única, normaliza o Outland antigo,
-    aplica os looktypes do lab e faz Orre e Outland herdarem o sprite da espécie base. Devolve o formato compacto."""
+    aplica os looktypes do lab e faz Orre e Outland herdarem o sprite da espécie base. Devolve as espécies completas."""
     creatures: list[dict] = []
     for p in parts:
         creatures.extend(c for c in (p or {}).get("creatures", []) if isinstance(c, dict) and c.get("pokeId") is not None)
@@ -102,7 +102,40 @@ def merge_catalog(parts: list[dict], lab: dict | None = None) -> dict:
             base = by_name.get(name.lower())
         if base is not None and (base.get("looktype") or 0) > 1:
             c["looktype"] = base["looktype"]
-    return compact_creatures({"creatures": creatures})
+    return creatures
+
+
+def merge_catalog(parts: list[dict], lab: dict | None = None) -> dict:
+    """O mesmo catálogo, no formato compacto que o navegador baixa."""
+    return compact_creatures({"creatures": merge_creatures(parts, lab)})
+
+
+CATALOG_TTL_S = 3600
+_catalog: dict = {}
+
+
+async def load_catalog() -> dict | None:
+    """Baixa (cache de 1 h) os arquivos de espécies do jogo. Devolve {"compact": {...}, "full": {pokeId: espécie}}
+    ou None se o site não respondeu e não há cópia anterior."""
+    if _catalog.get("exp", 0) > time.time():
+        return _catalog
+    import aiohttp
+
+    async def fetch(s, name: str):
+        try:
+            async with s.get(f"{SITE}/assets/{name}") as resp:
+                return json.loads(await resp.text()) if resp.status == 200 else None
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            return None  # arquivo opcional: o catálogo fica só com o que veio
+
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
+        *parts, lab = await asyncio.gather(*(fetch(s, n) for n in (*CATALOG_FILES, "creatures-sprites-lab.json")))
+    if not parts[0]:
+        return _catalog or None
+    full = merge_creatures(parts, lab)
+    _catalog.update(exp=time.time() + CATALOG_TTL_S, compact=compact_creatures({"creatures": full}),
+                    full={int(c["pokeId"]): c for c in full})
+    return _catalog
 
 
 def compact_creatures(raw: dict) -> dict:
@@ -118,8 +151,6 @@ def compact_creatures(raw: dict) -> dict:
 
 
 def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store, auth: Auth) -> None:
-    creatures_cache: dict = {}
-
     def guard(request: Request, tok: str | None):
         return auth.guard(request, tok)
 
@@ -145,22 +176,10 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
         """creatures.json do jogo (tipos e loot), com cache de 1h: o site não envia CORS."""
         if (r := guard(request, tok)):
             return r
-        if creatures_cache.get("exp", 0) < time.time():
-            import aiohttp
-
-            async def fetch(s, name: str):
-                try:
-                    async with s.get(f"{SITE}/assets/{name}") as resp:
-                        return json.loads(await resp.text()) if resp.status == 200 else None
-                except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
-                    return None  # arquivo opcional: o catálogo fica só com o que veio
-
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
-                *parts, lab = await asyncio.gather(*(fetch(s, n) for n in (*CATALOG_FILES, "creatures-sprites-lab.json")))
-            if not parts[0]:
-                return JSONResponse({"error": "não consegui baixar os dados do jogo"}, status_code=502)
-            creatures_cache.update(exp=time.time() + 3600, data=merge_catalog(parts, lab))
-        return JSONResponse(creatures_cache["data"], headers={"Cache-Control": "max-age=3600"})
+        cat = await load_catalog()
+        if cat is None:
+            return JSONResponse({"error": "não consegui baixar os dados do jogo"}, status_code=502)
+        return JSONResponse(cat["compact"], headers={"Cache-Control": "max-age=3600"})
 
     @app.post("/api/accounts/{acc_id}/hunt")
     async def select_hunt(acc_id: int, body: HuntIn, request: Request, tok: str | None = Query(None, alias="token")):

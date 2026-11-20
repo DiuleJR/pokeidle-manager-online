@@ -33,6 +33,7 @@ from inventory import InventoryView
 from battle_pass import PASSE_NIVEL_MIN, pode_resgatar
 from maps import effective_tier, normalize_tiers
 from market import MarketClient
+from pvp import PvpManager
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
 from game_data import item_name
 from session_stats import ITEM_LABELS, TRACKED, SessionItems, SessionStore, ShinyTracker
@@ -191,6 +192,7 @@ class AccountConnection:
         self.on_auth_status = None        # callback(acc_id, status, detail): painel/banco
         self.on_token_renewed = None      # callback(acc_id, novo_token)
         self.on_chat = None               # callback(conn, frame): frames de chat (ChatHub)
+        self.on_pvp_table = None          # callback(conn, frame): página da tabela do PVP (Top 1.000)
         self.on_online = None             # async callback(conn): a conta acabou de ficar online
         self.chat_mute_until = 0.0        # ms epoch: mute de chat aplicado pelo jogo
         self.exit_ip = "?"
@@ -242,6 +244,7 @@ class AccountConnection:
                 get_ids=ball_ids_resolver(self.estado, account.ball_priority, lambda: self.acc.ball_id),
                 threshold=account.ball_restock_threshold, qty=account.ball_restock_qty))
         self.inventory = InventoryView(self.estado)
+        self.pvp = PvpManager(account.name, self.estado, auto=account.pvp_auto)
         self._log = logging.LoggerAdapter(log, {})
 
     # ------------------------------------------------------------------ logs
@@ -394,6 +397,7 @@ class AccountConnection:
                 self.balls.bind(ws)
                 self.shop.bind(ws)
                 self.market.bind(ws)
+                self.pvp.bind(ws)
                 if self.acc.hunt_slug and self.acc.hunt_slug != self.estado.get("huntSlug"):
                     await self.hunt.select_hunt(self.acc.hunt_slug)
                 if self.on_online:
@@ -409,6 +413,7 @@ class AccountConnection:
                     asyncio.create_task(self._frame_watchdog(ws)),
                     asyncio.create_task(self._inventory_logger()),
                     asyncio.create_task(self._hunt_queue_loop()),
+                    asyncio.create_task(self.pvp.run_forever(lambda: int(self.estado.get("level") or 0))),
                 ]
                 if self.acc.auto_catch:
                     background.append(asyncio.create_task(self.balls.run_forever()))
@@ -420,6 +425,7 @@ class AccountConnection:
                     await recv_task
                 finally:
                     self.market.unbind()
+                    self.pvp.unbind()
                     for t in background:
                         t.cancel()
                     await asyncio.gather(*background, return_exceptions=True)
@@ -453,6 +459,9 @@ class AccountConnection:
                 self.balls.handle_frame(msg)
                 self.shop.handle_frame(msg)
                 self.market.handle_frame(msg)
+                self.pvp.handle_frame(msg)
+                if msg.get("t") == "pvpTabela" and self.on_pvp_table:
+                    self.on_pvp_table(self, msg)
                 self._check_server_rares()
                 before = dict(self.session_items.gained)
                 self.session_items.update(self.estado)

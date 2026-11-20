@@ -55,6 +55,7 @@ class OptionsIn(BaseModel):
     ball_id: int | None = None
     ball_restock_threshold: int | None = Field(None, ge=0, le=100000)
     ball_restock_qty: int | None = Field(None, ge=1, le=100000)
+    pvp_auto: bool | None = None
 
 
 class LoginWindowIn(BaseModel):
