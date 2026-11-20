@@ -1,10 +1,10 @@
 import { AnimatePresence, motion, useDragControls, type PanInfo } from "framer-motion";
-import { ChevronDown, Clock, Crosshair, Crown, MapPin, Swords } from "lucide-react";
+import { ChevronDown, Clock, Crosshair, Crown, MapPin, Star, Swords } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { EquipPopover } from "@/components/EquipPopover";
 import { StatusPill } from "@/components/StatusPill";
-import { XpMedallion, XpRace, XpVersus } from "@/components/XpMeters";
+import { XpMedallion, XpRace, XpSpark, XpVersus } from "@/components/XpMeters";
 import { AnimatedNumber, Coin, GoldPerHourIcon } from "@/components/ui";
 import { serverNow, useAccount } from "@/lib/telemetry";
 import type { EquippedItem } from "@/lib/types";
@@ -190,6 +190,18 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
       <EquipChip item={ball} label="Bola equipada" onPress={options ? open("ball") : undefined} />
     </div>
   );
+  const chipsBlock = (
+    <>
+      <EquipChip item={potion} label="Poção equipada" onPress={options ? open("potion") : undefined} block />
+      <EquipChip item={ball} label="Bola equipada" onPress={options ? open("ball") : undefined} block />
+    </>
+  );
+  const huntKills =
+    acc.hunt && acc.hunt.kills > 0 ? (
+      <span className="tnum text-xs font-medium text-mute">
+        <AnimatedNumber value={acc.hunt.kills} /> abates nesta hunt
+      </span>
+    ) : null;
   const xpRow = (
     <div className="mb-3 flex items-center justify-between gap-2 text-sm">
       <span className="font-semibold text-mute">XP por hora</span>
@@ -232,17 +244,24 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
     return (
       <div className="space-y-2 sm:space-y-2.5">
         <div className="tile px-2.5 py-3 sm:px-4 sm:py-4">
-          {xpRow}
           <XpVersus trainer={trainer} mon={mon}>
-            <div className="flex justify-center">
-              <div className="flex size-14 items-center justify-center rounded-full border-2 border-edge sm:size-20" style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)" }}>
-                <span className="origin-center scale-[.8] sm:scale-110"><PokemonSprite looktype={pk?.looktype} size={52} /></span>
+            <div className="flex flex-col items-center gap-2.5 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full border-2 border-edge sm:size-16" style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)" }}>
+                <span className="origin-center scale-[.8] sm:scale-100"><PokemonSprite looktype={pk?.looktype} size={52} /></span>
               </div>
+              <div>
+                <div className="flex items-center justify-center gap-1 text-[11px] font-medium leading-none text-mute sm:text-xs">
+                  <Star className="size-3.5 fill-poke-gold text-poke-gold" aria-hidden /> XP por hora
+                </div>
+                <div className="mt-1 text-2xl font-extrabold leading-none sm:text-3xl">{xpHour}</div>
+              </div>
+              <div className="w-full max-w-[200px]"><XpSpark id={id} /></div>
+              <div className="flex w-full max-w-[200px] flex-col gap-1.5">{chipsBlock}</div>
             </div>
           </XpVersus>
         </div>
         {stats}
-        {chips}
+        {huntKills && <p className="text-right">{huntKills}</p>}
         {popover}
       </div>
     );

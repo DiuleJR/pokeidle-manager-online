@@ -270,11 +270,15 @@ function Gauge({ label, level, w, color }: { label: string; level: number | null
           animate={{ scaleY: w.p ? Math.max(w.p.pct, 0.02) : 0 }}
           transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
         />
+        {[25, 50, 75].map((t) => (
+          <span key={t} className="absolute inset-x-0 h-px bg-black/45" style={{ bottom: `${t}%` }} aria-hidden />
+        ))}
       </div>
       {w.p ? (
         <>
           <p className="mt-1.5 text-lg font-extrabold leading-none"><Pct value={w.p.pct} pulse={w.track.ev?.key} style={{ color }} /></p>
-          {w.eta && <p className="tnum mt-0.5 whitespace-nowrap text-[11px] leading-tight text-mute"><span className="hidden sm:inline">sobe </span>em {w.eta}</p>}
+          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
+          {w.eta && <p className="tnum whitespace-nowrap text-[11px] leading-tight text-mute"><span className="hidden sm:inline">sobe </span>em {w.eta}</p>}
         </>
       ) : (
         <p className="mt-1.5 text-[11px] text-mute">sem dados</p>
