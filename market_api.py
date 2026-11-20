@@ -212,8 +212,13 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
                                          return_exceptions=True)
         if isinstance(res, BaseException):
             raise res if isinstance(res, HubError) else HubError(str(res))
+        try:
+            names = await hub.names()
+        except HubError:
+            names = {}                          # sem o índice de nomes, só os Pokémon já vistos pelo painel têm sprite
         return market_hub.normalize(res, prev if isinstance(prev, dict) else None, moeda, period, days,
-                                    market_stats.looks(store), svc.icon_by_name, now)
+                                    market_stats.looks(store), svc.icon_by_name, now, names,
+                                    market_stats.looks_by_species(store))
 
     @app.get("/api/market/stats")
     async def stats(request: Request, moeda: Literal["gold", "orb"] = "gold",
