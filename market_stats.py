@@ -136,6 +136,14 @@ def looks(store: "Store") -> dict[str, int]:
     return _LOOKS[1]
 
 
+def looks_by_species(store: "Store") -> dict[int, int]:
+    """id da espécie -> looktype, das vendas guardadas (a mesma espécie tem o mesmo sprite em qualquer nome)."""
+    rows = store.sales_query(
+        "SELECT species, MAX(look) look FROM market_sales "
+        "WHERE kind='pokemon' AND shiny=0 AND look IS NOT NULL AND species IS NOT NULL GROUP BY species", {})
+    return {int(r["species"]): r["look"] for r in rows}
+
+
 def overview(store: "Store", moeda: str, period: str, now_ms: int | None = None) -> dict:
     days = PERIODS.get(period, 7)
     now = now_ms if now_ms is not None else int(time.time() * 1000)
