@@ -95,7 +95,7 @@ function Segmented<T extends string>({
           role="tab"
           aria-selected={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`relative rounded-lg px-2.5 py-1 text-xs font-semibold sm:px-3.5 sm:py-1.5 sm:text-sm transition-colors duration-200 ${
+          className={`relative min-w-0 flex-1 rounded-lg px-2.5 py-1 text-xs font-semibold sm:flex-none sm:px-3.5 sm:py-1.5 sm:text-sm transition-colors duration-200 ${
             value === o.id ? "text-void" : "text-mute hover:text-fg"
           }`}
         >
@@ -268,18 +268,20 @@ export default function App() {
               <LayoutGroup id="sub">
                 {/* Sem animação de saída: o elemento que sai (popLayout) ficava preso por cima das abas. */}
                 {tab === "dashboard" ? (
-                  <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
-                    <div className="flex items-center gap-1.5 sm:gap-2.5">
-                      <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
-                      {mode === "resumo" && <Segmented id="cardstyle" options={CARD_STYLES} value={cardStyle} onChange={setCardStyle} />}
+                  <motion.div key="mode" className="w-full sm:w-auto" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
+                    {/* Celular: Resumo/Sessão e o botão de zerar numa linha, os modelos de card na de baixo, esticados. */}
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
+                      <Segmented id="mode" className="order-1" options={MODES} value={mode} onChange={setMode} />
+                      {mode === "resumo" && <Segmented id="cardstyle" className="order-3 w-full sm:order-2 sm:w-auto" options={CARD_STYLES} value={cardStyle} onChange={setCardStyle} />}
                       <button
                         type="button"
-                        className="btn"
+                        aria-label="Zerar sessão"
+                        className="btn order-2 ml-auto sm:order-3 sm:ml-0"
                         onClick={() => setResetOpen(true)}
                         title="Zerar o tempo, os itens e os shinies da sessão de todas as contas"
                       >
                         <RotateCcw className="size-4" aria-hidden />
-                        <span>Zerar sessão</span>
+                        <span className="hidden sm:inline">Zerar sessão</span>
                       </button>
                     </div>
                   </motion.div>

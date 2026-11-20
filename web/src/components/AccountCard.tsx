@@ -145,7 +145,7 @@ function EquipChip({ item, label, onPress, block = false }: { item?: EquippedIte
       ) : (
         <span className="text-mute">—</span>
       )}
-      {onPress && <ChevronDown className="ml-auto size-3.5 shrink-0 text-mute" aria-hidden />}
+      {onPress && <ChevronDown className="ml-auto hidden size-3.5 shrink-0 text-mute min-[360px]:block" aria-hidden />}
     </button>
   );
 }

@@ -171,16 +171,23 @@ function Legend({ label, level, w, color }: { label: string; level: number | nul
           <span className="truncate">{label}</span>
           {level != null && <span className="tnum shrink-0 text-xs font-semibold text-mute">Nv. {fmtShort(level)}</span>}
         </p>
-        <GainChip ev={w.track.ev} color={color} />
       </div>
       {w.p ? (
-        <p className="tnum mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-mute">
-          <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-xl font-extrabold leading-none" style={{ color }} />
-          <span>
-            faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
-            {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
-          </span>
-        </p>
+        <div className="mt-0.5">
+          <div className="flex items-center justify-between gap-2">
+            <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-xl font-extrabold leading-none" style={{ color }} />
+            <GainChip ev={w.track.ev} color={color} />
+          </div>
+          {/* Celular: duas linhas curtas (nada quebra no meio); a partir de sm, numa linha só. */}
+          <p className="tnum mt-0.5 flex min-w-0 flex-col text-xs leading-snug text-mute sm:flex-row sm:flex-wrap sm:gap-x-1.5">
+            <span className="whitespace-nowrap">faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b></span>
+            {w.eta && (
+              <span className="whitespace-nowrap">
+                <span className="hidden sm:inline">· </span>sobe em <b className="font-semibold text-fg">{w.eta}</b>
+              </span>
+            )}
+          </p>
+        </div>
       ) : (
         <p className="mt-0.5 text-xs text-mute">Aguardando o XP desta conta…</p>
       )}
@@ -212,14 +219,14 @@ export function XpMedallion({ trainer, mon, sprite }: { trainer: XpWho; mon: XpW
     </>
   );
   return (
-    <div className="flex items-center gap-3 sm:gap-5">
-      <div className="relative size-[116px] shrink-0 sm:size-[144px]">
+    <div className="flex items-center gap-2.5 min-[360px]:gap-3 sm:gap-5">
+      <div className="relative size-[92px] shrink-0 min-[360px]:size-[116px] sm:size-[144px]">
         <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label="Anel de fora: XP do treinador. Anel de dentro: XP do Pokémon.">
           {ring(55, t, XP_TRAINER)}
           {ring(43, m, XP_MON)}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="origin-center scale-[.8] sm:scale-[1.05]">{sprite}</span>
+          <span className="origin-center scale-100 sm:scale-[1.3]">{sprite}</span>
         </div>
       </div>
       <div className="min-w-0 flex-1 space-y-3">
@@ -263,7 +270,7 @@ function Gauge({ label, level, w, color }: { label: string; level: number | null
         <>
           <p className="mt-1.5 text-lg font-extrabold leading-none"><Pct value={w.p.pct} pulse={w.track.ev?.key} style={{ color }} /></p>
           <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
-          {w.eta && <p className="tnum text-[11px] leading-tight text-mute">sobe em {w.eta}</p>}
+          {w.eta && <p className="tnum whitespace-nowrap text-[11px] leading-tight text-mute"><span className="hidden sm:inline">sobe </span>em {w.eta}</p>}
         </>
       ) : (
         <p className="mt-1.5 text-[11px] text-mute">sem dados</p>
@@ -277,7 +284,7 @@ export function XpVersus({ trainer, mon, children }: { trainer: XpWho; mon: XpWh
   const t = useWho(trainer);
   const m = useWho(mon);
   return (
-    <div className="grid grid-cols-[minmax(0,84px)_minmax(0,1fr)_minmax(0,84px)] items-start gap-2 sm:grid-cols-[minmax(0,110px)_minmax(0,1fr)_minmax(0,110px)] sm:gap-4">
+    <div className="grid grid-cols-[minmax(0,66px)_minmax(0,1fr)_minmax(0,66px)] items-start gap-1.5 min-[360px]:grid-cols-[minmax(0,84px)_minmax(0,1fr)_minmax(0,84px)] min-[360px]:gap-2 sm:grid-cols-[minmax(0,110px)_minmax(0,1fr)_minmax(0,110px)] sm:gap-4">
       <Gauge label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} />
       <div className="min-w-0 self-center">{children}</div>
       <Gauge label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} />
