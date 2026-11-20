@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from auth import Auth
+import market_stats
 from market import MarketError
 from market_service import MarketService, today_key
 
@@ -195,6 +196,32 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
             return fail(e)
         since = int((time.time() - 30 * 86400) * 1000)
         return {"itemId": itemId, "moeda": moeda, "sales": series, "floor": store.price_history(itemId, since)}
+
+    def with_icons(groups: list[dict]) -> list[dict]:
+        for g in groups:
+            g["icon"] = svc.icon_by_name(g["name"])
+        return groups
+
+    @app.get("/api/market/stats")
+    async def stats(request: Request, moeda: Literal["gold", "orb"] = "gold",
+                    period: Literal["24h", "7d", "30d"] = "7d", tok: str | None = Query(None, alias="token")):
+        """Análise do mercado: o que mais vendeu, preços, altas e quedas, volume por dia e por hora."""
+        if (r := guard(request, tok)):
+            return r
+        res = market_stats.overview(store, moeda, period)
+        with_icons(res["items"])
+        for g in (*res["up"], *res["down"]):
+            if g["kind"] == "item":
+                g["icon"] = svc.icon_by_name(g["name"])
+        return res
+
+    @app.get("/api/market/stats/detail")
+    async def stats_detail(request: Request, kind: Literal["item", "pokemon"], name: str = Query(max_length=80),
+                           shiny: bool = False, moeda: Literal["gold", "orb"] = "gold",
+                           period: Literal["24h", "7d", "30d"] = "7d", tok: str | None = Query(None, alias="token")):
+        if (r := guard(request, tok)):
+            return r
+        return market_stats.detail(store, kind, name, shiny, moeda, period)
 
     @app.get("/api/market/mine")
     async def mine(request: Request, account: int | None = None, tok: str | None = Query(None, alias="token")):

@@ -198,6 +198,7 @@ def env(store, tmp_path, monkeypatch):
     mgr = AccountManager(store, Notifier(""), DailyStats(path=str(tmp_path / "d.json")))
     conn = FakeConn()
     mgr._conns[1] = conn
+    mgr.market._collect_at = float("inf")      # a coleta da aba Análise tem os testes dela (test_market_stats)
     app = create_app(mgr.connections, Auth(store, exposed=False, env_token=KEY), manager=mgr, store=store)
     c = TestClient(app)
     c.mgr, c.conn, c.store = mgr, conn, store

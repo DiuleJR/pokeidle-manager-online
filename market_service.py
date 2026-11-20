@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 
 import re
 
+import market_stats
 from game_data import ITEM_NAMES, item_icon_path, item_meta, item_name
 from market import MarketError
 from notify import BLUE, GOLD, GREEN
@@ -46,7 +47,8 @@ SELL_CHECK_S = 120               # confere se algum item meu está caro
 SELL_COOLDOWN_S = 6 * 3600       # não repete o aviso do mesmo item antes disso...
 SELL_RISE = 0.25                 # ...a menos que o ágio suba mais 25 pontos
 SELL_MIN_SOLD = 3                # média de 7 dias só vale com algumas vendas
-SALE_CHECK_S = 60                # confere as vendas das contas
+COLLECT_EVERY_S = 60             # coleta das vendas do servidor (aba Análise)
+SALE_CHECK_S = 60              # confere as vendas das contas
 NO_BUDGET_CAP = 10**15            # regra sem orçamento diário: só o saldo da conta limita
 WIN_BATCH_S = 3                 # espera para juntar as compras de várias contas no mesmo anúncio
 SITE = "https://pokeidle.io"
@@ -162,6 +164,7 @@ class MarketService:
         self._sell_alerted: dict[tuple[int, str], tuple[float, float]] = {}   # (item, moeda) -> (quando, ágio)
         self._sell_at = 0.0
         self._sale_at = 0.0
+        self._collect_at = 0.0
 
     # ------------------------------------------------------------ contas
     def online(self):
@@ -723,7 +726,22 @@ class MarketService:
                 self.notifier.send(f"💸 Mais {len(new) - 5} vendas em {c.acc.nick}", "Veja em Mercado → Vendas.", GOLD)
 
     # ------------------------------------------------------------ laço
+    async def collect_sales(self) -> None:
+        """Guarda as vendas novas do servidor para a aba Análise (uma consulta por minuto)."""
+        if time.time() - self._collect_at < COLLECT_EVERY_S or self.pick() is None:
+            return
+        self._collect_at = time.time()
+        n = await market_stats.collect(self, self.store)
+        if n:
+            log.debug("análise: %d vendas novas", n)
+
     async def tick(self) -> None:
+        try:
+            await self.collect_sales()
+        except MarketError as e:
+            log.debug("coleta de vendas: %s", e)
+        except Exception:  # noqa: BLE001
+            log.exception("coleta de vendas falhou")
         await self.snapshot_if_due()
         for job in (self.sell_alerts, self.sale_alerts):
             try:

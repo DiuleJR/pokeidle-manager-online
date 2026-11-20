@@ -167,6 +167,55 @@ export interface BuyResult {
   total?: number;
 }
 
+// ------------------------------------------------------------------ análise do mercado
+export type StatsPeriod = "24h" | "7d" | "30d";
+export interface StatsGroup {
+  name: string;
+  shiny: boolean;
+  look: number | null;
+  icon?: string | null;
+  kind?: "item" | "pokemon";
+  sales: number;
+  units: number;
+  volume: number;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+  prevSales: number;
+  prevAvg: number | null;
+  /** variação do preço médio contra o período anterior (%), só com vendas suficientes nos dois */
+  change: number | null;
+}
+export interface StatsBucket {
+  k: string;
+  sales: number;
+  volume: number;
+  itemVolume: number;
+  pokemonVolume: number;
+}
+export interface MarketStats {
+  moeda: Moeda;
+  period: StatsPeriod;
+  days: number;
+  now: number;
+  coverage: { first: number | null; last: number | null; count: number };
+  totals: { sales: number; volume: number; prevSales: number; prevVolume: number };
+  series: StatsBucket[];
+  hourly: boolean;
+  hours: { h: number; sales: number; volume: number }[];
+  items: StatsGroup[];
+  pokemon: StatsGroup[];
+  up: StatsGroup[];
+  down: StatsGroup[];
+}
+export interface StatsDetail {
+  kind: "item" | "pokemon";
+  name: string;
+  shiny: boolean;
+  hourly: boolean;
+  points: { k: string; sales: number; units: number; volume: number; avg: number | null; min: number; max: number }[];
+}
+
 const qs = (p: Record<string, string | number | boolean | null | undefined>) => {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== null && v !== "" && v !== false) u.set(k, String(v));
@@ -184,6 +233,9 @@ export const marketApi = {
     call<Tape>("GET", `/api/market/tape${qs(p)}`),
   sales: (itemId: number, moeda: Moeda, account?: number) =>
     call<{ sales: SalesPoint[]; floor: FloorPoint[] }>("GET", `/api/market/sales${qs({ itemId, moeda, account })}`),
+  stats: (moeda: Moeda, period: StatsPeriod) => call<MarketStats>("GET", `/api/market/stats${qs({ moeda, period })}`),
+  statsDetail: (kind: "item" | "pokemon", name: string, shiny: boolean, moeda: Moeda, period: StatsPeriod) =>
+    call<StatsDetail>("GET", `/api/market/stats/detail${qs({ kind, name, shiny, moeda, period })}`),
   mine: (account?: number) => call<{ account: number; now: number; listings: Listing[] }>("GET", `/api/market/mine${qs({ account })}`),
   wallet: (account?: number) => call<Wallet>("GET", `/api/market/wallet${qs({ account })}`),
   log: () => call<{ log: LogRow[] }>("GET", "/api/market/log"),

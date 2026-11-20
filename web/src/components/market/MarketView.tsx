@@ -4,13 +4,15 @@ import { MineTab } from "./MineTab";
 import { PokemonTab } from "./PokemonTab";
 import { PricesTab } from "./PricesTab";
 import { RulesTab } from "./RulesTab";
+import { StatsTab } from "./StatsTab";
 import { Reveal } from "@/components/ui";
 import { Seg } from "./shared";
 
-type Sub = "buy" | "sales" | "auto" | "mine";
+type Sub = "buy" | "sales" | "stats" | "auto" | "mine";
 const SUBS: { id: Sub; label: string }[] = [
   { id: "buy", label: "Comprar" },
   { id: "sales", label: "Vendas" },
+  { id: "stats", label: "Análise" },
   { id: "auto", label: "Automação" },
   { id: "mine", label: "Minha conta" },
 ];
@@ -31,15 +33,15 @@ const save = (key: string, v: string) => {
   }
 };
 
-/** Aba Mercado: Comprar (itens e Pokémon), Vendas (histórico), Automação (alertas e sniper) e Minha conta. */
+/** Aba Mercado: Comprar (itens e Pokémon), Vendas (histórico), Análise (estatísticas do servidor), Automação (alertas e sniper) e Minha conta. */
 export function MarketView() {
-  const [sub, setSub] = useState<Sub>(() => read("mkt-sub", ["buy", "sales", "auto", "mine"] as const, "buy"));
+  const [sub, setSub] = useState<Sub>(() => read("mkt-sub", ["buy", "sales", "stats", "auto", "mine"] as const, "buy"));
   const [kind, setKind] = useState<"items" | "pokemon">(() => read("mkt-kind", ["items", "pokemon"] as const, "items"));
 
   return (
     <div className="mkt space-y-3 sm:space-y-4">
       <Reveal index={0}>
-      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2" role="tablist" aria-label="Seção do mercado">
+      <div className="grid grid-cols-5 gap-1.5 sm:flex sm:gap-2" role="tablist" aria-label="Seção do mercado">
         {SUBS.map((s) => (
           <button
             key={s.id}
@@ -77,6 +79,7 @@ export function MarketView() {
         </div>
       )}
       {sub === "sales" && <HistoryTab />}
+      {sub === "stats" && <StatsTab />}
       {sub === "auto" && <RulesTab />}
       {sub === "mine" && <MineTab />}
       </Reveal>

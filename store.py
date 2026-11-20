@@ -77,6 +77,22 @@ CREATE TABLE IF NOT EXISTS price_history (
     ads INTEGER NOT NULL, units INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_price_item ON price_history(item_id, ts);
+CREATE TABLE IF NOT EXISTS market_sales (
+    id INTEGER PRIMARY KEY,          -- id da venda no jogo (único e crescente)
+    ts INTEGER NOT NULL,             -- ms
+    kind TEXT NOT NULL,              -- item | pokemon
+    moeda TEXT NOT NULL,             -- gold | orb
+    price REAL NOT NULL,             -- valor total da venda
+    qty INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    species INTEGER,
+    shiny INTEGER NOT NULL DEFAULT 0,
+    iv INTEGER,
+    level INTEGER,
+    look INTEGER                     -- looktype do Pokémon (sprite)
+);
+CREATE INDEX IF NOT EXISTS idx_sales_ts ON market_sales(ts);
+CREATE INDEX IF NOT EXISTS idx_sales_name ON market_sales(kind, moeda, name, ts);
 CREATE TABLE IF NOT EXISTS market_rule_spend (
     rule_id INTEGER NOT NULL,
     account_id INTEGER NOT NULL,
@@ -377,6 +393,33 @@ class Store:
         with self._lock:
             r = self._db.execute("SELECT MAX(ts) FROM price_history").fetchone()
         return int(r[0] or 0)
+
+    # ----------------------------------------------------------- vendas do servidor (análise do mercado)
+    SALES_KEEP_DAYS = 60
+
+    def last_sale_id(self) -> int:
+        with self._lock:
+            r = self._db.execute("SELECT MAX(id) FROM market_sales").fetchone()
+        return int(r[0] or 0)
+
+    def add_sales(self, rows: list[tuple]) -> int:
+        """rows: (id, ts, kind, moeda, price, qty, name, species, shiny, iv, level, look). Ignora ids já gravados."""
+        if not rows:
+            return 0
+        with self._lock:
+            before = self._db.total_changes
+            self._db.executemany(
+                "INSERT OR IGNORE INTO market_sales(id, ts, kind, moeda, price, qty, name, species, shiny, iv, level, look) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+            added = self._db.total_changes - before
+            self._db.execute("DELETE FROM market_sales WHERE ts < ?",
+                             (int(time.time() * 1000) - self.SALES_KEEP_DAYS * 86_400_000,))
+            self._db.commit()
+        return added
+
+    def sales_query(self, sql: str, params: dict) -> list[sqlite3.Row]:
+        with self._lock:
+            return self._db.execute(sql, params).fetchall()
 
     def add_market_log(self, account_id: int | None, rule_id: int | None, status: str, text: str) -> None:
         with self._lock:

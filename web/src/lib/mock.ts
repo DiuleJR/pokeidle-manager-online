@@ -184,6 +184,34 @@ function installMockApi(accs: AccountSnapshot[]) {
         ],
       });
     }
+    if (path === "/api/market/stats") {                    // análise do mercado do modo de demonstração
+      const q = new URL(url, "http://x").searchParams;
+      const days = q.get("period") === "24h" ? 1 : q.get("period") === "30d" ? 30 : 7;
+      const orb = q.get("moeda") === "orb";
+      const buckets = days === 1 ? 24 : days;
+      const wave = (i: number) => 0.6 + 0.4 * Math.sin(i * 1.3) + (i % 5) * 0.08;
+      const series = Array.from({ length: buckets }, (_, i) => {
+        const iv = Math.round((orb ? 900 : 4_800_000) * wave(i)), pv = Math.round((orb ? 2400 : 21_000_000) * wave(i + 2));
+        const d = new Date(Date.now() - 3 * 3_600_000 - (buckets - 1 - i) * (days === 1 ? 3_600_000 : 86_400_000)).toISOString();
+        return { k: days === 1 ? `${d.slice(0, 10)} ${d.slice(11, 13)}:00` : d.slice(0, 10), sales: Math.round(60 * wave(i)), volume: iv + pv, itemVolume: iv, pokemonVolume: pv };
+      });
+      const g = (name: string, sales: number, avg: number, change: number | null, extra: object = {}) => ({ name, shiny: false, look: null, sales, units: sales * 4, volume: Math.round(sales * 4 * avg), avg, min: Math.round(avg * 0.7), max: Math.round(avg * 1.4), prevSales: sales - 3, prevAvg: change === null ? null : Math.round(avg / (1 + change / 100)), change, ...extra });
+      const k = orb ? 1 / 12000 : 1;
+      const items = [g("Rare Candy", 412, 104_000 * k, 6.4, { kind: "item" }), g("Sun Stone", 268, 74_500 * k, -4.2), g("Fire Stone", 190, 55_000 * k, 12.9), g("Moon Stone", 141, 81_000 * k, null), g("Leaf Stone", 96, 52_000 * k, -11.3)];
+      const mons = [g("Garchomp", 88, 42_000_000 * k, 3.1, { look: 60445 }), g("Pikachu", 61, 5_200_000 * k, -8.7, { shiny: true, look: 60003 }), g("Scizor", 44, 39_000_000 * k, null, { look: 60212 })];
+      const hours = Array.from({ length: 24 }, (_, h) => ({ h, sales: Math.round(40 * (0.5 + 0.5 * Math.sin((h - 6) / 3.8)) + 8), volume: 0 }));
+      return json({ moeda: orb ? "orb" : "gold", period: q.get("period") ?? "7d", days, now: Date.now(), coverage: { first: Date.now() - 20 * 86_400_000, last: Date.now() - 40_000, count: 48210 }, totals: { sales: 1830 * days, volume: orb ? 3_400 * days : 24_000_000 * days, prevSales: 1700 * days, prevVolume: orb ? 3_700 * days : 21_000_000 * days }, series, hourly: days === 1, hours, items, pokemon: mons, up: [items[2], mons[0], items[0]], down: [items[4], mons[1], items[1]] });
+    }
+    if (path === "/api/market/stats/detail") {
+      const q = new URL(url, "http://x").searchParams;
+      const days = q.get("period") === "24h" ? 1 : q.get("period") === "30d" ? 30 : 7;
+      const n = days === 1 ? 24 : days;
+      return json({ kind: q.get("kind"), name: q.get("name"), shiny: false, hourly: days === 1, points: Array.from({ length: n }, (_, i) => {
+        const d = new Date(Date.now() - 3 * 3_600_000 - (n - 1 - i) * (days === 1 ? 3_600_000 : 86_400_000)).toISOString();
+        const avg = Math.round(70_000 + 9_000 * Math.sin(i / 2));
+        return { k: days === 1 ? `${d.slice(0, 10)} ${d.slice(11, 13)}:00` : d.slice(0, 10), sales: 12 + (i % 7), units: 40, volume: avg * 40, avg, min: Math.round(avg * 0.8), max: Math.round(avg * 1.25) };
+      }) });
+    }
     if (path === "/api/market/log") {
       const st = ["comprado", "perdeu_sorteio", "perdeu_sorteio", "comprado", "recusado"];
       return json({
