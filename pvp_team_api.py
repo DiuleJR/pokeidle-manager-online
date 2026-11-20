@@ -81,6 +81,44 @@ def species_payload(esp: dict, species: dict[int, dict], c: "AccountConnection |
             "pokedex": {"defeated": dex.get("k"), "captured": dex.get("c")}, "foundIn": found}
 
 
+def find_species(pk: dict, species: dict[int, dict]) -> dict | None:
+    """Espécie do Pokémon. Fichas públicas (chat, mercado) podem vir sem `speciesId`: cai para o nome."""
+    esp = species.get(pk.get("speciesId"))
+    if esp is None and pk.get("nome"):
+        nome = str(pk["nome"]).strip().lower()
+        esp = next((e for e in species.values() if str(e.get("name") or "").lower() == nome), None)
+    return esp
+
+
+def sheet_payload(pk: dict, species: dict[int, dict], c: "AccountConnection | None", *,
+                  hunts_from: "AccountConnection | None" = None) -> dict:
+    """Ficha completa de um Pokémon (da conta, ou de outro jogador quando `c` é None).
+
+    Em Pokémon de outro jogador não há Pokédex a mostrar; `hunts_from` só empresta a lista de hunts."""
+    esp = find_species(pk, species)
+    stats = pk.get("stats") or {}
+    out = {
+        "pokemon": dict(pk),
+        "combatHp": max(24, pw._round((stats.get("hp") or 0) * pw.COMBAT_HP_MULT)),
+        "pvpPower": 0, "pvpLevel": pw.arena_level(pk.get("level") or 1), "pvePower": 0,
+        "bases": None, "range": pw.species_range(esp),
+        "species": None,
+    }
+    if esp is None:
+        return out
+    try:
+        out.update(pvpPower=pw.pvp_power(pk, esp), pvePower=pw.pve_power(pk, esp), bases=pw.bases(esp, pk.get("refino")))
+    except (KeyError, TypeError, ValueError):       # ficha pública incompleta: mostra o resto sem os poderes
+        pass
+    out["pokemon"].setdefault("speciesId", esp.get("pokeId"))
+    if c is not None:
+        out.update(species_payload(esp, species, c))
+    else:
+        out.update(species_payload(esp, species, hunts_from))
+        out["pokedex"] = {"defeated": None, "captured": None}
+    return out
+
+
 def register_pvp_team_routes(app: FastAPI, manager: "AccountManager", auth: "Auth") -> None:
     async def species_map() -> dict[int, dict]:
         cat = await load_catalog()
@@ -173,14 +211,4 @@ def register_pvp_team_routes(app: FastAPI, manager: "AccountManager", auth: "Aut
         pk = _owned(c).get(pid) if c else None
         if pk is None:
             return JSONResponse({"error": "Pokémon não encontrado nessa conta."}, status_code=404)
-        species = await species_map()
-        esp = species.get(pk.get("speciesId"))
-        return {
-            "pokemon": dict(pk),
-            "combatHp": max(24, pw._round((pk.get("stats") or {}).get("hp", 0) * pw.COMBAT_HP_MULT)),
-            "pvpPower": pw.pvp_power(pk, esp), "pvpLevel": pw.arena_level(pk.get("level")),
-            "pvePower": pw.pve_power(pk, esp),
-            "bases": pw.bases(esp, pk.get("refino")) if esp else None,
-            "range": pw.species_range(esp),
-            **(species_payload(esp, species, c) if esp else {"species": None}),
-        }
+        return sheet_payload(pk, await species_map(), c)

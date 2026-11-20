@@ -289,6 +289,11 @@ class MarketClient:
         frame = {"t": msg_t, "pagina": max(0, int(pagina)), "seq": seq, **(filtros or {})}
         return await self.request(frame, _match_aba(aba, seq=seq))
 
+    async def anuncio(self, listing_id: int) -> dict:
+        """Um anúncio avulso (o link do chat): {t:"market", aba:"anuncio", id, anuncio}."""
+        lid = int(listing_id)
+        return await self.request({"t": "market.anuncio", "id": lid}, _match_aba("anuncio", id=lid))
+
     async def meus(self) -> dict:
         return await self.request({"t": "market.meus"}, _match_aba("meus"))
 

@@ -142,6 +142,7 @@ def env(store, tmp_path, monkeypatch):
     def fake_spawn(self, row):
         conn = AccountConnection(build_account_config(row), self.settings(), self.notifier, self.daily)
         conn.on_pvp_table = self.pvp_ladder.handle_frame
+        conn.on_ficha = self.fichas.handle_frame
         self._conns[conn.acc.index] = conn
 
     monkeypatch.setattr(AccountManager, "_spawn", fake_spawn)
@@ -212,7 +213,7 @@ def test_ladder_is_requested_once_and_cached(env):
 # ------------------------------------------------- poder e tabuleiro
 import pvp_power as pw  # noqa: E402
 
-TYRANITAR = {"pokeId": 248, "baseHp": 100, "baseAtk": 134, "baseDef": 110, "baseSpAtk": 95, "baseSpDef": 100, "baseSpeed": 61,
+TYRANITAR = {"pokeId": 248, "name": "Tyranitar", "baseHp": 100, "baseAtk": 134, "baseDef": 110, "baseSpAtk": 95, "baseSpDef": 100, "baseSpeed": 61,
              "type1": "ROCK", "type2": "DARK",
              "attacks": [{"name": "Rock Throw", "power": 96, "type": "ROCK", "category": "PHYSICAL", "cooldownMs": 29100, "learnLevel": 1},
                          {"name": "Crumbling Rain", "power": 600, "type": "ROCK", "category": "PHYSICAL", "cooldownMs": 60000, "learnLevel": 1}]}
@@ -292,3 +293,104 @@ def test_roster_filters_and_sorts(env, monkeypatch):
     assert client.get(f"/api/pvp/{acc_id}/roster?shiny=true", headers=H).json()["total"] == 1
     assert client.get(f"/api/pvp/{acc_id}/roster?local=colecao", headers=H).json()["items"][0]["name"] == "Pequeno"
     assert client.get(f"/api/pvp/{acc_id}/roster?q=dark", headers=H).json()["total"] == 1
+
+
+# ------------------------------------------------- ficha de Pokémon de outros (mercado, chat)
+@pytest.fixture
+def sheets(env, monkeypatch):
+    import pokemon_sheet_api
+    import pvp_team_api
+
+    async def fake_catalog():
+        return {"full": {248: TYRANITAR}}
+
+    monkeypatch.setattr(pvp_team_api, "load_catalog", fake_catalog)
+    monkeypatch.setattr(pokemon_sheet_api, "load_catalog", fake_catalog)
+    return env
+
+
+def test_sheet_from_a_market_pokemon(sheets):
+    client, _, _, _ = sheets
+    r = client.post("/api/pokemon/sheet", json={"pokemon": {**TYR_PK, "nome": "Tyranitar", "dono": "Rival"}}, headers=H)
+    d = r.json()
+    assert r.status_code == 200 and d["pvpPower"] == 82354 and d["owner"] == "Rival" and d["species"]["pokeId"] == 248
+    assert d["pokedex"] == {"defeated": None, "captured": None}          # o Pokédex é da conta, não do dono do Pokémon
+    with_price = client.post("/api/pokemon/sheet", json={"pokemon": TYR_PK, "listing": {"id": 4, "price": 900, "currency": "orb", "qty": 1}}, headers=H).json()
+    assert with_price["listing"] == {"id": 4, "price": 900, "currency": "orb", "qty": 1} and "listing" not in d
+    assert client.post("/api/pokemon/sheet", json={"pokemon": {"id": 1}}, headers=H).status_code == 422
+    assert client.post("/api/pokemon/sheet", json={"pokemon": TYR_PK}).status_code in (401, 403)
+
+
+def test_sheet_without_species_id_falls_back_to_the_name(sheets):
+    client, _, _, _ = sheets
+    pk = {k: v for k, v in TYR_PK.items() if k != "speciesId"} | {"nome": "Tyranitar"}
+    d = client.post("/api/pokemon/sheet", json={"pokemon": pk}, headers=H).json()
+    assert d["species"]["pokeId"] == 248 and d["pokemon"]["speciesId"] == 248
+
+
+def test_public_pokemon_is_asked_to_the_game_once_and_cached(sheets):
+    client, conn, _, _ = sheets
+    asked = []
+
+    class Reply(FakeWS):
+        async def send(self, raw):
+            await super().send(raw)
+            frame = json.loads(raw)
+            if frame["t"] == "chat.verPokemon":
+                asked.append(frame)
+                conn.on_ficha(conn, {"t": "ranking.ficha", "pokemon": {**TYR_PK, "id": 777, "nome": "Tyranitar"}})
+
+    conn.hunt._ws = Reply()
+    r = client.get("/api/pokemon/public?nick=Bob&pid=777", headers=H)
+    assert r.status_code == 200 and r.json()["pokemon"]["id"] == 777 and r.json()["owner"] == "Bob"
+    assert asked == [{"t": "chat.verPokemon", "nick": "Bob", "pokemonId": 777}]
+    assert client.get("/api/pokemon/public?nick=Bob&pid=777", headers=H).status_code == 200
+    assert len(asked) == 1                                               # segunda abertura vem do cache
+    assert client.get("/api/pokemon/public?nick=Bob", headers=H).status_code == 400
+
+
+def test_public_pokemon_times_out_with_a_clear_message(sheets, monkeypatch):
+    import pokemon_sheet_api
+    client, _, _, _ = sheets
+    monkeypatch.setattr(pokemon_sheet_api, "FICHA_WAIT_S", 0.05)
+    r = client.get("/api/pokemon/public?nick=Bob&pid=888", headers=H)
+    assert r.status_code == 504 and "vendido ou liberado" in r.json()["error"]
+
+
+def test_public_pokemon_of_my_own_account_uses_the_full_sheet(sheets):
+    client, conn, _, _ = sheets
+    conn.estado["eu"] = {"nick": "Ash"}
+    conn.estado["pokemons"] = [{**TYR_PK, "id": 5, "nome": "Tyranitar"}]
+    r = client.get("/api/pokemon/public?nick=ash&pid=5", headers=H)
+    assert r.status_code == 200 and r.json()["pokedex"] is not None and r.json()["pvpPower"] == 82354
+
+
+def test_listing_sheet_reads_the_ad_from_the_market(sheets, monkeypatch):
+    client, conn, _, _ = sheets
+    monkeypatch.setattr(type(conn.market), "online", property(lambda self: True))
+    ads = {1: {"id": 1, "estado": "aberto", "tipo": "pokemon", "vendedor": "Dona", "preco": 8000, "moeda": "orb", "qtd": 1,
+               "pokemonId": 31, "ficha": {**TYR_PK, "id": None, "nome": "Tyranitar"}},
+           2: {"id": 2, "estado": "aberto", "tipo": "item", "itemId": 5, "ficha": {}},
+           3: {"id": 3, "estado": "vendido", "tipo": "pokemon", "ficha": {**TYR_PK}}}
+
+    async def fake_anuncio(lid):
+        return {"t": "market", "aba": "anuncio", "id": lid, "anuncio": ads.get(lid)}
+
+    monkeypatch.setattr(conn.market, "anuncio", fake_anuncio)
+    d = client.get("/api/pokemon/listing/1", headers=H).json()
+    assert d["owner"] == "Dona" and d["pokemon"]["id"] == 31 and d["listing"]["price"] == 8000 and d["pvpPower"] == 82354
+    assert client.get("/api/pokemon/listing/2", headers=H).json()["code"] == "item"
+    gone = client.get("/api/pokemon/listing/3", headers=H)
+    assert gone.status_code == 404 and gone.json()["code"] == "gone"
+    assert client.get("/api/pokemon/listing/99", headers=H).status_code == 404
+
+
+def test_chat_rows_carry_the_pokemon_and_listing_links():
+    from chat import normalize
+    base = {"id": 1, "canal": "mundo", "idioma": "pt", "de": "X"}
+    share = normalize({**base, "pkShare": {"nick": "Liang", "pokemonId": 55, "nome": "Leafeon", "apelido": "Folha"}})
+    assert share["pk"] == {"nick": "Liang", "id": 55, "label": "Folha"}
+    shiny = normalize({**base, "id": 2, "shinyCaptura": {"nick": "yLuffyD", "pokemonId": 9, "nome": "Staravia"}})
+    assert shiny["pk"] == {"nick": "yLuffyD", "id": 9, "label": "Staravia"} and "Staravia" in shiny["text"]
+    assert normalize({**base, "id": 3, "texto": "oi"})["pk"] is None
+    assert normalize({**base, "id": 4, "pkShare": {"nick": "A", "nome": "B"}})["pk"] is None      # sem id: sem link

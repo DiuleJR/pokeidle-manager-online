@@ -90,6 +90,24 @@ def _summary(m: dict) -> tuple[str, str] | None:
     return None
 
 
+def _pokemon_link(m: dict) -> dict | None:
+    """O Pokémon que a mensagem cita (compartilhado, capturado shiny/lendário): `{nick, id, label}`.
+    O painel abre a ficha pedindo `chat.verPokemon` ao jogo; `label` é o trecho do texto que vira link."""
+    for key, label_keys in (("pkShare", ("apelido", "nome")), ("shinyCaptura", ("nome",)), ("lendarioCaptura", ("nome",))):
+        s = m.get(key)
+        if not isinstance(s, dict):
+            continue
+        try:
+            pid = int(s.get("pokemonId") or 0)
+        except (TypeError, ValueError):
+            continue
+        nick = _s(s.get("nick"), 24)
+        label = next((_s(s.get(k), 40) for k in label_keys if s.get(k)), "")
+        if pid > 0 and nick and label:
+            return {"nick": nick, "id": pid, "label": label}
+    return None
+
+
 def normalize(m: dict, canal: str | None = None) -> dict | None:
     """Mensagem do jogo -> mensagem do painel (None = descartar)."""
     if not isinstance(m, dict) or m.get("id") is None or m.get("apagada"):
@@ -108,7 +126,7 @@ def normalize(m: dict, canal: str | None = None) -> dict | None:
     if kind == "ad":
         a = m["anuncioChat"]
         ad = {"qtd": int(a.get("qtd") or 1), "nome": _s(a.get("nome"), 60), "preco": _fmt(a.get("preco")),
-              "moeda": "gemas" if a.get("moeda") == "orb" else "gold"}
+              "moeda": "gemas" if a.get("moeda") == "orb" else "gold", "id": int(a["id"])}
     cargo = re.sub(r"[^a-z]", "", _s(m.get("cargo"), 20).lower())      # vira classe de cor na tela: só letras
     color = _s(m.get("guildTagCor"), 9)
     return {
@@ -116,7 +134,7 @@ def normalize(m: dict, canal: str | None = None) -> dict | None:
         "nivel": m.get("nivel") if isinstance(m.get("nivel"), (int, float)) else None,
         "cargo": cargo or None, "guild": _s(m.get("guildTag"), 6) or None,
         "guildColor": color if _HEX.fullmatch(color) else None,
-        "kind": kind, "text": text, "ad": ad,
+        "kind": kind, "text": text, "ad": ad, "pk": _pokemon_link(m),
     }
 
 

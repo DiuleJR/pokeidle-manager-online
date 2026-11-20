@@ -56,7 +56,7 @@ def test_normalize_plain_and_specials():
     assert normalize(msg(2, texto=None, shinyCaptura={"nick": "Ana", "nome": "Eevee"}))["kind"] == "shiny"
     ad = normalize(msg(3, texto=None, anuncioChat={"id": 9, "nome": "Common Bicycle", "qtd": 1, "preco": 1157, "moeda": "orb"}))
     assert ad["kind"] == "ad" and "1.157 Gemas" in ad["text"] and ad["text"].startswith("estou anunciando")
-    assert ad["ad"] == {"qtd": 1, "nome": "Common Bicycle", "preco": "1.157", "moeda": "gemas"}
+    assert ad["ad"] == {"qtd": 1, "nome": "Common Bicycle", "preco": "1.157", "moeda": "gemas", "id": 9}
 
 
 def test_normalize_keeps_role_and_guild_colour_but_only_safe_values():

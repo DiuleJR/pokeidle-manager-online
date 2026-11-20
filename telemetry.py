@@ -405,6 +405,8 @@ def create_app(
         register_pvp_routes(app, manager, store, auth)
         from pvp_team_api import register_pvp_team_routes
         register_pvp_team_routes(app, manager, auth)
+        from pokemon_sheet_api import register_pokemon_sheet_routes
+        register_pokemon_sheet_routes(app, manager, auth)
     if updater is not None:
         from updater import register_update_routes
         register_update_routes(app, updater, auth)
