@@ -161,35 +161,43 @@ function useWho(w: XpWho) {
 }
 type Who = ReturnType<typeof useWho>;
 
-/** Linha de legenda: quem é, nível, porcentagem grande, quanto falta e quando sobe. */
+/** "sobe em ~42 min" (e, em telas maiores, quanto falta). Sem previsão, mostra só o que falta. Texto fixo, sem animação. */
+function Remaining({ w, className = "" }: { w: Who; className?: string }) {
+  if (!w.p) return null;
+  const falta = <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>;
+  return (
+    <p className={`tnum whitespace-nowrap text-xs leading-snug text-mute ${className}`}>
+      {w.eta ? (
+        <>
+          sobe em <b className="font-semibold text-fg">{w.eta}</b>
+          <span className="hidden sm:inline"> · faltam {falta}</span>
+        </>
+      ) : (
+        <>faltam {falta}</>
+      )}
+    </p>
+  );
+}
+
+/** Quem é, nível, porcentagem grande com o ganho ao lado e, embaixo, quando sobe. */
 function Legend({ label, level, w, color }: { label: string; level: number | null | undefined; w: Who; color: string }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-bold leading-tight">
-          <span className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
-          <span className="truncate">{label}</span>
-          {level != null && <span className="tnum shrink-0 text-xs font-semibold text-mute">Nv. {fmtShort(level)}</span>}
-        </p>
-      </div>
+      <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-bold leading-tight">
+        <span className="size-2 shrink-0 self-center rounded-full" style={{ background: color }} aria-hidden />
+        <span className="truncate">{label}</span>
+        {level != null && <span className="tnum shrink-0 text-xs font-semibold text-mute">Nv. {fmtShort(level)}</span>}
+      </p>
       {w.p ? (
-        <div className="mt-0.5">
-          <div className="flex items-center justify-between gap-2">
-            <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-xl font-extrabold leading-none" style={{ color }} />
+        <>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-2xl font-extrabold leading-none" style={{ color }} />
             <GainChip ev={w.track.ev} color={color} />
           </div>
-          {/* Celular: duas linhas curtas (nada quebra no meio); a partir de sm, numa linha só. */}
-          <p className="tnum mt-0.5 flex min-w-0 flex-col text-xs leading-snug text-mute sm:flex-row sm:flex-wrap sm:gap-x-1.5">
-            <span className="whitespace-nowrap">faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b></span>
-            {w.eta && (
-              <span className="whitespace-nowrap">
-                <span className="hidden sm:inline">· </span>sobe em <b className="font-semibold text-fg">{w.eta}</b>
-              </span>
-            )}
-          </p>
-        </div>
+          <Remaining w={w} className="mt-1" />
+        </>
       ) : (
-        <p className="mt-0.5 text-xs text-mute">Aguardando o XP desta conta…</p>
+        <p className="mt-1 text-xs text-mute">Aguardando o XP desta conta…</p>
       )}
     </div>
   );
@@ -229,7 +237,7 @@ export function XpMedallion({ trainer, mon, sprite }: { trainer: XpWho; mon: XpW
           <span className="origin-center scale-100 sm:scale-[1.3]">{sprite}</span>
         </div>
       </div>
-      <div className="min-w-0 flex-1 space-y-3">
+      <div className="min-w-0 flex-1 space-y-4">
         <Legend label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} />
         <Legend label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} />
       </div>
@@ -262,15 +270,11 @@ function Gauge({ label, level, w, color }: { label: string; level: number | null
           animate={{ scaleY: w.p ? Math.max(w.p.pct, 0.02) : 0 }}
           transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
         />
-        {[25, 50, 75].map((t) => (
-          <span key={t} className="absolute inset-x-0 h-px bg-black/45" style={{ bottom: `${t}%` }} aria-hidden />
-        ))}
       </div>
       {w.p ? (
         <>
           <p className="mt-1.5 text-lg font-extrabold leading-none"><Pct value={w.p.pct} pulse={w.track.ev?.key} style={{ color }} /></p>
-          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
-          {w.eta && <p className="tnum whitespace-nowrap text-[11px] leading-tight text-mute"><span className="hidden sm:inline">sobe </span>em {w.eta}</p>}
+          {w.eta && <p className="tnum mt-0.5 whitespace-nowrap text-[11px] leading-tight text-mute"><span className="hidden sm:inline">sobe </span>em {w.eta}</p>}
         </>
       ) : (
         <p className="mt-1.5 text-[11px] text-mute">sem dados</p>
@@ -309,7 +313,7 @@ function Lane({ label, level, w, color, runner }: { label: string; level: number
         </span>
       </div>
       <div
-        className="relative mx-5 h-11"
+        className="relative mx-5 h-10"
         role="progressbar"
         aria-label={`XP ${label}`}
         aria-valuemin={0}
@@ -340,12 +344,7 @@ function Lane({ label, level, w, color, runner }: { label: string; level: number
           </span>
         </motion.div>
       </div>
-      {w.p && (
-        <p className="tnum -mt-0.5 text-xs text-mute">
-          faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
-          {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
-        </p>
-      )}
+      <Remaining w={w} className="-mt-0.5" />
     </div>
   );
 }
@@ -355,7 +354,7 @@ export function XpRace({ trainer, mon, trainerRunner, monRunner }: { trainer: Xp
   const t = useWho(trainer);
   const m = useWho(mon);
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <Lane label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} runner={trainerRunner} />
       <Lane label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} runner={monRunner} />
     </div>
