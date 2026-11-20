@@ -11,7 +11,7 @@ import time
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 
 from auth import Auth
@@ -237,6 +237,21 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
                 if g["kind"] == "item":
                     g["icon"] = svc.icon_by_name(g["name"])
         return res
+
+    @app.get("/api/market/species-sprite/{species}")
+    async def species_sprite(species: int, request: Request, tok: str | None = Query(None, alias="token")):
+        """Sprite de uma espécie (folha de 3 quadros), baixada uma vez do pokeidleguide.io e guardada no painel."""
+        if (r := auth.read_guard(request, tok)):
+            return r
+        if not 1 <= species <= 99_999:
+            return JSONResponse({"error": "espécie inválida"}, status_code=422)
+        try:
+            png = await hub.sprite(species)
+        except HubError:
+            return JSONResponse({"error": "sprite indisponível"}, status_code=503)
+        if png is None:
+            return JSONResponse({"error": "sem sprite"}, status_code=404)
+        return Response(png, media_type="image/png", headers={"Cache-Control": "private, max-age=604800, immutable"})
 
     @app.get("/api/market/stats/detail")
     async def stats_detail(request: Request, kind: Literal["item", "pokemon"], name: str = Query(max_length=80),

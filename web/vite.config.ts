@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "icon.svg", "apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "icon.svg", "apple-touch-icon.png", "support/eevee.gif", "support/pix-qr.png"],
       manifest: {
         name: "Pokeidle Manager",
         short_name: "PokeManager",

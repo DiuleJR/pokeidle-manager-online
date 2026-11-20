@@ -71,11 +71,31 @@ function useOutfit(looktype: number | null | undefined, enabled: boolean): Outfi
   return enabled && looktype != null ? outfitDone.get(looktype) : undefined;
 }
 
-/** Retrato do Pokémon (atlas de marcadores do jogo, indexado por looktype). */
-export function PokemonSprite({ looktype, size = 64 }: { looktype?: number | null; size?: number; shiny?: boolean }) {
+/** Primeiro quadro da folha de sprites da espécie (3 quadros quadrados lado a lado), servida pelo painel com cache. */
+function SpeciesSprite({ species, size }: { species: number; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Ball size={size} />;
+  return (
+    <span className="inline-block overflow-hidden" style={{ width: size, height: size }}>
+      <img
+        src={`/api/market/species-sprite/${species}`}
+        alt=""
+        height={size}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+        style={{ height: size, width: "auto", maxWidth: "none", imageRendering: "pixelated" }}
+      />
+    </span>
+  );
+}
+
+/** Retrato do Pokémon (atlas de marcadores do jogo, indexado por looktype). Sem looktype, usa a imagem da espécie. */
+export function PokemonSprite({ looktype, species, size = 64 }: { looktype?: number | null; species?: number | null; size?: number; shiny?: boolean }) {
   const atlas = useAtlas();
   const slot = looktype != null ? atlas?.slots[String(looktype)] : undefined;
   const outfit = useOutfit(looktype, !!atlas && !slot);
+  const bySpecies = !slot && !outfit && species != null && (looktype == null || outfit === null);
   const fit = outfit ? Math.min(size / outfit.w, size / outfit.h) : 1;
   return (
     <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
@@ -103,6 +123,8 @@ export function PokemonSprite({ looktype, size = 64 }: { looktype?: number | nul
             imageRendering: "pixelated",
           }}
         />
+      ) : bySpecies ? (
+        <SpeciesSprite species={species as number} size={size} />
       ) : (
         <Ball size={size} />
       )}

@@ -52,6 +52,28 @@ def test_normalize_gems_and_missing_pieces():
     assert o["index"] is None                                                       # sem série de inflação em Gemas
 
 
+def test_normalize_sprites_use_species_when_look_unknown():
+    names = {"Furious Scizor": 2050, "Earth Stone": 1}
+    o = mh.normalize(RESUMO, None, "orb", "7d", 7, {}, lambda n: None, 5, names, {2050: 60212})
+    sc = next(g for g in o["groups"] if g["name"] == "Furious Scizor")
+    assert (sc["species"], sc["look"]) == (2050, 60212)                           # looktype achado pela espécie
+    o2 = mh.normalize(RESUMO, None, "orb", "7d", 7, {}, lambda n: None, 5, names, {})
+    sc2 = next(g for g in o2["groups"] if g["name"] == "Furious Scizor")
+    assert (sc2["species"], sc2["look"]) == (2050, None)                          # sem looktype: o painel usa a imagem da espécie
+    assert o2["groups"][-1]["species"] is None                                    # item não tem espécie
+
+
+def test_sprite_cached_and_missing():
+    import time
+
+    hub = mh.HubClient()
+    hub._sprites[7] = b"png"
+    assert asyncio.run(hub.sprite(7)) == b"png"                                   # em memória: não sai para a rede
+    hub._sprites[8] = None
+    hub._sprite_at[8] = time.monotonic()
+    assert asyncio.run(hub.sprite(8)) is None                                     # ausência lembrada por 10 min
+
+
 def test_normalize_serie_skips_bad_points():
     pts = mh.normalize_serie({"pontos": [{"dia": "2026-11-01", "mediana": 10, "p25": 8, "p75": 12, "vendas": 3, "unidades": 5, "volume": 50},
                                          {"dia": "2026-11-02"}, "x"]})

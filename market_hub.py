@@ -14,7 +14,10 @@ from typing import Any
 
 log = logging.getLogger("market")
 
-BASE = "https://pokeidleguide.io/api/mercado"
+SITE = "https://pokeidleguide.io"
+BASE = f"{SITE}/api/mercado"
+TTL_NAMES_S = 24 * 3600
+SPRITES_MAX = 1500
 TIMEOUT_S = 8.0
 TTL_RESUMO_S = 300
 TTL_SERIE_S = 3600
@@ -34,6 +37,8 @@ class HubClient:
     def __init__(self) -> None:
         self._cache: dict[str, tuple[float, Any]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        self._sprites: dict[int, bytes | None] = {}      # espécie -> PNG (None = o site não tem)
+        self._sprite_at: dict[int, float] = {}
 
     async def _fetch(self, url: str) -> Any:
         import aiohttp
@@ -51,7 +56,7 @@ class HubClient:
             raise HubError(f"o site não respondeu ({type(e).__name__})") from e
 
     async def get(self, path: str, ttl: float) -> Any:
-        url = f"{BASE}/{path}"
+        url = path if path.startswith("https://") else f"{BASE}/{path}"
         hit = self._cache.get(url)
         if hit and time.monotonic() - hit[0] < ttl:
             return hit[1]
@@ -75,6 +80,31 @@ class HubClient:
         if not isinstance(data, dict) or not isinstance(data.get("totais"), dict) or not isinstance(data.get("maisVendidos"), list):
             raise HubError("resposta inesperada do site")
         return data
+
+    async def names(self) -> dict[str, int]:
+        """nome do Pokémon (inclusive formas como "Furious Scizor") -> id da espécie, do índice de sprites do site."""
+        data = await self.get(f"{SITE}/assets/sprites/nomes.json", TTL_NAMES_S)
+        if not isinstance(data, dict):
+            raise HubError("resposta inesperada do site")
+        return {str(k): int(v) for k, v in data.items() if isinstance(v, int) and not isinstance(v, bool)}
+
+    async def sprite(self, species: int) -> bytes | None:
+        """PNG (folha de 3 quadros) da espécie. Guardado em memória: cada espécie é baixada uma vez só."""
+        if species in self._sprites and (self._sprites[species] is not None or time.monotonic() - self._sprite_at.get(species, 0) < 600):
+            return self._sprites[species]
+        import aiohttp
+
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT_S), headers={"User-Agent": "PokeIdleManager"}) as s:
+                async with s.get(f"{SITE}/assets/sprites/{int(species)}.png") as r:
+                    body = await r.read() if r.status == 200 and "image" in (r.content_type or "") else None
+        except Exception as e:  # noqa: BLE001
+            raise HubError(f"sem sprite ({type(e).__name__})") from e
+        if len(self._sprites) >= SPRITES_MAX:
+            self._sprites.pop(next(iter(self._sprites)))
+        self._sprites[species] = body if body and len(body) < 200_000 else None
+        self._sprite_at[species] = time.monotonic()
+        return self._sprites[species]
 
     async def serie(self, name: str, moeda: str, days: int) -> dict:
         from urllib.parse import urlencode
@@ -109,9 +139,17 @@ def _change(g: dict) -> float | None:
 
 
 def normalize(r: dict, prev: dict | None, moeda: str, period: str, days: int, looks: dict[str, int],
-              icon_of, now_ms: int) -> dict:
+              icon_of, now_ms: int, species: dict[str, int] | None = None, looks_sp: dict[int, int] | None = None) -> dict:
     """Resumo do site -> mesmo formato que `market_stats.overview` devolve."""
     mo = MOEDA[moeda]
+    species = species or {}
+    looks_sp = looks_sp or {}
+
+    def sprite_of(name: str) -> tuple[int | None, int | None]:
+        """(looktype, espécie): o looktype vem das vendas que o painel viu; a espécie, do índice do site."""
+        sp = species.get(name)
+        return looks.get(name) or (looks_sp.get(sp) if sp else None), sp
+
     trend = {}
     for g in (r.get("tendencias") or {}).get("todas") or []:
         if isinstance(g, dict) and g.get("moeda") == mo:
@@ -125,7 +163,8 @@ def normalize(r: dict, prev: dict | None, moeda: str, period: str, days: int, lo
         kind, shiny = _kind(cat), cat == "shiny"
         t = spark_from or trend.get((name, kind, shiny)) or {}
         vendas = int(g.get("vendas") or t.get("vendas") or 0)
-        return {"name": name, "kind": kind, "shiny": shiny, "look": looks.get(name) if kind == "pokemon" else None,
+        look, sp = sprite_of(name) if kind == "pokemon" else (None, None)
+        return {"name": name, "kind": kind, "shiny": shiny, "look": look, "species": sp,
                 "icon": icon_of(name) if kind == "item" else None, "sales": vendas,
                 "units": int(g.get("unidades") or vendas), "volume": round(_num(g.get("volume")) or 0),
                 "typical": _num(g.get("mediana")), "low": _num(g.get("p25")), "high": _num(g.get("p75")),
@@ -143,8 +182,9 @@ def normalize(r: dict, prev: dict | None, moeda: str, period: str, days: int, lo
             cat = str(g.get("categoria") or "item")
             if not name:
                 continue
+            look, sp = sprite_of(name) if cat != "item" else (None, None)
             out.append({"name": name, "kind": _kind(cat), "shiny": cat == "shiny",
-                        "look": looks.get(name) if cat != "item" else None, "icon": icon_of(name) if cat == "item" else None,
+                        "look": look, "species": sp, "icon": icon_of(name) if cat == "item" else None,
                         "sales": int(g.get("vendas") or 0), "units": int(g.get("vendas") or 0), "volume": 0,
                         "typical": _num(g.get("depois")), "low": None, "high": None, "change": _change(g),
                         "spark": [x for x in (g.get("serie") or []) if _num(x) is not None][-14:]})

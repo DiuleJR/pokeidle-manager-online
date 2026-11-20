@@ -90,7 +90,7 @@ def _pct(cur: float | None, prev: float | None) -> float | None:
 
 def _groups(store: "Store", kind: str, moeda: str, since: int, prev_since: int) -> list[dict]:
     rows = store.sales_query(
-        """SELECT name, shiny, MAX(look) look,
+        """SELECT name, shiny, MAX(look) look, MAX(species) species,
                   SUM(CASE WHEN ts>=:s THEN 1 ELSE 0 END) sales,
                   SUM(CASE WHEN ts>=:s THEN qty ELSE 0 END) units,
                   SUM(CASE WHEN ts>=:s THEN price ELSE 0 END) volume,
@@ -105,7 +105,7 @@ def _groups(store: "Store", kind: str, moeda: str, since: int, prev_since: int) 
     for r in rows:
         avg = r["volume"] / r["units"] if r["units"] else None
         pavg = r["pvolume"] / r["punits"] if r["punits"] else None
-        out.append({"name": r["name"], "kind": kind, "shiny": bool(r["shiny"]), "look": r["look"], "icon": None,
+        out.append({"name": r["name"], "kind": kind, "shiny": bool(r["shiny"]), "look": r["look"], "species": r["species"], "icon": None,
                     "sales": r["sales"], "units": r["units"], "volume": round(r["volume"]),
                     "typical": round(avg, 2) if avg else None,
                     "low": round(r["mn"], 2) if r["mn"] is not None else None,

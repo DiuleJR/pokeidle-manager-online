@@ -174,6 +174,8 @@ export interface StatsGroup {
   kind: "item" | "pokemon";
   shiny: boolean;
   look: number | null;
+  /** id da espécie, para a imagem quando o painel ainda não viu o looktype */
+  species?: number | null;
   icon?: string | null;
   sales: number;
   units: number;

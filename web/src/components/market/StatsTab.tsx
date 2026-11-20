@@ -264,7 +264,7 @@ function Stat({ label, children, delta }: { label: string; children: React.React
 }
 
 function Thumb({ g }: { g: StatsGroup }) {
-  return g.kind === "pokemon" ? <PokemonSprite looktype={g.look} size={38} /> : <ItemSprite icon={g.icon} size={34} />;
+  return g.kind === "pokemon" ? <PokemonSprite looktype={g.look} species={g.species} size={38} /> : <ItemSprite icon={g.icon} size={34} />;
 }
 const tone = (c: number | null): "up" | "down" | "flat" => (c == null ? "flat" : c > 0.05 ? "up" : c < -0.05 ? "down" : "flat");
 

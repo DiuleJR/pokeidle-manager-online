@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Coffee, Copy, QrCode } from "lucide-react";
+import { Check, Coffee, Copy, QrCode, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Mesmos dados da seção "Apoie o projeto" do README.
@@ -47,6 +47,21 @@ const store = {
   },
 };
 
+/** Altura da barra de navegação fixa do celular (0 quando ela não existe, em telas largas). */
+function useBottomNavHeight(): number {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>('nav[aria-label="Navegação"]');
+    if (!nav || typeof ResizeObserver === "undefined") return;
+    const measure = () => setH(getComputedStyle(nav).display === "none" ? 0 : Math.round(nav.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+  return h;
+}
+
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 async function copy(text: string): Promise<boolean> {
@@ -90,13 +105,21 @@ function CopyButton({ kind, label, onCopied }: { kind: Kind; label: string; onCo
 
 /** Eevee animado (sprite do Pokémon Showdown, servido localmente). */
 function Mascot({ flip = false, height = 110 }: { flip?: boolean; height?: number }) {
+  const [tries, setTries] = useState(0);
+  if (tries > 1)
+    return (
+      <span aria-hidden className="grid shrink-0 place-items-center rounded-full border border-edge/60 bg-tile text-poke-gold" style={{ width: height * 0.7, height: height * 0.7 }}>
+        <Coffee className="size-1/2" />
+      </span>
+    );
   return (
     <motion.img
-      src="/support/eevee.gif"
+      src={tries ? `/support/eevee.gif?r=${tries}` : "/support/eevee.gif"}
       alt="Eevee animado"
       width={64}
       height={55}
       draggable={false}
+      onError={() => setTries((n) => n + 1)}
       animate={{ y: [0, -3, 0] }}
       transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
       className={`w-auto select-none ${flip ? "-scale-x-100" : ""}`}
@@ -177,6 +200,7 @@ export function SupportPopup({ disabled = false }: { disabled?: boolean }) {
   const [msgIdx, setMsgIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const nextTimer = useRef<ReturnType<typeof setTimeout>>();
+  const navH = useBottomNavHeight();
 
   const schedule = useCallback((delay: number) => {
     clearTimeout(nextTimer.current);
@@ -253,11 +277,20 @@ export function SupportPopup({ disabled = false }: { disabled?: boolean }) {
           onPointerLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}
           onBlurCapture={() => setPaused(false)}
-          className="fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-end justify-end gap-1 min-[1800px]:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[400px]"
+          style={navH ? { bottom: navH + 8 } : undefined}
+          className="pointer-events-none fixed inset-x-2 bottom-3 z-30 flex items-end justify-end gap-1 min-[1800px]:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[400px]"
         >
           {/* Caixa de diálogo estilo jogo */}
-          <div className="card relative min-w-0 flex-1 p-3 pr-3.5 sm:p-3.5" style={{ borderRadius: 14 }}>
-            <p className="min-h-[3.75rem] text-sm font-medium leading-snug text-fg">
+          <div className="card pointer-events-auto relative min-w-0 flex-1 p-3 pr-3.5 sm:p-3.5" style={{ borderRadius: 14 }}>
+            <button
+              type="button"
+              onClick={() => hide(SNOOZE_DISMISS)}
+              aria-label="Fechar"
+              className="absolute right-1 top-1 grid size-9 place-items-center rounded-full text-mute transition-colors hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-edge"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+            <p className="min-h-[3.75rem] pr-7 text-sm font-medium leading-snug text-fg">
               {shown}
               {!done && <span aria-hidden className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-poke-gold align-middle" />}
             </p>
@@ -273,11 +306,7 @@ export function SupportPopup({ disabled = false }: { disabled?: boolean }) {
                     <CopyButton kind="pix" label="Copiar Pix" onCopied={thank} />
                     <CopyButton kind="usdt" label="USDT" onCopied={thank} />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => hide(SNOOZE_DISMISS)}
-                    className="mt-1.5 w-full py-1 text-center text-xs font-semibold text-mute hover:text-fg"
-                  >
+                  <button type="button" onClick={() => hide(SNOOZE_DISMISS)} className="btn mt-2 min-h-11 w-full !border-transparent text-mute">
                     Agora não
                   </button>
                 </motion.div>
@@ -294,7 +323,7 @@ export function SupportPopup({ disabled = false }: { disabled?: boolean }) {
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 14, delay: 0.15 }}
-            className="shrink-0 pb-1"
+            className="pointer-events-none shrink-0 pb-1"
           >
             <Mascot height={84} />
           </motion.div>
