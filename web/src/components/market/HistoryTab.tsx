@@ -1,6 +1,7 @@
 import { PokemonSelos } from "@/components/PokemonSelos";
 import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { useMemo, useState } from "react";
+import { Search, X } from "lucide-react";
 import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Moeda, type TapeRow, marketApi } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
@@ -87,13 +88,33 @@ export function HistoryTab() {
   const [moeda, setMoeda] = useState("");
   const [busca, setBusca] = useState("");
   const [applied, setApplied] = useState("");
+  const [item, setItem] = useState<{ id: number; name: string } | null>(null); // item escolhido na busca (Só itens)
+  const [showList, setShowList] = useState(false);
   const [page, setPage] = useState(0);
+  const L = useItemLabel();
+  const ov = useAsync(() => marketApi.overview(), [], { every: 300000, skip: tipo !== "item" });
+  const itemMatches = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q || item) return [];
+    return (ov.data?.items ?? []).filter((i) => i.name.toLowerCase().includes(q) || L(i.name, i.id).toLowerCase().includes(q)).slice(0, 8);
+  }, [ov.data, busca, item, L]);
+  const pickItem = (i: { id: number; name: string }) => {
+    setItem({ id: i.id, name: i.name });
+    setBusca(L(i.name, i.id));
+    setShowList(false);
+    setPage(0);
+  };
+  const clearItem = () => {
+    setItem(null);
+    setBusca("");
+    setPage(0);
+  };
   const personal = mode !== "global";
   const gemsOnly = tipo === "deposito" || tipo === "saque";
 
   const res = useAsync(
-    () => marketApi.tape({ mode, page, tipo, moeda: gemsOnly ? "" : moeda, busca: applied, elemento: "", soShiny: false, soP5: false, account: personal ? account : undefined }),
-    [mode, page, tipo, moeda, applied, account, personal],
+    () => marketApi.tape({ mode, page, tipo, moeda: gemsOnly ? "" : moeda, itemId: tipo === "item" ? item?.id : undefined, busca: applied, elemento: "", soShiny: false, soP5: false, account: personal ? account : undefined }),
+    [mode, page, tipo, moeda, applied, item, account, personal],
     { every: 30000, skip: personal && account === undefined },
   );
   const go = <T,>(set: (v: T) => void) => (v: T) => {
@@ -130,7 +151,12 @@ export function HistoryTab() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select className="field" value={tipo} onChange={(e) => go(setTipo)(e.target.value)} aria-label="Tipo">
+        <select className="field" value={tipo} onChange={(e) => {
+            setItem(null);
+            setBusca("");
+            setApplied("");
+            go(setTipo)(e.target.value);
+          }} aria-label="Tipo">
           {TIPOS.filter((t) => mode === "global" || (t.id !== "deposito" && t.id !== "saque")).map((t) => (
             <option key={t.id} value={t.id}>
               {t.label}
@@ -143,6 +169,55 @@ export function HistoryTab() {
             <option value="gold">Só Gold</option>
             <option value="orb">Só Gemas</option>
           </select>
+        )}
+        {tipo === "item" && (
+          <form
+            className="relative flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (itemMatches[0]) pickItem(itemMatches[0]);
+            }}
+          >
+            <div className="relative">
+              <input
+                className="field w-52 pr-8"
+                type="search"
+                placeholder="Nome do item"
+                value={busca}
+                onChange={(e) => {
+                  setBusca(e.target.value);
+                  setItem(null);
+                  setShowList(true);
+                  setPage(0);
+                }}
+                onFocus={() => setShowList(true)}
+                onBlur={() => window.setTimeout(() => setShowList(false), 120)}
+                maxLength={40}
+                aria-label="Buscar item pelo nome"
+                aria-autocomplete="list"
+              />
+              {item && (
+                <button type="button" onClick={clearItem} aria-label="Limpar a busca" className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-mute hover:text-fg">
+                  <X className="size-4" aria-hidden />
+                </button>
+              )}
+              {showList && itemMatches.length > 0 && (
+                <ul role="listbox" className="absolute left-0 top-full z-30 mt-1 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-auto rounded-xl border border-edge bg-surface p-1 shadow-xl">
+                  {itemMatches.map((i) => (
+                    <li key={i.id} role="option" aria-selected="false">
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickItem(i)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold hover:bg-tile">
+                        <ItemSprite icon={i.icon} size={26} alt="" />
+                        <span className="truncate">{L(i.name, i.id)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <button className="btn" type="submit">
+              <Search className="size-4" aria-hidden /> Buscar
+            </button>
+          </form>
         )}
         {tipo === "pokemon" && (
           <form
@@ -163,7 +238,9 @@ export function HistoryTab() {
 
       <p className="text-xs text-mute">
         {mode === "global"
-          ? "As vendas mais recentes de todo o servidor. Use como referência de preço. ▲/▼ compara com a venda anterior do mesmo item."
+          ? tipo === "item" && !item
+            ? "As vendas mais recentes de todo o servidor. Digite o nome de um item e escolha na lista para ver só as vendas dele. ▲/▼ compara com a venda anterior do mesmo item."
+            : "As vendas mais recentes de todo o servidor. Use como referência de preço. ▲/▼ compara com a venda anterior do mesmo item."
           : mode === "vendas"
             ? "O que a conta escolhida vendeu."
             : "O que a conta escolhida comprou."}
