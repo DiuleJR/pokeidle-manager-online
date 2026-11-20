@@ -625,16 +625,26 @@ export function StatsTab() {
                 <summary className="cursor-pointer font-semibold text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-edge">Como ler esta tela</summary>
                 <ul className="mt-2 list-disc space-y-1.5 pl-5">
                   <li>
-                    <b className="text-fg">Preço típico</b> é a mediana: metade das vendas foi mais barata e metade mais cara. Ela não se deixa enganar por uma venda fora do comum.
+                    <b className="text-fg">Preço de cada item:</b> é o valor por unidade.{" "}
+                    {s.source === "hub" ? "Em 7 e 30 dias é a mediana (o valor do meio: metade das vendas saiu mais barata e metade mais cara), que não se deixa enganar por uma venda fora do comum." : "Em 24 horas é a média das vendas."}
                   </li>
                   <li>
-                    <b className="text-fg">Faixa</b> é onde ficou a maior parte das vendas (do quarto mais barato ao quarto mais caro).
+                    <b className="text-fg">Faixa</b>{" "}
+                    {s.source === "hub" ? "mostra onde ficou a maioria das vendas, sem contar os preços muito baixos ou muito altos." : "vai do menor ao maior preço vendido no período."}
                   </li>
                   <li>
-                    <b className="text-fg">Mais caros / mais baratos</b> comparam com o começo do período e só entram coisas com vendas suficientes.
+                    <b className="text-fg">Setas e porcentagens</b> comparam com o período anterior do mesmo tamanho (por exemplo, 7 dias contra os 7 dias antes).
                   </li>
                   <li>
-                    <b className="text-fg">24 horas</b> vem do seu painel, hora a hora. <b className="text-fg">7 e 30 dias</b> vêm do pokeidleguide.io, um site da comunidade que guarda o histórico de vendas.
+                    <b className="text-fg">Ficaram mais caros / Ficaram mais baratos</b> mostram as maiores altas e quedas de preço nessa comparação. Só entram itens com pelo menos 3 vendas em cada período.
+                  </li>
+                  {s.index && (
+                    <li>
+                    <b className="text-fg">Preços dos itens</b> começa em 100 no primeiro dia. Acima de 100 ficou mais caro; abaixo, mais barato.
+                  </li>
+                  )}
+                  <li>
+                    <b className="text-fg">De onde vêm os dados:</b> 24 horas vem do seu painel, hora a hora. 7 e 30 dias vêm do pokeidleguide.io, um site da comunidade que guarda o histórico de vendas.
                   </li>
                 </ul>
               </details>
