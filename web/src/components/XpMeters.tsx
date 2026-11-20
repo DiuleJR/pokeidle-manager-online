@@ -175,7 +175,7 @@ function Legend({ label, level, w, color }: { label: string; level: number | nul
         <p className="tnum mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-mute">
           <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-xl font-extrabold leading-none" style={{ color }} />
           <span>
-            faltam <b className="font-semibold text-fg"><AnimatedNumber value={w.p.falta} /></b>
+            faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
             {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
           </span>
         </p>
@@ -260,7 +260,7 @@ function Gauge({ label, level, w, color }: { label: string; level: number | null
       {w.p ? (
         <>
           <p className="mt-1.5 text-lg font-extrabold leading-none"><Pct value={w.p.pct} pulse={w.track.ev?.key} style={{ color }} /></p>
-          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam <AnimatedNumber value={w.p.falta} /></p>
+          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
           {w.eta && <p className="tnum text-[11px] leading-tight text-mute">sobe em {w.eta}</p>}
         </>
       ) : (
@@ -333,7 +333,7 @@ function Lane({ label, level, w, color, runner }: { label: string; level: number
       </div>
       {w.p && (
         <p className="tnum -mt-0.5 text-xs text-mute">
-          faltam <b className="font-semibold text-fg"><AnimatedNumber value={w.p.falta} /></b>
+          faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
           {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
         </p>
       )}
