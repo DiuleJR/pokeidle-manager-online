@@ -165,7 +165,7 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
             <div className="mb-2 text-sm text-mute">
               {fmtInt(shown.length)} de {fmtInt(rows.length)} Pokémons
             </div>
-            <ul className="space-y-1.5 md:hidden">
+            <ul key={`m${page}`} className="max-h-[22rem] space-y-1.5 overflow-y-auto overscroll-contain pr-1 md:hidden">
               {slice.map((p, i) => (
                 <motion.li
                   key={`${p.account}-${p.id}`}
@@ -195,10 +195,10 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                 </motion.li>
               ))}
             </ul>
-            <div className="hidden overflow-x-auto md:block">
+            <div key={`d${page}`} className="hidden max-h-[22.5rem] overflow-auto overscroll-contain md:block">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="label border-b-2 border-line">
+                  <tr className="label sticky top-0 z-10 border-b-2 border-line bg-card">
                     <th className="py-2 pr-2 font-normal">Pokémon</th>
                     {account === "all" && <th className="px-2 py-2 font-normal">Conta</th>}
                     <th className="px-2 py-2 text-right font-normal">Nv.</th>
