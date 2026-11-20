@@ -24,7 +24,7 @@ import re
 
 import market_stats
 from game_data import ITEM_NAMES, item_meta
-from item_labels import display_name, item_icon_path, item_name
+from item_labels import display_name, is_zmove_item, item_icon_path, item_name
 from market import MarketError
 from notify import BLUE, GOLD, GREEN
 
@@ -195,15 +195,15 @@ class MarketService:
                     nos = c.itens_nossos.get(iid) or {}
                     return {"id": iid, "name": PT_NAMES.get(iid) or display_name(it.get("nome")) or item_name(iid),
                             "category": cat, "icon": self._icon(iid, c),
-                            "rare": _is_rare(cat, bool(nos.get("rare")) or item_meta(iid)[1])}
+                            "rare": _is_rare(cat, bool(nos.get("rare")) or item_meta(iid)[1] or is_zmove_item(iid))}
             nos = c.itens_nossos.get(iid)
             if nos:
                 cat = nos.get("category") or "special"
                 return {"id": iid, "name": PT_NAMES.get(iid) or display_name(nos.get("name")) or item_name(iid),
-                        "category": cat, "icon": self._abs(nos.get("icon")), "rare": _is_rare(cat, bool(nos.get("rare")))}
+                        "category": cat, "icon": self._abs(nos.get("icon")), "rare": _is_rare(cat, bool(nos.get("rare")) or is_zmove_item(iid))}
         cat, rare = item_meta(iid)
         return {"id": iid, "name": PT_NAMES.get(iid) or item_name(iid), "category": cat,
-                "icon": self._abs(item_icon_path(iid)), "rare": _is_rare(cat, rare)}
+                "icon": self._abs(item_icon_path(iid)), "rare": _is_rare(cat, rare or is_zmove_item(iid))}
 
     def _ids_by_name(self) -> dict[str, int]:
         """nome (minúsculo, em inglês ou português) -> id do item, para achar o ícone de uma linha do histórico."""

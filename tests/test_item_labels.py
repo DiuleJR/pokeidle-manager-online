@@ -26,3 +26,9 @@ def test_icones_novos():
     assert item_icon_path(59247) == "/img/itens/zmove/fairy.png"
     # item qualquer continua com o ícone do items-icons.json
     assert item_icon_path(30) == "/assets/site/assets/items/dark_gem.png"
+
+
+def test_zmove_items_are_rare():
+    from item_labels import is_zmove_item
+    assert is_zmove_item(59194) and is_zmove_item(40530) and is_zmove_item(40575)
+    assert not is_zmove_item(1)

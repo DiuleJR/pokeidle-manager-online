@@ -31,6 +31,14 @@ for _id, _nome in ITEM_NAMES.items():       # discos elementais: um ícone por t
         ICONES[int(_id)] = f"{_ZMOVE_DIR}/{_m.group(1).lower()}.png"
 
 
+def is_zmove_item(item_id) -> bool:
+    """Fragmentos, discos AoE e discos Z-Move elementais: são itens raros no jogo."""
+    try:
+        return int(item_id) in ICONES
+    except (TypeError, ValueError):
+        return False
+
+
 def display_name(text: str | None) -> str:
     """"TM Disk Piece" -> "Fragmento de Z-Move"; "Fire-Type TM Disk" -> "Z-Move FIRE"; o resto passa igual.
     Aceita também uma descrição inteira ("6× TM Disk Piece")."""

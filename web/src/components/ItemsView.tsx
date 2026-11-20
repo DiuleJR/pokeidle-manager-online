@@ -178,7 +178,7 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows
-      .filter((r) => (!onlyRare || r.rare) && (group === "all" || r.group === group) && (!q || r.name.toLowerCase().includes(q)))
+      .filter((r) => (onlyRare ? r.rare : group === "all" || r.group === group) && (!q || r.name.toLowerCase().includes(q)))
       .sort((a, b) => b.qty - a.qty);
   }, [rows, query, onlyRare, group]);
 
@@ -195,15 +195,15 @@ export function ItemsView({ account, valuation }: { account: string; valuation?:
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input className="field w-full sm:w-64" placeholder="Buscar item" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="-mx-0.5 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-0.5 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-          <button className="btn shrink-0" data-active={group === "all"} onClick={() => setGroup("all")}>
+          <button className="btn shrink-0" data-active={!onlyRare && group === "all"} onClick={() => { setOnlyRare(false); setGroup("all"); }}>
             Todos
           </button>
           {GROUPS.map((g) => (
-            <button key={g.id} className="btn shrink-0" data-active={group === g.id} onClick={() => setGroup(g.id)}>
+            <button key={g.id} className="btn shrink-0" data-active={!onlyRare && group === g.id} onClick={() => { setOnlyRare(false); setGroup(g.id); }}>
               {g.label}
             </button>
           ))}
-          <button className="btn shrink-0 sm:ml-auto" data-active={onlyRare} onClick={() => setOnlyRare((v) => !v)}>
+          <button className="btn shrink-0" data-active={onlyRare} onClick={() => setOnlyRare((v) => !v)}>
             ★ Raros
           </button>
         </div>
