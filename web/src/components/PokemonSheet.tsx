@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { TypeChip } from "@/components/HuntRow";
 import { PokemonSprite } from "@/components/Sprites";
 import {
@@ -205,7 +205,7 @@ function PokemonTab({ d }: { d: PokemonSheetPayload }) {
         </Card>
       )}
 
-      <Card title="Evolução"><Evolution ev={d.evolution} self={self} /></Card>
+      {d.species && <Card title="Evolução"><Evolution ev={d.evolution} self={self} /></Card>}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card title="Experiência">
@@ -349,6 +349,24 @@ function SpeciesTab({ d }: { d: SpeciesPayload }) {
   );
 }
 
+/** Um dado inesperado na ficha não pode apagar o painel inteiro: mostra o aviso só dentro da janela. */
+class SheetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("ficha do Pokémon", error);
+  }
+  render() {
+    return this.state.failed ? (
+      <p className="py-10 text-center text-sm text-poke-red" role="alert">Não consegui mostrar esta parte da ficha. Feche e abra de novo; se repetir, avise o suporte.</p>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 // ----------------------------------------------------------------- janela
 /** De onde vem a ficha: um Pokémon de uma conta sua, um Pokémon em mãos (anúncio da vitrine), um jogador do chat ou um anúncio. */
 export type SheetSource =
@@ -407,7 +425,11 @@ export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
           {!data && !err && <div className="flex justify-center py-16 text-mute"><Loader2 className="size-6 animate-spin" aria-label="Carregando" /></div>}
           {err && <p className="py-10 text-center text-poke-red" role="alert">{err}</p>}
-          {data && (tab === "pokemon" ? <PokemonTab d={data} /> : <SpeciesTab d={data} />)}
+          {data && (
+            <SheetBoundary key={`${tab}-${data.pokemon?.id}`}>
+              {tab === "pokemon" ? <PokemonTab d={data} /> : <SpeciesTab d={data} />}
+            </SheetBoundary>
+          )}
         </div>
       </motion.div>
     </motion.div>

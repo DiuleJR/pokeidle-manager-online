@@ -321,6 +321,13 @@ def test_sheet_from_a_market_pokemon(sheets):
     assert client.post("/api/pokemon/sheet", json={"pokemon": TYR_PK}).status_code in (401, 403)
 
 
+def test_sheet_of_a_species_missing_from_the_catalog_keeps_the_shape(sheets):
+    client, _, _, _ = sheets
+    d = client.post("/api/pokemon/sheet", json={"pokemon": {**TYR_PK, "speciesId": 9999, "nome": "Mega Garchomp"}}, headers=H).json()
+    assert d["species"] is None and d["bases"] is None
+    assert d["evolution"] == {"prev": None, "next": None, "level": 0, "prevLevel": 0} and d["foundIn"] == [] and d["pokedex"]["captured"] is None
+
+
 def test_sheet_without_species_id_falls_back_to_the_name(sheets):
     client, _, _, _ = sheets
     pk = {k: v for k, v in TYR_PK.items() if k != "speciesId"} | {"nome": "Tyranitar"}

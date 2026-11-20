@@ -102,9 +102,10 @@ def sheet_payload(pk: dict, species: dict[int, dict], c: "AccountConnection | No
         "combatHp": max(24, pw._round((stats.get("hp") or 0) * pw.COMBAT_HP_MULT)),
         "pvpPower": 0, "pvpLevel": pw.arena_level(pk.get("level") or 1), "pvePower": 0,
         "bases": None, "range": pw.species_range(esp),
-        "species": None,
+        "species": None, "evolution": {"prev": None, "next": None, "level": 0, "prevLevel": 0},
+        "pokedex": {"defeated": None, "captured": None}, "foundIn": [],
     }
-    if esp is None:
+    if esp is None:                  # ex.: formas Mega, que o catálogo de espécies não tem
         return out
     try:
         out.update(pvpPower=pw.pvp_power(pk, esp), pvePower=pw.pve_power(pk, esp), bases=pw.bases(esp, pk.get("refino")))

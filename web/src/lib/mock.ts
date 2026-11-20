@@ -110,6 +110,7 @@ export function startMockChat(emit: (ev: ChatEvent) => void) {
       mockMsg("mundo", "Liang", 10, "mostrou o Pokémon Leafeon", "share", 9, { cargo: "compartilhar", pk: { nick: "Liang", id: 5151, label: "Leafeon" } }),
       mockMsg("mundo", "Diule_JR", 1306, "clk", "msg", 9, { guild: "FON", guildColor: "#6fd47c" }),
       mockMsg("mundo", "JalyTorey", 3312, "", "ad", 8, { cargo: "anuncio", ad: { qtd: 1, nome: "Blastoise Nv 80", preco: "450", moeda: "gemas", id: 7 } }),
+      mockMsg("mundo", "Benzaquen", 4818, "", "ad", 7, { cargo: "anuncio", ad: { qtd: 1, nome: "Mega Garchomp", preco: "25.999", moeda: "gemas", id: 8888 } }),
       mockMsg("mundo", "Dubas", 2944, "", "ad", 7, { cargo: "anuncio", ad: { qtd: 3, nome: "Rare Candy", preco: "100.000", moeda: "gold", id: 9999 } }),
       mockMsg("mundo", "✨ Shiny", null, "✨ Luskashi33 capturou um Gengar shiny!", "shiny", 5, { cargo: "shiny", pk: { nick: "Luskashi33", id: 4242, label: "Gengar" } }),
       mockMsg("mundo", "🏷️ Tag IDLE", null, "🏷️ O jogador Mhynx resgatou 5 diamantes utilizando a TAG IDLE no Discord, venha receber também!", "msg", 4, { cargo: "anuncio" }),
@@ -224,6 +225,11 @@ function installMockApi(accs: AccountSnapshot[]) {
       const q = new URL(url, location.href).searchParams;
       if (path.startsWith("/api/pokemon/listing/") && path.endsWith("/9999")) return json({ error: "Esse anúncio é de item, não de Pokémon.", code: "item" }, 422);
       const sent = path.endsWith("/sheet") && init?.body ? (JSON.parse(String(init.body)) as { pokemon?: { dono?: string }; listing?: unknown }) : null;
+      if (path.endsWith("/8888")) {                          // forma Mega: o catálogo de espécies não tem
+        return json({ owner: "Benzaquen", listing: { id: 8888, price: 25999, currency: "orb", qty: 1 }, species: null, range: 1, evolution: { prev: null, next: null, level: 0, prevLevel: 0 }, pokedex: { defeated: null, captured: null }, foundIn: [], bases: null,
+          pokemon: { id: 1, speciesId: 9999, nome: "Mega Garchomp", looktype: 60212, lookShiny: null, tipos: ["DRAGON", "GROUND"], level: 400, xp: 15694800, quality: 1.9, potencia: 3, shiny: false, slot: null, maxHp: 9000, poder: 5000, nota: 5.2, ivs: { hp: 31, atk: 25, def: 28, spAtk: 11, spDef: 19, speed: 8 }, stats: { hp: 900, atk: 994, def: 754, spAtk: 426, spDef: 592, speed: 543 }, refino: {}, refinoTotal: 0, tmElemental: null, caughtAt: 1795130280057, caughtBy: "Benzaquen" },
+          combatHp: 10800, pvpPower: 0, pvpLevel: 300, pvePower: 0 });
+      }
       const owner = sent?.pokemon?.dono ?? (path.endsWith("/public") ? q.get("nick") : "JalyTorey");
       const sp = { pokeId: 2050, name: "Scizor", looktype: 60212, type1: "BUG", type2: "STEEL", rarity: "RARE", baseHp: 70, baseAtk: 130, baseDef: 100, baseSpAtk: 55, baseSpDef: 80, baseSpeed: 65, huntLevel: 90, evolvesToId: 0, evolveLevel: 0, sellValue: 9000, experience: 1200, loot: [], attacks: [{ name: "Fury Cutter", type: "BUG", power: 80, category: "PHYSICAL", cooldownMs: 22000, learnLevel: 1 }] };
       return json({
