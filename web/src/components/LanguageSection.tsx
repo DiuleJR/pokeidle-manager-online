@@ -62,7 +62,8 @@ export function LanguageSection() {
                 }`}
               >
                 {FLAGS[l.id]}
-                <span className="truncate">{l.nome}</span>
+                <span className="sm:hidden" aria-hidden>{l.id.toUpperCase()}</span>
+                <span className="sr-only sm:not-sr-only sm:truncate">{l.nome}</span>
                 {on && <Check className="absolute right-1.5 top-1.5 size-3.5" aria-hidden />}
               </button>
             );
