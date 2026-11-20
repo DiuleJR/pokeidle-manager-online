@@ -91,3 +91,13 @@ export function selosDe({ potencia, iv, quality, nota }: SelosInput): Selo[] {
   }
   return out;
 }
+
+/** Cor do IV de um stat (1 a 32), como na ficha do jogo: vermelho até 5, laranja até 10, amarelo até 15, verde até 24, verde-claro acima. */
+export function ivStatColor(v: number): { color: string; glow: string } {
+  const n = Math.round(Number(v) || 0);
+  if (n <= 5) return { color: "#ff4444", glow: "rgba(255,68,68,.55)" };
+  if (n <= 10) return { color: "#ff9a3c", glow: "rgba(255,154,60,.5)" };
+  if (n <= 15) return { color: "#ffd93d", glow: "rgba(255,217,61,.45)" };
+  if (n <= 24) return { color: "#2ecc71", glow: "rgba(46,204,113,.45)" };
+  return { color: "#7dff9a", glow: "rgba(125,255,154,.55)" };
+}

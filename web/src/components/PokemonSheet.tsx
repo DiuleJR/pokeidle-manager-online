@@ -97,7 +97,7 @@ function StatBars({ rows }: { rows: { label: string; value: number; iv?: number;
             <span className="block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, (r.value / r.max) * 100))}%`, background: r.color ?? "#6fd47c" }} />
           </span>
           <span className="tnum w-14 shrink-0 text-right font-bold">{nf.format(r.value)}</span>
-          {r.iv !== undefined && <span className="tnum w-12 shrink-0 text-right text-[11px] font-semibold text-poke-green">IV {r.iv}</span>}
+          {r.iv !== undefined && <span className="tnum w-12 shrink-0 text-right text-[11px] font-bold" style={{ color: ivStatColor(r.iv).color, textShadow: `0 0 6px ${ivStatColor(r.iv).glow}` }} title="IV sorteado na captura (1 a 32)">IV {r.iv}</span>}
         </li>
       ))}
     </ul>
