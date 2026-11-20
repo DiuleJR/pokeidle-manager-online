@@ -123,6 +123,12 @@ def hours_of_day(store: "Store", moeda: str, since: int) -> list[dict]:
     return [{"h": r["h"], "sales": r["sales"], "volume": round(r["volume"])} for r in rows]
 
 
+def hours_from(store: "Store", since: int) -> int | None:
+    """Desde quando há vendas guardadas dentro da janela (para avisar que os horários ainda são parciais)."""
+    r = store.sales_query("SELECT MIN(ts) a FROM market_sales WHERE ts>=:s", {"s": since})[0]
+    return r["a"]
+
+
 _LOOKS: tuple[float, dict[str, int]] = (0.0, {})
 
 
@@ -178,7 +184,7 @@ def overview(store: "Store", moeda: str, period: str, now_ms: int | None = None)
         "totals": {"sales": tot["sales"] or 0, "volume": round(tot["volume"] or 0),
                    "prevSales": tot["psales"] or 0, "prevVolume": round(tot["pvolume"] or 0)},
         "series": list(by_k.values()), "hourly": days <= 1, "index": None,
-        "hours": hours_rows,
+        "hours": hours_rows, "hoursFrom": hours_from(store, since),
         "groups": groups[:TOP_N],
         "up": [g for g in reversed(moved) if g["change"] > 0][:6],
         "down": [g for g in moved if g["change"] < 0][:6],

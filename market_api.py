@@ -232,7 +232,9 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
         if period != "24h":
             try:
                 res = await hub_overview(moeda, period)
-                res["hours"] = market_stats.hours_of_day(store, moeda, int(time.time() * 1000) - days * 86_400_000)
+                since = int(time.time() * 1000) - days * 86_400_000
+                res["hours"] = market_stats.hours_of_day(store, moeda, since)
+                res["hoursFrom"] = market_stats.hours_from(store, since)
             except HubError as e:
                 log.warning("análise: %s; usando os dados locais", e)
         if res is None:

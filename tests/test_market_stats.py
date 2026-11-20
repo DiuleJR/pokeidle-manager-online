@@ -93,6 +93,7 @@ def test_overview_ranks_prices_and_movers(store):
     assert o["hourly"] is True and o["source"] == "local" and o["groups"][0]["sales"] == 4      # mais vendas primeiro
     assert {(g["name"], g["shiny"]) for g in o["groups"] if g["kind"] == "pokemon"} == {("Garchomp", False), ("Garchomp", True)}
     assert sum(h["sales"] for h in o["hours"]) == 9
+    assert o["hoursFrom"] is not None and o["hoursFrom"] >= NOW - 48 * H
     assert all(g["sales"] for g in o["groups"])
 
     o7 = ms.overview(store, "gold", "7d", now_ms=NOW)        # 7d: as vendas de 30 h atrás também entram

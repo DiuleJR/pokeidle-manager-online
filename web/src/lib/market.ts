@@ -212,6 +212,8 @@ export interface MarketStats {
   /** índice de preços dos itens (100 = início do período) */
   index: { points: { day: string; index: number }[]; change: number } | null;
   hours: { h: number; sales: number; volume: number }[];
+  /** desde quando o painel tem vendas para calcular os horários (null = nenhuma) */
+  hoursFrom: number | null;
   groups: StatsGroup[];
   up: StatsGroup[];
   down: StatsGroup[];

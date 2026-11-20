@@ -177,28 +177,94 @@ function IndexChart({ index }: { index: NonNullable<MarketStats["index"]> }) {
   );
 }
 
-function HoursChart({ hours, note }: { hours: MarketStats["hours"]; note?: string }) {
+const PARTS = [
+  { id: "madrugada", label: "Madrugada", range: "0h–6h", from: 0, to: 6 },
+  { id: "manha", label: "Manhã", range: "6h–12h", from: 6, to: 12 },
+  { id: "tarde", label: "Tarde", range: "12h–18h", from: 12, to: 18 },
+  { id: "noite", label: "Noite", range: "18h–24h", from: 18, to: 24 },
+] as const;
+const hourSpan = (h: number) => `${h}h às ${(h + 1) % 24}h`;
+/** "5 horas" ou "3 dias": há quanto tempo o painel coleta as vendas desta tela. */
+const spanLabel = (ms: number) => {
+  const h = Math.max(1, Math.round(ms / 3_600_000));
+  return h < 48 ? `${h} ${h === 1 ? "hora" : "horas"}` : `${Math.round(h / 24)} dias`;
+};
+
+/** Em que horas do dia (horário de Brasília) o mercado vende mais. Toque numa barra para ver o número exato. */
+function HoursChart({ hours, from, now }: { hours: MarketStats["hours"]; from: number | null; now: number }) {
+  const [pick, setPick] = useState<number | null>(null);
   const byH = new Map(hours.map((h) => [h.h, h.sales]));
   const data = Array.from({ length: 24 }, (_, h) => ({ h, sales: byH.get(h) ?? 0 }));
+  const total = data.reduce((s, d) => s + d.sales, 0);
+  if (!total) return <p className="text-sm text-mute">Ainda não há vendas coletadas neste período. O painel coleta sozinho enquanto uma conta estiver online.</p>;
   const max = Math.max(...data.map((d) => d.sales), 1);
   const top = [...data].sort((a, b) => b.sales - a.sales).slice(0, 3).filter((d) => d.sales > 0);
-  if (!top.length) return <p className="text-sm text-mute">Ainda sem vendas coletadas neste período.</p>;
   const peak = new Set(top.map((d) => d.h));
+  const share = (n: number) => Math.round((n / total) * 100);
+  const parts = PARTS.map((p) => ({ ...p, sales: data.filter((d) => d.h >= p.from && d.h < p.to).reduce((s, d) => s + d.sales, 0) }));
+  const bestPart = parts.reduce((a, b) => (b.sales > a.sales ? b : a));
+  const covered = from ? now - from : 0;
+  const partial = covered > 0 && covered < 3 * 86_400_000;
+  const sel = pick != null ? data[pick] : null;
   return (
-    <div>
-      <div className="flex h-24 items-end gap-[3px]" role="img" aria-label={`Vendas por hora do dia. Maiores picos: ${top.map((d) => `${d.h}h`).join(", ")}`}>
-        {data.map((d) => (
-          <div key={d.h} className="flex-1 rounded-t-sm" title={`${d.h}h: ${fmtInt(d.sales)} vendas`} style={{ height: `${Math.max((d.sales / max) * 100, 3)}%`, background: peak.has(d.h) ? GOLD : "#6b5535" }} />
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between text-[11px] text-mute">
-        {[0, 6, 12, 18, 23].map((h) => (
-          <span key={h}>{h}h</span>
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-mute">
-        Mais movimento às <b className="text-fg">{top.map((d) => `${d.h}h`).join(", ")}</b> (horário de Brasília).{note ? ` ${note}` : ""}
+    <div className="space-y-3">
+      <p className="text-sm">
+        O pico de vendas é às <b className="text-poke-gold">{top[0].h}h</b>.
+        {top.length > 1 && <span className="text-mute"> Depois vêm {top.slice(1).map((d) => `${d.h}h`).join(" e ")}.</span>}
       </p>
+
+      <div>
+        <div className="flex h-28 items-stretch gap-[3px]" role="group" aria-label="Vendas por hora do dia">
+          {data.map((d) => (
+            <button
+              key={d.h}
+              type="button"
+              onClick={() => setPick(pick === d.h ? null : d.h)}
+              onMouseEnter={() => setPick(d.h)}
+              onFocus={() => setPick(d.h)}
+              aria-label={`${hourSpan(d.h)}: ${fmtInt(d.sales)} vendas`}
+              aria-pressed={pick === d.h}
+              className="group relative flex min-w-0 flex-1 items-end rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-edge"
+            >
+              <span
+                className="block w-full rounded-t-sm transition-opacity"
+                style={{ height: `${d.sales ? Math.max((d.sales / max) * 100, 6) : 3}%`, background: pick === d.h ? "#fff3c4" : peak.has(d.h) ? GOLD : d.sales ? "#8a6d3f" : "#3b2b17", opacity: pick != null && pick !== d.h ? 0.55 : 1 }}
+              />
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 flex justify-between text-[11px] text-mute" aria-hidden>
+          {[0, 6, 12, 18].map((h) => (
+            <span key={h}>{h}h</span>
+          ))}
+          <span>24h</span>
+        </div>
+        <p className="mt-1.5 min-h-5 text-xs" aria-live="polite">
+          {sel ? (
+            <>
+              <b className="text-fg">{hourSpan(sel.h)}</b> <span className="text-mute">· {fmtInt(sel.sales)} vendas ({share(sel.sales)}% do dia)</span>
+            </>
+          ) : (
+            <span className="text-mute">Toque numa barra para ver as vendas daquela hora. Barras douradas são os 3 maiores picos.</span>
+          )}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-1.5" aria-label="Vendas por período do dia">
+        {parts.map((p) => (
+          <div key={p.id} className={`rounded-lg border px-1.5 py-1.5 text-center ${p.id === bestPart.id ? "border-edge/70 bg-tile" : "border-line"}`}>
+            <p className="tnum text-base font-extrabold leading-none">{share(p.sales)}%</p>
+            <p className="mt-1 text-[11px] font-semibold leading-tight">{p.label}</p>
+            <p className="text-[10px] leading-tight text-mute">{p.range}</p>
+          </div>
+        ))}
+      </div>
+
+      {partial && (
+        <p className="rounded-lg bg-tile px-2.5 py-2 text-xs text-mute">
+          O painel começou a coletar há <b className="text-fg">{spanLabel(covered)}</b>, então estes horários ainda são parciais. Eles ficam mais confiáveis a cada dia.
+        </p>
+      )}
     </div>
   );
 }
@@ -485,8 +551,8 @@ export function StatsTab() {
                     <IndexChart index={s.index} />
                   </ChartCard>
                 ) : null}
-                <ChartCard title="Horários de pico" hint="Em que horas do dia o mercado mais vende.">
-                  <HoursChart hours={s.hours} note={s.source === "hub" && s.coverage.last ? "Calculado com as vendas que o painel coletou." : undefined} />
+                <ChartCard title="Horários de pico" hint="Em que horas do dia (horário de Brasília) o mercado mais vende.">
+                  <HoursChart hours={s.hours} from={s.hoursFrom} now={s.now} />
                 </ChartCard>
               </div>
 
