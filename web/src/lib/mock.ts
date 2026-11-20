@@ -10,18 +10,18 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
     nick: `Treinador${i + 1}`,
     level: [2104, 1306, 450, 40][i],
     status: statuses[i],
-    pokemon: { name: p, hp: 100, maxHp: 100, level: [565, 487, 333, 21][i], xp: { atual: 146_200_000_000 + i * 9e9, nivel: 146_121_000_000 + i * 9e9, proximo: 146_334_000_000 + i * 9e9 } },
-    xp: { atual: 52_000_000_000 + i * 3e9, nivel: 51_400_000_000 + i * 3e9, proximo: 52_900_000_000 + i * 3e9 },
+    pokemon: { name: p, hp: 100, maxHp: 100, level: [565, 487, 333, 21][i], looktype: [60025, 60006, 60094, 60143][i], xp: { atual: 146_290_000_000 + i * 9e9, nivel: 146_121_000_000 + i * 9e9, proximo: 146_334_000_000 + i * 9e9 } },
+    xp: { atual: 52_000_000_000 + i * 3e9, nivel: 51_700_000_000 + i * 3e9, proximo: 52_150_000_000 + i * 3e9 },
     pass: [{ ultimo: D - 1, degrau: 6, total: 5, vipAte: 0, ciclos: 0, vipPegos: 0 }, { ultimo: D, degrau: 12, total: 40, vipAte: Date.now() + 9 * 86_400_000, ciclos: 1, vipPegos: 0b11111111111, ultimoVip: D }, { ultimo: D - 3, degrau: 3, total: 3, vipAte: 0, ciclos: 0, vipPegos: 0 }, null][i],
     map: [{ region: "outland", label: "Outland 2", outland: { tier: 2, label: "Outland 2", mult: 1.25 } }, { region: "hoenn", label: "Hoenn", outland: null }, { region: "kanto", label: "Kanto", outland: null }, { region: "outland", label: "Outland 1", outland: { tier: 1, label: "Outland 1", mult: 1 } }][i],
-    xpPerHour: 90_000 + i * 12_000,
+    xpPerHour: 78_000_000 + i * 9_000_000,
     goldPerHour: 15_000 + i * 3_000,
     gold: 1_200_000 * (i + 1),
     gems: 340 + i * 25,
     potions: 120 - i * 10,
     balls: 500 - i * 40,
     equipped: {
-      potion: { id: 70070, name: ["Golden Potion", "Super Potion", "Hyper Potion", "Potion"][i], qty: 120 - i * 10, icon: "/assets/site/assets/items/potion.png" },
+      potion: { id: 70070, name: ["Golden Potion", "Super Potion", "Hyper Potion", "Potion"][i], qty: 120 - i * 10, icon: "/img/itens/golden-potion.png" },
       ball: { id: 4, name: ["Ultra Ball", "Great Ball", "Poké Ball", "Master Ball"][i], qty: 500 - i * 40, icon: "/assets/site/assets/ui/ball-poke.png" },
     },
     session: { startedAt: Date.now() - (3600 + i * 1700) * 1000, items: { boss: i, key: 2 + i, shinyStone: i % 2, bike: 1 } },
@@ -77,7 +77,7 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
       if (a.status === "online") {
         a.xpPerHour = Math.round(a.xpPerHour * (0.97 + Math.random() * 0.06));
         // XP sobe a cada tick (ritmo acelerado para dar para ver a barra e o "+ganho" andando); o Pokémon passa de nível de vez em quando.
-        const gain = Math.round((a.xpPerHour / 3600) * 4000);
+        const gain = Math.round((a.xpPerHour / 3600) * 300);
         if (a.xp) a.xp = { ...a.xp, atual: (a.xp.atual ?? 0) + gain };
         const px = a.pokemon!.xp;
         if (px && px.atual != null && px.proximo != null) {
@@ -268,7 +268,16 @@ function installMockApi(accs: AccountSnapshot[]) {
     if (path.startsWith("/api/sprite/")) {                // sprite de outfit (Mega/shiny): o servidor real devolve o quadro da página do jogo
       const lt = Number(path.split("/").pop());
       if (lt === 1) return json({ error: "esse looktype não tem sprite" }, 404);
-      return json({ image: "https://pokeidle.io/assets/asset-packs/outfits/male/80248/outfits-male-80248-00-4b1d43b135e5.webp", pageW: 4094, pageH: 66, x: 398, y: 2, w: 64, h: 64 });
+      // Demonstração: o looktype 60000+N é a espécie N; usa o sprite dela no pokeidleguide.io (folha de 3 quadros quadrados).
+      const image = `https://pokeidleguide.io/assets/sprites/${lt - 60000}.png`;
+      const dims = await new Promise<{ w: number; h: number } | null>((ok) => {
+        const im = new Image();
+        im.onload = () => ok({ w: im.naturalWidth, h: im.naturalHeight });
+        im.onerror = () => ok(null);
+        im.src = image;
+      });
+      if (!dims) return json({ error: "sem sprite" }, 404);
+      return json({ image, pageW: dims.w, pageH: dims.h, x: 0, y: 0, w: dims.h, h: dims.h });
     }
     if (path === "/api/pokemons") {                       // inventário de Pokémon do modo de demonstração
       const names = ["Tyranitar", "Venusaur", "Gengar", "Mamoswine", "Dragonite", "Scizor"];
