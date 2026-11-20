@@ -1,3 +1,4 @@
+import { CardStyleSection } from "@/components/CardStyleSection";
 import { LanguageSection } from "@/components/LanguageSection";
 import { AnimatePresence, motion } from "framer-motion";
 import { useScrollLock } from "@/lib/scrollLock";
@@ -1066,6 +1067,10 @@ export function SettingsView() {
         <div className="tile p-3 sm:p-4">
           <GlobalForm />
         </div>
+      </Reveal>
+
+      <Reveal index={5}>
+        <CardStyleSection />
       </Reveal>
 
       <Reveal index={5}>

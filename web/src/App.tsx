@@ -17,7 +17,6 @@ import { ConfirmDialog, Frame } from "@/components/ui";
 import { actions } from "@/lib/actions";
 import { startChat, totalUnread, useChat } from "@/lib/chat";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
-import { CARD_STYLES, setCardStyle, useCardStyle } from "@/lib/cardStyle";
 import { useCardOrder } from "@/lib/useCardOrder";
 
 type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "passe" | "pvp" | "config" | "chat";
@@ -171,7 +170,6 @@ function Dashboard({ mode }: { mode: CardMode }) {
 export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
   const [mode, setMode] = useState<CardMode>("resumo");
-  const cardStyle = useCardStyle();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetErr, setResetErr] = useState("");
@@ -269,14 +267,13 @@ export default function App() {
                 {/* Sem animação de saída: o elemento que sai (popLayout) ficava preso por cima das abas. */}
                 {tab === "dashboard" ? (
                   <motion.div key="mode" className="w-full sm:w-auto" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
-                    {/* Celular: Resumo/Sessão e o botão de zerar numa linha, os modelos de card na de baixo, esticados. */}
+                    {/* Resumo/Sessão e o botão de zerar na mesma linha. */}
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
-                      <Segmented id="mode" className="order-1" options={MODES} value={mode} onChange={setMode} />
-                      {mode === "resumo" && <Segmented id="cardstyle" className="order-3 w-full sm:order-2 sm:w-auto" options={CARD_STYLES} value={cardStyle} onChange={setCardStyle} />}
+                      <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
                       <button
                         type="button"
                         aria-label="Zerar sessão"
-                        className="btn order-2 ml-auto sm:order-3 sm:ml-0"
+                        className="btn ml-auto sm:ml-0"
                         onClick={() => setResetOpen(true)}
                         title="Zerar o tempo, os itens e os shinies da sessão de todas as contas"
                       >

@@ -124,6 +124,22 @@ function Stat({ icon, label, children }: { icon: React.ReactNode; label: string;
   );
 }
 
+/** Celular: "x79". Desktop: "Golden Potion (x79)". Só no modelo Padrão. */
+function Equipped({ item }: { item?: EquippedItem | null }) {
+  if (!item) return <span className="text-mute">—</span>;
+  return (
+    <>
+      <span className="hidden sm:inline">{item.name} </span>
+      <span className="font-semibold text-mute sm:text-fg">
+        <span className="sm:hidden">x</span>
+        <span className="hidden sm:inline">(x</span>
+        <AnimatedNumber value={item.qty} />
+        <span className="hidden sm:inline">)</span>
+      </span>
+    </>
+  );
+}
+
 /** Poção ou bola equipada como botão compacto; ao tocar abre o seletor para trocar. */
 function EquipChip({ item, label, onPress, block = false }: { item?: EquippedItem | null; label: string; onPress?: (el: HTMLElement) => void; block?: boolean }) {
   return (
@@ -223,6 +239,48 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
       )}
     </AnimatePresence>
   );
+
+  // ---------------------------------------------------------------- Padrão (o card de antes dos modelos)
+  if (variant === "padrao") {
+    return (
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
+        <Tile icon={<Coin kind="gold" />} label="Gold" className="order-6 sm:order-none">
+          <AnimatedNumber value={acc.gold} />
+        </Tile>
+        <Tile icon={<Coin kind="gem" />} label="Gemas" className="order-3 sm:order-none">
+          <AnimatedNumber value={acc.gems} />
+        </Tile>
+        <Tile icon={<ItemSprite icon={potion?.icon} size={32} alt={potion?.name} />} className="order-2 sm:order-none" label="Poção equipada" hint={potion ? `Poção equipada: ${potion.name}. Clique para trocar` : "Clique para escolher a poção"} onPress={options ? open("potion") : undefined}>
+          <Equipped item={potion} />
+        </Tile>
+        <Tile icon={<ItemSprite icon={ball?.icon} size={32} alt={ball?.name} />} className="order-5 sm:order-none" label="Bola equipada" hint={ball ? `Bola equipada: ${ball.name}. Clique para trocar` : "Clique para escolher a bola"} onPress={options ? open("ball") : undefined}>
+          <Equipped item={ball} />
+        </Tile>
+        <Tile icon={<Star className="size-full fill-poke-gold text-poke-gold" />} label="XP por hora" className="tile-green order-1 sm:order-none">
+          <span className="text-poke-green">
+            +<AnimatedNumber value={acc.xpPerHour} />
+            <span className="hidden sm:inline"> XP/h</span>
+          </span>
+        </Tile>
+        <Tile icon={<GoldPerHourIcon />} label="Ouro por hora" className="tile-gold order-4 sm:order-none">
+          <span className="text-poke-gold">
+            +<AnimatedNumber value={acc.goldPerHour} />
+            <span className="hidden sm:inline"> Ouro/h</span>
+          </span>
+        </Tile>
+        <Tile icon={<Swords className="size-full text-fg" />} label="Abates por hora" className="order-7 col-span-full sm:order-none">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="text-fg">
+              {killsPerHour == null ? "—" : <AnimatedNumber value={killsPerHour} />}
+              <span className="text-mute"> abates/h</span>
+            </span>
+            {huntKills && <span className="text-xs font-medium text-mute">{fmtShort(acc.hunt!.kills)} nesta hunt</span>}
+          </span>
+        </Tile>
+        {popover}
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------- Medalhão
   if (variant === "medalhao") {
@@ -451,7 +509,7 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
       className={`card p-2.5 sm:p-3 ${drag?.canDrag ? "cursor-grab active:cursor-grabbing" : touchMode ? "select-none [-webkit-touch-callout:none]" : ""} ${lifted ? "ring-2 ring-poke-gold/70" : ""}`}
     >
       <header className="flex items-center gap-2.5 sm:gap-3.5">
-        {cardStyle === "corrida" && (
+        {(cardStyle === "corrida" || cardStyle === "padrao") && (
         <motion.div
           whileHover={{ rotate: -4, scale: 1.06 }}
           transition={{ type: "spring", stiffness: 320, damping: 16 }}
@@ -483,8 +541,8 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
             </div>
             <StatusPill status={acc.status} />
           </div>
-          {/* Os níveis já aparecem no bloco de XP do Resumo; na aba Sessão continuam aqui. */}
-          <div className={`mt-0.5 items-center gap-x-2 text-xs text-mute sm:mt-1 sm:text-sm ${mode === "sessao" ? "flex" : "hidden"}`}>
+          {/* Nos modelos com barras de XP os níveis já aparecem no bloco; no Padrão e na aba Sessão ficam aqui. */}
+          <div className={`mt-0.5 items-center gap-x-2 text-xs text-mute sm:mt-1 sm:text-sm ${mode === "sessao" || cardStyle === "padrao" ? "flex" : "hidden"}`}>
             <span className="tnum shrink-0" title="Nível do treinador">
               <span className="sm:hidden">Trein. </span>
               <span className="hidden sm:inline">Treinador </span>
