@@ -32,6 +32,7 @@ import {
   type MonthlyTop,
   type WeeklyPrize,
 } from "@/lib/pvpRewards";
+import { useScrollLock } from "@/lib/scrollLock";
 import { PLACEMENT_MATCHES, rankIcon, TIER_COLOR, TIER_NAME, type PvpAccount } from "@/lib/pvp";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -101,16 +102,14 @@ export function PvpRewardClocks({ accounts }: { accounts: PvpAccount[] }) {
 // ------------------------------------------------------------------ janela
 function Sheet({ title, icon, onClose, children, extra }: { title: string; icon: React.ReactNode; onClose: () => void; children: React.ReactNode; extra?: React.ReactNode }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  useScrollLock();
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     closeRef.current?.focus({ preventScroll: true });
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", key);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", key);
-      document.body.style.overflow = overflow;
       prev?.focus?.({ preventScroll: true });
     };
   }, [onClose]);

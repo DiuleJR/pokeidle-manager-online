@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useScrollLock } from "@/lib/scrollLock";
 import { Loader2, Save, Search, SlidersHorizontal, Trash2, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TypeChip } from "@/components/HuntRow";
@@ -23,6 +24,7 @@ const ORDERS: [RosterQuery["ord"], string][] = [
 ];
 
 export function PvpTeamEditor({ account, nick, levelMin, onClose, onSaved }: { account: number; nick: string; levelMin: number; onClose: () => void; onSaved: () => void }) {
+  useScrollLock();
   const [ids, setIds] = useState<number[]>([]);
   const [placement, setPlacement] = useState<Placement>({});
   const [members, setMembers] = useState<Map<number, RosterRow>>(new Map());

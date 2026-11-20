@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useScrollLock } from "@/lib/scrollLock";
 import { Check, Copy, Pencil, Plus, Power, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
@@ -75,6 +76,7 @@ function parsePaste(text: string): { nick: string; token: string; device: string
 }
 
 export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  useScrollLock();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);

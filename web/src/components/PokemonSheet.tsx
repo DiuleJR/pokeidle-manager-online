@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useScrollLock } from "@/lib/scrollLock";
 import { Loader2, X } from "lucide-react";
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { TypeChip } from "@/components/HuntRow";
@@ -535,6 +536,7 @@ export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(source)]);
 
+  useScrollLock();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
