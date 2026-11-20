@@ -23,7 +23,7 @@ export function xpProgress(bar?: XpBar | null) {
 export function etaLabel(hours: number): string {
   const min = hours * 60;
   if (!Number.isFinite(min) || min <= 0) return "";
-  if (min < 1) return "menos de 1 min";
+  if (min < 1) return "< 1 min";
   if (min < 60) return `~${Math.round(min)} min`;
   if (min < 48 * 60) {
     const h = Math.floor(min / 60);
