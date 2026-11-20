@@ -1,17 +1,20 @@
 ## Novidades
 
-**Chat do jogo no painel**
-- **Converse sem sair do painel:** o chat do jogo (Mundo, Comércio e Dúvidas) agora vive aqui, com as mesmas cores: nick por cargo, tag da guild colorida, menções em destaque, anúncios do mercado em cartão e avisos de shiny.
-- **Escolha a conta que fala:** por padrão vai a de maior nível, mas você troca quando quiser. O painel respeita as regras do jogo (nível 10, mute, sem links) e limita a uma mensagem a cada 3 segundos por conta, para nenhuma conta tomar mute.
-- **Bandeja que sai de trás do painel** no computador, com contador de mensagens novas (vermelho quando chamam uma das suas contas). Em telas menores vira uma gaveta, e no celular é a aba **Chat** do menu.
-- **Destacar o chat:** o botão de janela no topo do chat abre uma janela flutuante que fica por cima de outros programas, para acompanhar o chat enquanto você assiste um vídeo ou faz outra coisa. Funciona no Chrome, Edge e Brave.
+**PVP ranqueado**
+- **Nova aba PVP:** o rank de cada conta (faixa, divisão, PR, vitórias e derrotas), a tabela do Top 1.000 e o histórico de partidas numa linha só, com rolagem para o lado.
+- **Fila automática:** liga por conta ou em todas de uma vez. Entra na fila quando a espera acaba, respeita as recusas do jogo e desliga sozinha se a conta não puder jogar.
+- **Editor de equipe:** monte os 5 Pokémon no tabuleiro, com arrastar e soltar no computador e toque no celular, filtros por tipo, alcance e busca, e salve direto no jogo.
+- **Recompensas e Top mensal:** dois botões com contagem regressiva (semanal zera, mensal fecha) abrem a tabela de prêmios da semana, a prévia "se a semana acabasse agora", os ovos por faixa e o Top mensal com a arrecadação em Gemas, a sua posição e a tabela paginada.
 
-**Comunidade**
-- **Discord no painel:** coluna "Comunidade" ao lado do painel com o convite do servidor e quantos estão online, mais o link das novidades da versão. O "Me pague um café" ficou menor, com Pix e USDT juntos. Em telas menores, o convite aparece numa faixa no fim da página.
+**Ficha do Pokémon**
+- **Abre em todo lugar:** clique num Pokémon da equipe do PVP, no Inventário, no Mercado (comprar, vender e histórico) e no Chat (Pokémon mostrados, capturas shiny e lendárias e anúncios do mercado) para ver a ficha completa.
+- **Aba Calculadora:** nota de nascença, potencial na evolução final, peso de cada fator e poder de combate, no mesmo cálculo do jogo.
+- **IV por stat colorido:** vermelho até 5, laranja até 10, amarelo até 15 e verde acima, como na ficha do jogo.
 
-**Layout**
-- O painel central se ajusta à largura da tela para as colunas laterais caberem em 100% de zoom (a partir de 1800 px). Em telas maiores continua do tamanho de sempre.
+**Mercado e Inventário**
+- **Selos coloridos P, IV, Q e N:** cada atributo ganha cor pelo quão raro é o valor (cinza, verde, azul, roxo e dourado), para saber de relance se o Pokémon é bom. Aparecem no Mercado, no Inventário e no editor de equipe.
 
 **Correções**
-- **Sprites trocados nos cards:** depois de uma atualização do jogo, alguns Pokémon apareciam com o retrato errado. O painel agora confere a versão das imagens do jogo e se atualiza sozinho.
-- **Poção equipada no card:** passa a mostrar a poção que o jogo realmente está usando.
+- **Sprites de Mega e shiny:** deixaram de aparecer como Pokébola; o painel busca a imagem certa no jogo.
+- **Formas Mega na ficha:** não deixam mais a tela em branco, e um erro numa janela não derruba o painel.
+- **Rolagem travada com janela aberta:** a página de trás não rola mais enquanto uma ficha, o editor de equipe ou outra janela está aberta.
