@@ -185,7 +185,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
   const inQueue = a.queue.on;
   const canQueue = a.online && !a.blocker;
   return (
-    <Reveal as="section" index={index} className="card flex flex-col gap-3 p-3 sm:p-4">
+    <Reveal as="section" index={index} className="card flex min-w-0 flex-col gap-3 p-3 sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="truncate text-base font-extrabold sm:text-lg">{a.nick}</h3>
@@ -218,7 +218,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
       {(err || a.refusal) && <p className="rounded-md bg-poke-red/10 px-2 py-1 text-xs text-poke-red" role="alert">{err || a.refusal?.msg}</p>}
 
       {recent.length > 0 && (
-        <div className="border-t border-line pt-2.5">
+        <div className="min-w-0 border-t border-line pt-2.5">
           <div className="mb-1.5 flex items-center justify-between text-xs text-mute">
             <span>{a.session.matches.length ? "Partidas desta sessão" : "Últimas partidas"}</span>
             {a.session.matches.length > 0 && (
@@ -227,8 +227,8 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
               </span>
             )}
           </div>
-          <div className="flex flex-wrap gap-1">
-            {recent.slice(0, 14).map((m, i) => (
+          <div className="flex gap-1 overflow-x-auto overscroll-x-contain pb-2 [&>*]:shrink-0" tabIndex={0} role="group" aria-label="Histórico de partidas, role para o lado">
+            {recent.slice(0, 60).map((m, i) => (
               <Chip key={`${m.id}-${i}`} match={m} />
             ))}
           </div>
@@ -374,7 +374,7 @@ export function PvpView() {
       {!data && !error && <p className="py-10 text-center text-mute">Carregando o PVP…</p>}
       {data && accounts.length === 0 && <p className="py-10 text-center text-mute">Nenhuma conta conectada.</p>}
 
-      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
         {accounts.map((a, i) => (
           <AccountPvp key={a.id} a={a} index={i} onChanged={refresh} />
         ))}
