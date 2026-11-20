@@ -541,7 +541,7 @@ export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const tabs = [["pokemon", "Pokémon"], ...(data?.calc ? [["calc", "Calculadora"] as const] : []), ["species", "Espécie"]] as const;
+  const tabs = [["pokemon", "Pokémon"], ["species", "Espécie"], ...(data?.calc ? [["calc", "Calculadora"] as const] : [])] as const;
   return (
     <motion.div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} role="presentation">
       <motion.div
