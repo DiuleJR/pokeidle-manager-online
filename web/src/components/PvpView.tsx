@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Loader2, Pencil, Shield, Swords, Trophy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { PokemonSheet } from "@/components/PokemonSheet";
 import { PvpTeamEditor } from "@/components/PvpTeamEditor";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
@@ -137,7 +138,7 @@ function RankBlock({ a }: { a: PvpAccount }) {
   );
 }
 
-function TeamStrip({ a, onEdit }: { a: PvpAccount; onEdit: () => void }) {
+function TeamStrip({ a, onEdit, onSheet }: { a: PvpAccount; onEdit: () => void; onSheet: (id: number) => void }) {
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -151,9 +152,18 @@ function TeamStrip({ a, onEdit }: { a: PvpAccount; onEdit: () => void }) {
       ) : (
         <ul className="grid grid-cols-5 gap-1.5 sm:flex sm:flex-wrap" aria-label="Equipe de PVP">
           {a.team.map((p) => (
-            <li key={p.id} className="tile flex min-w-0 flex-col items-center py-1 sm:w-[3.9rem]" title={p.missing ? "Pokémon que saiu da conta" : `${p.name} Nv ${p.level}${p.shiny ? " (shiny)" : ""}`}>
-              {p.missing ? <span className="flex size-10 items-center justify-center text-mute">?</span> : <PokemonSprite looktype={p.looktype} size={40} />}
-              <span className="tnum text-[10px] font-bold leading-none text-mute">{p.missing ? "—" : `Nv ${p.level}`}</span>
+            <li key={p.id} className="min-w-0 sm:w-[3.9rem]">
+              <button
+                type="button"
+                disabled={p.missing}
+                onClick={() => onSheet(p.id)}
+                aria-label={p.missing ? "Pokémon que saiu da conta" : `Abrir a ficha de ${p.name}`}
+                title={p.missing ? "Pokémon que saiu da conta" : `${p.name} Nv ${p.level}${p.shiny ? " (shiny)" : ""}: ver ficha`}
+                className="tile flex w-full min-w-0 cursor-pointer flex-col items-center py-1 transition-colors hover:border-[#b66bff] hover:bg-[#2a1b3a] disabled:cursor-default disabled:hover:border-line disabled:hover:bg-transparent"
+              >
+                {p.missing ? <span className="flex size-10 items-center justify-center text-mute">?</span> : <PokemonSprite looktype={p.looktype} size={40} />}
+                <span className="tnum text-[10px] font-bold leading-none text-mute">{p.missing ? "—" : `Nv ${p.level}`}</span>
+              </button>
             </li>
           ))}
         </ul>
@@ -166,6 +176,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
+  const [sheet, setSheet] = useState<number | null>(null);
   const recent = useMemo(() => (a.session.matches.length ? a.session.matches : a.history.slice(0, 8)), [a]);
   const run = useCallback(
     async (fn: () => Promise<unknown>) => {
@@ -196,7 +207,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
       </header>
 
       <RankBlock a={a} />
-      <TeamStrip a={a} onEdit={() => setEditing(true)} />
+      <TeamStrip a={a} onEdit={() => setEditing(true)} onSheet={setSheet} />
 
       <div className="flex flex-wrap items-center gap-2.5">
         <button
@@ -237,6 +248,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
       {createPortal(
         <AnimatePresence>
           {editing && <PvpTeamEditor account={a.id} nick={a.nick} levelMin={a.levelMin} onClose={() => setEditing(false)} onSaved={onChanged} />}
+          {sheet != null && <PokemonSheet account={a.id} pokemonId={sheet} onClose={() => setSheet(null)} />}
         </AnimatePresence>,
         document.body,
       )}
