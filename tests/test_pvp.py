@@ -446,3 +446,65 @@ def test_lists_use_the_shiny_look(sheets):
     conn.estado["pokemons"] = [{**TYR_PK, "id": 9, "nome": "Tyranitar", "shiny": True, "looktype": 60248, "lookShiny": 70248, "tipos": []}]
     row = client.get(f"/api/pvp/{acc_id}/roster", headers=H).json()["items"][0]
     assert row["looktype"] == 70248
+
+
+# ------------------------------------------------- calculadora (nota, evolução final)
+import pokemon_calc as pcalc  # noqa: E402
+
+
+def _sp(pid, name, hp, atk, df, spa, spd, spe, evolves=0, level=0, look=None):
+    return {"pokeId": pid, "name": name, "baseHp": hp, "baseAtk": atk, "baseDef": df, "baseSpAtk": spa, "baseSpDef": spd,
+            "baseSpeed": spe, "evolvesToId": evolves, "evolveLevel": level, "looktype": look or 60000 + pid, "type1": "GRASS", "type2": None,
+            "attacks": []}
+
+
+TURTWIG = _sp(387, "Turtwig", 55, 68, 64, 45, 55, 31, 388, 18)
+GROTLE = _sp(388, "Grotle", 75, 89, 85, 55, 65, 36, 389, 32)
+TORTERRA = _sp(389, "Torterra", 95, 109, 105, 75, 85, 56)
+CHAIN = {s["pokeId"]: s for s in (TURTWIG, GROTLE, TORTERRA)}
+TURT_PK = {"id": 1, "speciesId": 387, "nome": "Turtwig", "level": 20, "quality": 1.377, "potencia": 1, "shiny": True,
+           "ivs": {"hp": 31, "atk": 31, "def": 24, "spAtk": 11, "spDef": 32, "speed": 24}, "refino": {},
+           "stats": {"hp": 95, "atk": 100, "def": 80, "spAtk": 40, "spDef": 90, "speed": 50}}
+
+
+def test_calc_matches_the_games_example_turtwig():
+    # a tela do jogo: Shiny Turtwig Nv 20, IV 153, qualidade 1,377, P1 -> N = 6,338; na evolução final (Torterra) 6,747
+    c = pcalc.calculadora(TURT_PK, TURTWIG, CHAIN)
+    assert c["nota"] == 6.338 and c["faixa"] == "poderoso" and c["mercado"] is True
+    assert c["proxima"]["faixa"] == "mitico" and round(c["proxima"]["falta"], 3) == 0.663       # "faltam 0,663 para Mítico"
+    assert [f["name"] for f in c["finais"]] == ["Torterra"] and c["finais"][0]["nota"] == 6.747
+    assert [round(c["eixos"][k], 2) for k in ("iv", "qualidade", "potencia", "shiny")] == [0.29, 0.21, 0.0, 0.5]
+    assert c["stats"][0]["key"] == "atk" and round(c["stats"][0]["pct"], 2) == 0.21               # "ATK pesa mais (21%)"
+    assert c["combate"]["mult"] == 3 and c["combate"]["poderRanking"] == 118                       # "Poder (ranking) ⚔ 118"
+
+
+def test_calc_has_no_evolution_for_a_final_species_and_skips_legendaries():
+    c = pcalc.calculadora({**TURT_PK, "speciesId": 389}, TORTERRA, CHAIN)
+    assert c["finais"] == []
+    leg = _sp(150, "Mewtwo", 106, 110, 90, 154, 90, 130)
+    cl = pcalc.calculadora({**TURT_PK, "speciesId": 150}, leg, {150: leg})
+    assert cl["lendario"] is True and "nota" not in cl and cl["combate"]["lendario"] == 4
+
+
+def test_calc_never_lowers_the_note_below_the_pre_evolution():
+    # evoluir não derruba a nota: o piso é a nota do pré-evoluído + 0,1 por passo
+    base = pcalc.calculadora({**TURT_PK, "shiny": False}, GROTLE, CHAIN)
+    solo = pcalc.nota_pokemon(iv=153, ivs=TURT_PK["ivs"], qualidade=1.377, potencia=1, shiny=False,
+                              bases=pcalc.bases_da_especie(GROTLE), bases_limites=pcalc.bases_da_especie(GROTLE))
+    assert base["nota"] >= solo["nota"]
+
+
+def test_sheet_payload_carries_the_calculator(sheets, monkeypatch):
+    client, _, _, _ = sheets
+    import pvp_team_api
+    import pokemon_sheet_api
+
+    async def fake_catalog():
+        return {"full": CHAIN}
+
+    monkeypatch.setattr(pvp_team_api, "load_catalog", fake_catalog)
+    monkeypatch.setattr(pokemon_sheet_api, "load_catalog", fake_catalog)
+    d = client.post("/api/pokemon/sheet", json={"pokemon": TURT_PK}, headers=H).json()
+    assert d["calc"]["nota"] == 6.338 and d["calc"]["finais"][0]["name"] == "Torterra"
+    bad = client.post("/api/pokemon/sheet", json={"pokemon": {**TURT_PK, "ivs": {}, "speciesId": 999}}, headers=H).json()
+    assert bad["calc"] is None

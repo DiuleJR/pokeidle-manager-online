@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 import pvp_power as pw
 from actions_api import load_catalog
+from pokemon_calc import calculadora
 from sprite_outfit import look_of
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ def sheet_payload(pk: dict, species: dict[int, dict], c: "AccountConnection | No
         "pvpPower": 0, "pvpLevel": pw.arena_level(pk.get("level") or 1), "pvePower": 0,
         "bases": None, "range": pw.species_range(esp),
         "species": None, "evolution": {"prev": None, "next": None, "level": 0, "prevLevel": 0},
-        "pokedex": {"defeated": None, "captured": None}, "foundIn": [],
+        "pokedex": {"defeated": None, "captured": None}, "foundIn": [], "calc": None,
     }
     if esp is None:                  # ex.: formas Mega, que o catálogo de espécies não tem
         return out
@@ -113,6 +114,10 @@ def sheet_payload(pk: dict, species: dict[int, dict], c: "AccountConnection | No
     except (KeyError, TypeError, ValueError):       # ficha pública incompleta: mostra o resto sem os poderes
         pass
     out["pokemon"].setdefault("speciesId", esp.get("pokeId"))
+    try:
+        out["calc"] = calculadora(pk, esp, species)
+    except Exception:                # noqa: BLE001 - uma ficha estranha não derruba a ficha inteira, só some a aba
+        out["calc"] = None
     if c is not None:
         out.update(species_payload(esp, species, c))
     else:

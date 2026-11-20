@@ -153,6 +153,30 @@ export interface SpeciesPayload {
   pokedex: { defeated: number | null; captured: number | null };
   foundIn: { slug: string; name: string; level: number; points: number }[];
 }
+/** Calculadora da ficha: nota de nascença, potencial na evolução final e peso de cada fator (porta da calculadora do jogo). */
+export interface CalcFinal {
+  pokeId: number;
+  name: string;
+  looktype: number | null;
+  nota: number;
+  faixa: string;
+  mercado: boolean;
+}
+export interface CalcPayload {
+  lendario: boolean;
+  ivTotal: number;
+  mercadoMin: number;
+  /** Ausentes em lendário/mítico: a nota não se aplica a eles. */
+  nota?: number;
+  faixa?: string;
+  eixos?: { iv: number; qualidade: number; potencia: number; shiny: number };
+  proxima?: { faixa: string; falta: number } | null;
+  mercado?: boolean;
+  stats?: { key: string; valor: number; pct: number }[];
+  finais?: CalcFinal[];
+  combate: { mult: number; potencia: number; shiny: number | null; lendario: number | null; poderRanking: number; poderGinasio: number; nivelGinasio: number };
+}
+
 /** O anúncio de onde a ficha veio (preço e moeda). */
 export interface SheetListing {
   id: number;
@@ -195,6 +219,8 @@ export interface PokemonSheetPayload extends SpeciesPayload {
   /** Só quando a ficha veio de um anúncio do mercado. */
   listing?: SheetListing;
   combatHp: number;
+  /** null quando a ficha não tem dados para calcular (espécie fora do catálogo, ex.: Mega). */
+  calc: CalcPayload | null;
   pvpPower: number;
   pvpLevel: number;
   pvePower: number;

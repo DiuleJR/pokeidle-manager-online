@@ -100,6 +100,15 @@ const mockMsg = (canal: string, de: string, nivel: number | null, text: string, 
   id: ++chatSeq, ts: Date.now() - agoMin * 60_000, canal, de, nivel, cargo: null, guild: null, guildColor: null, ad: null, kind, text, ...extra,
 });
 
+// Calculadora da ficha (o exemplo do jogo: Shiny Turtwig Nv 20, nota 6,338; na evolução final, 6,747).
+const mockCalc = {
+  lendario: false, ivTotal: 153, mercadoMin: 3.5, nota: 6.338, faixa: "poderoso", proxima: { faixa: "mitico", falta: 0.663 }, mercado: true,
+  eixos: { iv: 0.29, qualidade: 0.21, potencia: 0, shiny: 0.5 },
+  stats: [{ key: "atk", valor: 504, pct: 0.21 }, { key: "hp", valor: 476, pct: 0.19 }, { key: "spDef", valor: 461, pct: 0.19 }, { key: "def", valor: 434, pct: 0.18 }, { key: "speed", valor: 321, pct: 0.13 }, { key: "spAtk", valor: 260, pct: 0.11 }],
+  finais: [{ pokeId: 389, name: "Torterra", looktype: 60389, nota: 6.747, faixa: "poderoso", mercado: true }, { pokeId: 3389, name: "Mega Torterra", looktype: 80389, nota: 5.1, faixa: "forte", mercado: false }],
+  combate: { mult: 3, potencia: 1, shiny: 3, lendario: null, poderRanking: 118, poderGinasio: 1, nivelGinasio: 20 },
+};
+
 export function startMockChat(emit: (ev: ChatEvent) => void) {
   chatEmit = emit;
   const seed = {
@@ -242,7 +251,7 @@ function installMockApi(accs: AccountSnapshot[]) {
         owner, ...(path.startsWith("/api/pokemon/listing/") ? { listing: { id: 7, price: 450, currency: "orb", qty: 1 } } : sent?.listing ? { listing: sent.listing } : {}),
         species: sp, range: 1, evolution: { prev: null, next: null, level: 0, prevLevel: 0 }, pokedex: { defeated: null, captured: null }, foundIn: [{ slug: "scizor", name: "Scizor", level: 90, points: 12 }],
         pokemon: { id: 176926002, speciesId: 2050, nome: "Furious Scizor", looktype: 60212, lookShiny: null, tipos: ["BUG", "STEEL"], level: 100, xp: 15694800, quality: 1.734, potencia: 2, shiny: false, slot: null, maxHp: 2808, poder: 366, nota: 3.58, ivs: { hp: 31, atk: 25, def: 28, spAtk: 11, spDef: 19, speed: 8 }, stats: { hp: 234, atk: 294, def: 254, spAtk: 126, spDef: 192, speed: 143 }, refino: { hp: 0, atk: 0, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 0, tmElemental: null, caughtAt: 1795130280057, caughtBy: owner },
-        combatHp: 2808, pvpPower: 3116, pvpLevel: 100, pvePower: 366000, bases: { hp: 70, atk: 130, def: 100, spAtk: 55, spDef: 80, speed: 65 },
+        calc: mockCalc, combatHp: 2808, pvpPower: 3116, pvpLevel: 100, pvePower: 366000, bases: { hp: 70, atk: 130, def: 100, spAtk: 55, spDef: 80, speed: 65 },
       });
     }
     const pvpApiM = path.match(/^\/api\/pvp\/(\d+)\/(roster|team-view|team|pokemon\/\d+)$/);
@@ -256,7 +265,7 @@ function installMockApi(accs: AccountSnapshot[]) {
       const common = { species, range: 1, evolution: { prev: { pokeId: 247, name: "Pupitar", looktype: 401 }, next: null, level: 0, prevLevel: 100 }, pokedex: { defeated: 25, captured: 1 }, foundIn: [{ slug: "tyranitar", name: "Tyranitar", level: 470, points: 15 }] };
       if (path.startsWith("/api/pvp/species/")) return json(common);
       await wait();
-      return json({ ...common, pokemon: { id: 3289961, speciesId: 248, nome: "Tyranitar", looktype: 60248, lookShiny: null, tipos: ["ROCK", "DARK"], level: 2064, xp: 146304204535, xpNivel: 146121877400, xpProximo: 146334572800, quality: 1.711, potencia: 1, shiny: false, slot: 2, hp: 48190, maxHp: 55284, poder: 8479, nota: 3.651, ivs: { hp: 17, atk: 23, def: 20, spAtk: 28, spDef: 32, speed: 32 }, stats: { hp: 4607, atk: 5741, def: 4758, spAtk: 4789, spDef: 5202, speed: 4297 }, refino: { hp: 0, atk: 1, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 1, tmElemental: null, caughtAt: 1789099341577, caughtBy: true }, combatHp: 55284, pvpPower: 82354, pvpLevel: 488, pvePower: 26161752, bases: { hp: 100, atk: 135, def: 110, spAtk: 95, spDef: 100, speed: 61 } });
+      return json({ ...common, pokemon: { id: 3289961, speciesId: 248, nome: "Tyranitar", looktype: 60248, lookShiny: null, tipos: ["ROCK", "DARK"], level: 2064, xp: 146304204535, xpNivel: 146121877400, xpProximo: 146334572800, quality: 1.711, potencia: 1, shiny: false, slot: 2, hp: 48190, maxHp: 55284, poder: 8479, nota: 3.651, ivs: { hp: 17, atk: 23, def: 20, spAtk: 28, spDef: 32, speed: 32 }, stats: { hp: 4607, atk: 5741, def: 4758, spAtk: 4789, spDef: 5202, speed: 4297 }, refino: { hp: 0, atk: 1, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 1, tmElemental: null, caughtAt: 1789099341577, caughtBy: true }, calc: mockCalc, combatHp: 55284, pvpPower: 82354, pvpLevel: 488, pvePower: 26161752, bases: { hp: 100, atk: 135, def: 110, spAtk: 95, spDef: 100, speed: 61 } });
     }
     if (path === "/api/pvp/ladder") {
       const pg = Number(new URL(url, location.href).searchParams.get("pagina") || 1);

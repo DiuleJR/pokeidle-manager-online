@@ -7,6 +7,7 @@ import {
   rangeBadge,
   rangeText,
   teamApi,
+  type CalcPayload,
   type EvolutionBrief,
   type PokemonSheetPayload,
   type SheetListing,
@@ -252,6 +253,145 @@ function PokemonTab({ d }: { d: PokemonSheetPayload }) {
   );
 }
 
+// ------------------------------------------------------------ aba Calculadora
+const FAIXA_ID = ["extremamente-fraco", "fraco", "mediano", "razoavel", "bom", "forte", "poderoso", "mitico", "legendario", "divino"];
+const faixaIdx = (id?: string) => Math.max(0, FAIXA_ID.indexOf(id ?? ""));
+const STAT_NOME: Record<string, string> = { hp: "HP", atk: "ATK", def: "DEF", spAtk: "SP.ATK", spDef: "SP.DEF", speed: "SPD" };
+const pctTxt = (v?: number) => `${Math.round((v ?? 0) * 100)}%`;
+
+function Axis({ label, pct, right, lead }: { label: string; pct: number; right: React.ReactNode; lead?: boolean }) {
+  return (
+    <li className="flex items-center gap-2 text-xs">
+      <span className="w-[5.5rem] shrink-0 leading-tight">
+        <span className={`block font-bold ${lead ? "text-poke-green" : ""}`}>{label}</span>
+        <span className="tnum text-[10px] text-mute">{pctTxt(pct)}</span>
+      </span>
+      <span className="h-2 flex-1 overflow-hidden rounded-full bg-tile ring-1 ring-line">
+        <span className="block h-full rounded-full" style={{ width: `${Math.max(2, pct * 100)}%`, background: lead ? "#6fd47c" : VIOLET }} />
+      </span>
+      <span className="tnum w-14 shrink-0 text-right font-bold">{right}</span>
+    </li>
+  );
+}
+
+function MercadoBadge({ ok, min }: { ok: boolean; min: number }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${ok ? "border-poke-green/50 bg-poke-green/10 text-poke-green" : "border-line bg-tile text-mute"}`}>
+      <span aria-hidden>{ok ? "✓" : "✕"}</span>
+      {ok ? "Atinge o Mercado" : "Ainda não atinge o Mercado"} (nota {dec(min, 1)}+ ou shiny/P5/lendário)
+    </span>
+  );
+}
+
+function CalcTab({ d, calc }: { d: PokemonSheetPayload; calc: CalcPayload }) {
+  const p = d.pokemon;
+  const ivs = p.ivs ?? {};
+  const c = calc.combate;
+  const idx = faixaIdx(calc.faixa);
+  const color = GRADE_COLORS[idx];
+  const prox = calc.proxima;
+  return (
+    <div className="space-y-3">
+      <p className="text-xs leading-snug text-mute">
+        A nota <b className="text-fg">N=</b> (0 a 10) mede o quão forte o Pokémon <b className="text-fg">nasceu</b>: IV, qualidade, potência e shiny juntos. Treinar não muda a nota, só o ⚔ do ranking.
+        Ela compara só com outros <b className="text-fg">{p.nome}</b>, nunca entre espécies diferentes.
+      </p>
+
+      {calc.lendario || calc.nota == null ? (
+        <Card title="Lendário ou mítico">
+          <p className="text-sm text-mute">A nota de nascença não se aplica a Pokémon lendários e míticos: todos nascem com os stats multiplicados por ×{c.lendario ?? 4}. Veja o desempenho em combate abaixo.</p>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-[1fr_15rem]">
+            <Card title="Números usados">
+              <div className="grid grid-cols-6 gap-1.5">
+                {STAT_LABEL.map(([, label, k]) => (
+                  <div key={k} className="rounded-lg border border-line bg-tile px-1 py-1.5 text-center">
+                    <div className="text-[10px] font-extrabold text-mute">{label}</div>
+                    <div className="tnum text-base font-extrabold">{ivs[k] ?? "—"}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="tnum mt-1 text-right text-[11px] text-mute">IV somado {calc.ivTotal}/192</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <Fact label="Qualidade" value={dec(p.quality, 3)} tone="#f3c04a" />
+                <Fact label="Potência" value={`P${p.potencia}`} tone={POTENCY_COLOR[p.potencia - 1]} />
+                <Fact label="Shiny" value={p.shiny ? "✨ ×3" : "Não"} tone={p.shiny ? "#f3c04a" : undefined} />
+              </div>
+            </Card>
+            <div className="flex flex-col items-center justify-center rounded-xl border border-line px-3 py-3 text-center" style={{ background: `radial-gradient(ellipse at 50% 0%, ${color}2b, #1b1209 72%)` }}>
+              <PokemonSprite looktype={p.shiny && p.lookShiny ? p.lookShiny : p.looktype} size={84} />
+              <div className="tnum text-4xl font-extrabold leading-none" style={{ color }}>{dec(calc.nota, 3)}<span className="text-sm text-mute"> / 10,0</span></div>
+              <div className="mt-1 text-[11px] font-extrabold uppercase tracking-wide" style={{ color }}>{GRADE_BANDS[idx]}</div>
+              <div className="mt-1.5 flex w-full gap-0.5" aria-hidden>
+                {GRADE_COLORS.map((cc, i) => <span key={cc} className="h-1.5 flex-1 rounded-sm" style={{ background: i <= idx ? cc : "#2a1e12" }} />)}
+              </div>
+              <p className="mt-1.5 text-[11px] font-semibold text-mute">
+                {prox ? (
+                  <>↑ faltam <b className="tnum text-fg">{dec(prox.falta, 3)}</b> para <b style={{ color: GRADE_COLORS[faixaIdx(prox.faixa)] }}>{GRADE_BANDS[faixaIdx(prox.faixa)]}</b></>
+                ) : "👑 Topo da escada: Divino"}
+              </p>
+            </div>
+          </div>
+          <MercadoBadge ok={!!calc.mercado} min={calc.mercadoMin} />
+
+          <Card title="Potencial na evolução final">
+            {calc.finais && calc.finais.length > 0 ? (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {calc.finais.map((f) => {
+                  const fi = faixaIdx(f.faixa);
+                  return (
+                    <li key={f.pokeId} className="flex items-center gap-2.5 rounded-xl border-2 bg-tile px-2.5 py-2" style={{ borderColor: `${GRADE_COLORS[fi]}99` }}>
+                      <PokemonSprite looktype={f.looktype} size={48} />
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <div className="truncate text-sm font-extrabold">{f.name}</div>
+                        <div className="tnum text-sm">N= <b style={{ color: GRADE_COLORS[fi] }}>{dec(f.nota, 3)}</b> <span className="text-xs font-bold" style={{ color: GRADE_COLORS[fi] }}>{GRADE_BANDS[fi]}</span></div>
+                        <div className={`text-[11px] ${f.mercado ? "text-poke-green" : "text-mute"}`}>{f.mercado ? "✓ Atinge o Mercado" : "✕ Não atinge o Mercado"}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="text-sm text-mute">Este Pokémon já está na forma final: não há evolução para projetar.</p>}
+            <p className="mt-2 text-[11px] leading-snug text-mute">Usa os mesmos IV, qualidade, potência e shiny de agora. Evoluir nunca derruba a nota: ela vale ao menos a da forma anterior + 0,1 por evolução.</p>
+          </Card>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Card title="De onde vem a nota">
+              <ul className="space-y-2">
+                <Axis label="IV (soma)" pct={calc.eixos?.iv ?? 0} right={pctTxt(calc.eixos?.iv)} />
+                <Axis label="Qualidade" pct={calc.eixos?.qualidade ?? 0} right={pctTxt(calc.eixos?.qualidade)} />
+                <Axis label="Potência" pct={calc.eixos?.potencia ?? 0} right={pctTxt(calc.eixos?.potencia)} />
+                <Axis label="Shiny" pct={calc.eixos?.shiny ?? 0} right={pctTxt(calc.eixos?.shiny)} />
+              </ul>
+            </Card>
+            <Card title="Peso de cada stat na nota">
+              {calc.stats && calc.stats[0] && (
+                <p className="mb-2 text-xs text-mute"><b className="text-poke-green">{STAT_NOME[calc.stats[0].key]}</b> pesa mais nesta espécie ({pctTxt(calc.stats[0].pct)} da soma de nascença).</p>
+              )}
+              <ul className="space-y-1.5">
+                {(calc.stats ?? []).map((s, i) => <Axis key={s.key} label={STAT_NOME[s.key]} pct={s.pct} right={nf.format(s.valor)} lead={i === 0} />)}
+              </ul>
+              <p className="mt-2 text-[11px] leading-snug text-mute">A distribuição de IV importa: dois Pokémon com a mesma soma podem ter notas diferentes se os pontos estiverem nos stats que a espécie mais valoriza.</p>
+            </Card>
+          </div>
+        </>
+      )}
+
+      <Card title="Em combate">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Fact label="Multiplicador de stats" value={`×${dec(c.mult, 2)}`} sub={`Potência ×${dec(c.potencia, 2)}${c.shiny ? ` · Shiny ×${c.shiny}` : ""}${c.lendario ? ` · Lendário ×${c.lendario}` : ""}`} />
+          <Fact label="Poder (ranking)" value={`⚔ ${nf.format(c.poderRanking)}`} sub={`Nv ${nf.format(p.level)}`} />
+          <Fact label="Poder (ginásio)" value={`⚔ ${nf.format(c.poderGinasio)}`} sub={`conta como Nv ${nf.format(c.nivelGinasio)}`} tone={VIOLET} />
+          <Fact label="HP de combate" value={nf.format(d.combatHp)} />
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-mute">A nota mede a força de nascença. Golpes físicos usam ATK/DEF; especiais usam Sp.Atk/Sp.Def. O ⚔ do ranking usa a mesma força × nível.</p>
+      </Card>
+    </div>
+  );
+}
+
 // --------------------------------------------------------------- aba Espécie
 function SpeciesTab({ d }: { d: SpeciesPayload }) {
   const s = d.species;
@@ -382,7 +522,7 @@ const loadSheet = (s: SheetSource) =>
   : teamApi.listing(s.id);
 
 export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose: () => void }) {
-  const [tab, setTab] = useState<"pokemon" | "species">("pokemon");
+  const [tab, setTab] = useState<"pokemon" | "calc" | "species">("pokemon");
   const [data, setData] = useState<PokemonSheetPayload | null>(null);
   const [err, setErr] = useState("");
 
@@ -401,7 +541,7 @@ export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const tabs = [["pokemon", "Pokémon"], ["species", "Espécie"]] as const;
+  const tabs = [["pokemon", "Pokémon"], ...(data?.calc ? [["calc", "Calculadora"] as const] : []), ["species", "Espécie"]] as const;
   return (
     <motion.div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} role="presentation">
       <motion.div
@@ -427,7 +567,7 @@ export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose
           {err && <p className="py-10 text-center text-poke-red" role="alert">{err}</p>}
           {data && (
             <SheetBoundary key={`${tab}-${data.pokemon?.id}`}>
-              {tab === "pokemon" ? <PokemonTab d={data} /> : <SpeciesTab d={data} />}
+              {tab === "pokemon" ? <PokemonTab d={data} /> : tab === "calc" && data.calc ? <CalcTab d={data} calc={data.calc} /> : <SpeciesTab d={data} />}
             </SheetBoundary>
           )}
         </div>
