@@ -5,6 +5,8 @@ Gemas nem envia Coins: o painel só LÊ a carteira.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -13,14 +15,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from auth import Auth
+import market_hub
 import market_stats
 from market import MarketError
+from market_hub import HubClient, HubError
 from market_service import MarketService, today_key
 
 if TYPE_CHECKING:
     from manager import AccountManager
     from store import Store
 
+log = logging.getLogger("market")
 MAX_RULES = 40
 ELEMENTS = {"", "NORMAL", "FIRE", "WATER", "GRASS", "ELECTRIC", "ICE", "FIGHTING", "POISON", "GROUND", "FLYING",
             "PSYCHIC", "BUG", "ROCK", "GHOST", "DRAGON", "DARK", "STEEL", "FAIRY"}
@@ -197,31 +202,60 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
         since = int((time.time() - 30 * 86400) * 1000)
         return {"itemId": itemId, "moeda": moeda, "sales": series, "floor": store.price_history(itemId, since)}
 
-    def with_icons(groups: list[dict]) -> list[dict]:
-        for g in groups:
-            g["icon"] = svc.icon_by_name(g["name"])
-        return groups
+    hub = HubClient()
+
+    async def hub_overview(moeda: str, period: str) -> dict:
+        days = market_stats.PERIODS[period]
+        now = int(time.time() * 1000)
+        prev_days = days * 2 if days * 2 <= market_hub.MAX_DAYS else 0
+        res, prev = await asyncio.gather(hub.resumo(days), hub.resumo(prev_days) if prev_days else asyncio.sleep(0, None),
+                                         return_exceptions=True)
+        if isinstance(res, BaseException):
+            raise res if isinstance(res, HubError) else HubError(str(res))
+        return market_hub.normalize(res, prev if isinstance(prev, dict) else None, moeda, period, days,
+                                    market_stats.looks(store), svc.icon_by_name, now)
 
     @app.get("/api/market/stats")
     async def stats(request: Request, moeda: Literal["gold", "orb"] = "gold",
                     period: Literal["24h", "7d", "30d"] = "7d", tok: str | None = Query(None, alias="token")):
-        """Análise do mercado: o que mais vendeu, preços, altas e quedas, volume por dia e por hora."""
+        """Análise do mercado. 24 h vem do coletor do painel (por hora); 7 e 30 dias vêm do pokeidleguide.io,
+        que já guarda semanas de vendas, e o painel cai para os dados locais se o site estiver fora."""
         if (r := guard(request, tok)):
             return r
-        res = market_stats.overview(store, moeda, period)
-        with_icons(res["items"])
-        for g in (*res["up"], *res["down"]):
-            if g["kind"] == "item":
-                g["icon"] = svc.icon_by_name(g["name"])
+        days = market_stats.PERIODS[period]
+        res = None
+        if period != "24h":
+            try:
+                res = await hub_overview(moeda, period)
+                res["hours"] = market_stats.hours_of_day(store, moeda, int(time.time() * 1000) - days * 86_400_000)
+            except HubError as e:
+                log.warning("análise: %s; usando os dados locais", e)
+        if res is None:
+            res = market_stats.overview(store, moeda, period)
+            res["hubDown"] = period != "24h"
+            for g in (*res["groups"], *res["up"], *res["down"]):
+                if g["kind"] == "item":
+                    g["icon"] = svc.icon_by_name(g["name"])
         return res
 
     @app.get("/api/market/stats/detail")
     async def stats_detail(request: Request, kind: Literal["item", "pokemon"], name: str = Query(max_length=80),
                            shiny: bool = False, moeda: Literal["gold", "orb"] = "gold",
                            period: Literal["24h", "7d", "30d"] = "7d", tok: str | None = Query(None, alias="token")):
+        """Preço ao longo do tempo de um item ou Pokémon (mediana e faixa do meio, por dia no site; por hora no 24 h)."""
         if (r := guard(request, tok)):
             return r
-        return market_stats.detail(store, kind, name, shiny, moeda, period)
+        if period != "24h" and not shiny:
+            try:
+                pts = market_hub.normalize_serie(await hub.serie(name, moeda, market_stats.PERIODS[period]))
+                if pts:
+                    return {"kind": kind, "name": name, "shiny": False, "moeda": moeda, "period": period,
+                            "hourly": False, "source": "hub", "points": pts}
+            except HubError as e:
+                log.debug("série do site: %s", e)
+        d = market_stats.detail(store, kind, name, shiny, moeda, period)
+        d["source"] = "local"
+        return d
 
     @app.get("/api/market/mine")
     async def mine(request: Request, account: int | None = None, tok: str | None = Query(None, alias="token")):

@@ -171,20 +171,21 @@ export interface BuyResult {
 export type StatsPeriod = "24h" | "7d" | "30d";
 export interface StatsGroup {
   name: string;
+  kind: "item" | "pokemon";
   shiny: boolean;
   look: number | null;
   icon?: string | null;
-  kind?: "item" | "pokemon";
   sales: number;
   units: number;
   volume: number;
-  avg: number | null;
-  min: number | null;
-  max: number | null;
-  prevSales: number;
-  prevAvg: number | null;
-  /** variação do preço médio contra o período anterior (%), só com vendas suficientes nos dois */
+  /** preço típico por unidade: mediana (site) ou média (coletor do painel) */
+  typical: number | null;
+  /** faixa do meio das vendas (25% a 75%) ou, no coletor, do menor ao maior preço */
+  low: number | null;
+  high: number | null;
+  /** variação do preço contra o período anterior (%), só com vendas suficientes */
   change: number | null;
+  spark: number[];
 }
 export interface StatsBucket {
   k: string;
@@ -194,6 +195,10 @@ export interface StatsBucket {
   pokemonVolume: number;
 }
 export interface MarketStats {
+  /** hub = pokeidleguide.io (semanas de histórico); local = coletor do painel */
+  source: "hub" | "local";
+  priceKind: "median" | "avg";
+  hubDown?: boolean;
   moeda: Moeda;
   period: StatsPeriod;
   days: number;
@@ -202,9 +207,10 @@ export interface MarketStats {
   totals: { sales: number; volume: number; prevSales: number; prevVolume: number };
   series: StatsBucket[];
   hourly: boolean;
+  /** índice de preços dos itens (100 = início do período) */
+  index: { points: { day: string; index: number }[]; change: number } | null;
   hours: { h: number; sales: number; volume: number }[];
-  items: StatsGroup[];
-  pokemon: StatsGroup[];
+  groups: StatsGroup[];
   up: StatsGroup[];
   down: StatsGroup[];
 }
@@ -213,6 +219,7 @@ export interface StatsDetail {
   name: string;
   shiny: boolean;
   hourly: boolean;
+  source: "hub" | "local";
   points: { k: string; sales: number; units: number; volume: number; avg: number | null; min: number; max: number }[];
 }
 

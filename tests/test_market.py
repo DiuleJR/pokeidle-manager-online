@@ -616,3 +616,29 @@ def test_sniper_without_daily_budget_is_limited_by_balance(env, monkeypatch):
     run(go())
     buy = [m for m in env.conn.market._ws.sent if m["t"] == "market.comprar"]
     assert len(buy) == 1 and buy[0]["qtd"] == 5                              # sem teto diário: só o saldo limita
+
+
+def test_stats_routes_use_site_and_fall_back_to_local(env, monkeypatch):
+    import market_hub as mh
+    from tests.test_market_hub import RESUMO
+
+    async def ok(self, url):
+        return RESUMO if "resumo" in url else {"pontos": [{"dia": "2026-11-01", "mediana": 10, "p25": 8, "p75": 12, "vendas": 3, "unidades": 5, "volume": 50}]}
+
+    monkeypatch.setattr(mh.HubClient, "_fetch", ok)
+    assert env.get("/api/market/stats").status_code == 401
+    r = env.get("/api/market/stats?moeda=gold&period=7d", headers=H).json()
+    assert r["source"] == "hub" and r["groups"][0]["name"] == "Earth Stone"
+    d = env.get("/api/market/stats/detail?kind=item&name=Earth%20Stone&period=7d", headers=H).json()
+    assert d["source"] == "hub" and d["points"][0]["avg"] == 10.0
+
+    async def down(self, url):
+        raise mh.HubError("fora")
+
+    monkeypatch.setattr(mh.HubClient, "_fetch", down)
+    monkeypatch.setattr(mh.HubClient, "get", lambda self, p, t: (_ for _ in ()).throw(mh.HubError("fora")))
+    r = env.get("/api/market/stats?moeda=gold&period=7d", headers=H).json()
+    assert r["source"] == "local" and r["hubDown"] is True
+    assert env.get("/api/market/stats?moeda=gold&period=24h", headers=H).json()["hubDown"] is False
+    d = env.get("/api/market/stats/detail?kind=item&name=Earth%20Stone&period=7d", headers=H).json()
+    assert d["source"] == "local"

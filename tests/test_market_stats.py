@@ -88,20 +88,20 @@ def test_overview_ranks_prices_and_movers(store):
 
     o = ms.overview(store, "gold", "24h", now_ms=NOW)
     assert o["totals"]["sales"] == 4 + 3 + 2 and o["coverage"]["count"] == len(rows)
-    fire = next(g for g in o["items"] if g["name"] == "Fire Stone")
-    assert (fire["sales"], fire["units"], fire["avg"]) == (4, 8, 100.0)
-    assert o["hourly"] is True and o["items"][0]["name"] == "Fire Stone"      # maior volume primeiro
-    assert {(g["name"], g["shiny"]) for g in o["pokemon"]} == {("Garchomp", False), ("Garchomp", True)}
+    fire = next(g for g in o["groups"] if g["name"] == "Fire Stone")
+    assert (fire["sales"], fire["units"], fire["typical"]) == (4, 8, 100.0) and fire["kind"] == "item"
+    assert o["hourly"] is True and o["source"] == "local" and o["groups"][0]["sales"] == 4      # mais vendas primeiro
+    assert {(g["name"], g["shiny"]) for g in o["groups"] if g["kind"] == "pokemon"} == {("Garchomp", False), ("Garchomp", True)}
     assert sum(h["sales"] for h in o["hours"]) == 9
-    assert "orb" not in str(o["items"])
+    assert all(g["sales"] for g in o["groups"])
 
     o7 = ms.overview(store, "gold", "7d", now_ms=NOW)        # 7d: as vendas de 30 h atrás também entram
-    fire7 = next(g for g in o7["items"] if g["name"] == "Fire Stone")
+    fire7 = next(g for g in o7["groups"] if g["name"] == "Fire Stone")
     assert fire7["sales"] == 8 and o7["hourly"] is False
 
     o1 = ms.overview(store, "gold", "24h", now_ms=NOW)
     # janela anterior de 24h (24-48 h atrás): Fire Stone caiu... subiu de 50 para 100
-    fs = next(g for g in o1["items"] if g["name"] == "Fire Stone")
+    fs = next(g for g in o1["groups"] if g["name"] == "Fire Stone")
     assert fs["change"] == 100.0
     assert [g["name"] for g in o1["up"]] == ["Fire Stone"]
     assert [g["name"] for g in o1["down"]] == ["Moon Stone"] and o1["down"][0]["change"] == -50.0

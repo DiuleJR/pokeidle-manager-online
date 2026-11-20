@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 FUSO_S = 3 * 3600
 MAX_PAGES = 60                   # a profundidade real do jogo é ~40 páginas; passou disso, é laço
 MOVER_MIN_SALES = 3              # alta/queda só vale com algumas vendas nos dois períodos
-TOP_N = 40
+TOP_N = 60
 PERIODS = {"24h": 1, "7d": 7, "30d": 30}
 _QTY = re.compile(r"^\s*([\d.,]+)\s*[×x]\s*(.+?)\s*$")
 
@@ -105,13 +105,35 @@ def _groups(store: "Store", kind: str, moeda: str, since: int, prev_since: int) 
     for r in rows:
         avg = r["volume"] / r["units"] if r["units"] else None
         pavg = r["pvolume"] / r["punits"] if r["punits"] else None
-        out.append({"name": r["name"], "shiny": bool(r["shiny"]), "look": r["look"], "sales": r["sales"], "units": r["units"],
-                    "volume": round(r["volume"]), "avg": round(avg, 2) if avg else None,
-                    "min": round(r["mn"], 2) if r["mn"] is not None else None,
-                    "max": round(r["mx"], 2) if r["mx"] is not None else None,
-                    "prevSales": r["psales"], "prevAvg": round(pavg, 2) if pavg else None,
-                    "change": _pct(avg, pavg) if r["sales"] >= MOVER_MIN_SALES and r["psales"] >= MOVER_MIN_SALES else None})
+        out.append({"name": r["name"], "kind": kind, "shiny": bool(r["shiny"]), "look": r["look"], "icon": None,
+                    "sales": r["sales"], "units": r["units"], "volume": round(r["volume"]),
+                    "typical": round(avg, 2) if avg else None,
+                    "low": round(r["mn"], 2) if r["mn"] is not None else None,
+                    "high": round(r["mx"], 2) if r["mx"] is not None else None,
+                    "change": _pct(avg, pavg) if r["sales"] >= MOVER_MIN_SALES and r["psales"] >= MOVER_MIN_SALES else None,
+                    "spark": []})
     return out
+
+
+def hours_of_day(store: "Store", moeda: str, since: int) -> list[dict]:
+    """Vendas por hora do dia (horário de Brasília) desde `since`."""
+    rows = store.sales_query(
+        f"""SELECT CAST(strftime('%H', ts/1000 - {FUSO_S}, 'unixepoch') AS INTEGER) h, COUNT(*) sales, SUM(price) volume
+            FROM market_sales WHERE moeda=:m AND ts>=:s GROUP BY h ORDER BY h""", {"m": moeda, "s": since})
+    return [{"h": r["h"], "sales": r["sales"], "volume": round(r["volume"])} for r in rows]
+
+
+_LOOKS: tuple[float, dict[str, int]] = (0.0, {})
+
+
+def looks(store: "Store") -> dict[str, int]:
+    """nome do Pokémon -> looktype (para o sprite), das vendas guardadas; em cache por 10 min."""
+    global _LOOKS
+    if time.monotonic() - _LOOKS[0] < 600 and _LOOKS[1]:
+        return _LOOKS[1]
+    rows = store.sales_query("SELECT name, MAX(look) look FROM market_sales WHERE kind='pokemon' AND shiny=0 AND look IS NOT NULL GROUP BY name", {})
+    _LOOKS = (time.monotonic(), {r["name"]: r["look"] for r in rows})
+    return _LOOKS[1]
 
 
 def overview(store: "Store", moeda: str, period: str, now_ms: int | None = None) -> dict:
@@ -135,28 +157,23 @@ def overview(store: "Store", moeda: str, period: str, now_ms: int | None = None)
         o["sales"] += r["sales"]
         o["volume"] += round(r["volume"])
         o["itemVolume" if r["kind"] == "item" else "pokemonVolume"] += round(r["volume"])
-    hours = store.sales_query(
-        f"""SELECT CAST(strftime('%H', ts/1000 - {FUSO_S}, 'unixepoch') AS INTEGER) h, COUNT(*) sales, SUM(price) volume
-            FROM market_sales WHERE moeda=:m AND ts>=:s GROUP BY h ORDER BY h""", {"m": moeda, "s": since})
+    hours_rows = hours_of_day(store, moeda, since)
 
     items = _groups(store, "item", moeda, since, prev_since)
     mons = _groups(store, "pokemon", moeda, since, prev_since)
-    moved = [g | {"kind": "item"} for g in items if g["change"] is not None] + \
-            [g | {"kind": "pokemon"} for g in mons if g["change"] is not None]
+    moved = [g for g in items + mons if g["change"] is not None]
     moved.sort(key=lambda g: g["change"])
-    cur = [g for g in items if g["sales"]]
-    cur_p = [g for g in mons if g["sales"]]
+    groups = sorted((g for g in items + mons if g["sales"]), key=lambda g: -g["sales"])
     return {
-        "moeda": moeda, "period": period, "days": days, "now": now,
+        "source": "local", "priceKind": "avg", "moeda": moeda, "period": period, "days": days, "now": now,
         "coverage": {"first": cov["a"], "last": cov["b"], "count": cov["n"]},
         "totals": {"sales": tot["sales"] or 0, "volume": round(tot["volume"] or 0),
                    "prevSales": tot["psales"] or 0, "prevVolume": round(tot["pvolume"] or 0)},
-        "series": list(by_k.values()), "hourly": days <= 1,
-        "hours": [{"h": r["h"], "sales": r["sales"], "volume": round(r["volume"])} for r in hours],
-        "items": sorted(cur, key=lambda g: -g["volume"])[:TOP_N],
-        "pokemon": sorted(cur_p, key=lambda g: -g["sales"])[:TOP_N],
-        "up": [g for g in reversed(moved) if g["change"] > 0][:8],
-        "down": [g for g in moved if g["change"] < 0][:8],
+        "series": list(by_k.values()), "hourly": days <= 1, "index": None,
+        "hours": hours_rows,
+        "groups": groups[:TOP_N],
+        "up": [g for g in reversed(moved) if g["change"] > 0][:6],
+        "down": [g for g in moved if g["change"] < 0][:6],
     }
 
 
