@@ -138,14 +138,16 @@ function Pct({ value, pulse, className, style }: { value: number; pulse?: number
   );
 }
 
-/** Ritmo para a conta: o do jogo (treinador) quando existe, senão o medido aqui. */
-const pace = (track: XpTrack, given?: number) => (given && given > 0 ? given : track.rate);
+/** Ritmo para a conta: o do jogo (treinador) quando existe; senão o medido aqui; enquanto não há medida, o estimado (`fallback`). */
+const pace = (track: XpTrack, given?: number, fallback?: number) => (given && given > 0 ? given : track.rate ?? (fallback && fallback > 0 ? fallback : null));
 
 export interface XpWho {
   level: number | null | undefined;
   bar: XpBar | null | undefined;
   /** XP por hora conhecido (treinador); se faltar, usa o medido aqui. */
   perHour?: number;
+  /** Ritmo estimado para usar até haver medida (o Pokémon usa o do treinador nos primeiros segundos). */
+  fallbackPerHour?: number;
   /** Nome do Pokémon (só no Pokémon). */
   name?: string | null;
 }
@@ -154,7 +156,7 @@ export interface XpWho {
 function useWho(w: XpWho) {
   const track = useXpTrack(w.bar?.atual, w.level);
   const p = xpProgress(w.bar);
-  const r = pace(track, w.perHour);
+  const r = pace(track, w.perHour, w.fallbackPerHour);
   return { track, p, eta: p && r ? etaLabel(p.falta / r) : "" };
 }
 type Who = ReturnType<typeof useWho>;

@@ -162,7 +162,7 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
   const open = (kind: "ball" | "potion") => (el: HTMLElement) => setPicker({ kind, anchor: el.getBoundingClientRect() });
   const pk = acc.pokemon;
   const trainer = { level: acc.level, bar: acc.xp, perHour: acc.xpPerHour };
-  const mon = { level: pk?.level, bar: pk?.xp, name: pk?.name };
+  const mon = { level: pk?.level, bar: pk?.xp, name: pk?.name, fallbackPerHour: acc.xpPerHour };
 
   const xpHour = (
     <span className="text-poke-green">
