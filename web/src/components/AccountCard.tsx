@@ -1,10 +1,10 @@
 import { AnimatePresence, motion, useDragControls, type PanInfo } from "framer-motion";
-import { Clock, Crosshair, MapPin, Star, Swords } from "lucide-react";
+import { ChevronDown, Clock, Crosshair, Crown, MapPin, Star, Swords } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { EquipPopover } from "@/components/EquipPopover";
 import { StatusPill } from "@/components/StatusPill";
-import { XP_MON, XP_TRAINER, XpMeter, XpRing, XpSpark } from "@/components/XpMeters";
+import { XpMedallion, XpRace, XpSpark, XpVersus } from "@/components/XpMeters";
 import { AnimatedNumber, Coin, GoldPerHourIcon } from "@/components/ui";
 import { serverNow, useAccount } from "@/lib/telemetry";
 import type { EquippedItem } from "@/lib/types";
@@ -111,23 +111,7 @@ function MapChip({ map }: { map?: MapInfo | null }) {
   );
 }
 
-/** Celular: "x79". Desktop: "Golden Potion (x79)". */
-function Equipped({ item }: { item?: EquippedItem | null }) {
-  if (!item) return <span className="text-mute">—</span>;
-  return (
-    <>
-      <span className="hidden sm:inline">{item.name} </span>
-      <span className="font-semibold text-mute sm:text-fg">
-        <span className="sm:hidden">x</span>
-        <span className="hidden sm:inline">(x</span>
-        <AnimatedNumber value={item.qty} />
-        <span className="hidden sm:inline">)</span>
-      </span>
-    </>
-  );
-}
-
-/** Bloco de número para os modelos Anéis e Painel: ícone, rótulo e valor, sem moldura. */
+/** Bloco de número: ícone, rótulo e valor, sem moldura própria. */
 function Stat({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -137,6 +121,32 @@ function Stat({ icon, label, children }: { icon: React.ReactNode; label: string;
         <div className="mt-0.5 truncate text-sm font-bold leading-tight sm:text-base">{children}</div>
       </div>
     </div>
+  );
+}
+
+/** Poção ou bola equipada como botão compacto; ao tocar abre o seletor para trocar. */
+function EquipChip({ item, label, onPress, block = false }: { item?: EquippedItem | null; label: string; onPress?: (el: HTMLElement) => void; block?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={!onPress}
+      aria-haspopup="dialog"
+      aria-label={item ? `${label}: ${item.name}, ${item.qty} unidades. Trocar` : `Escolher ${label.toLowerCase()}`}
+      title={item ? `${label}: ${item.name}. Toque para trocar` : `Escolher ${label.toLowerCase()}`}
+      onClick={(e) => !justDragged() && onPress?.(e.currentTarget)}
+      className={`inline-flex min-h-10 min-w-0 items-center gap-1.5 rounded-full border border-line bg-tile py-1 pl-1.5 pr-2.5 text-sm font-bold transition-colors enabled:hover:border-edge enabled:active:scale-[.98] disabled:cursor-default ${block ? "w-full" : ""}`}
+    >
+      <ItemSprite icon={item?.icon} size={26} alt="" />
+      {item ? (
+        <>
+          <span className="hidden min-w-0 truncate sm:inline">{item.name}</span>
+          <span className="tnum shrink-0 text-mute sm:text-fg">×<AnimatedNumber value={item.qty} /></span>
+        </>
+      ) : (
+        <span className="text-mute">—</span>
+      )}
+      {onPress && <ChevronDown className="ml-auto size-3.5 shrink-0 text-mute" aria-hidden />}
+    </button>
   );
 }
 
@@ -151,34 +161,41 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
   const killsPerHour = acc.hunt && acc.hunt.minutes >= 1 ? Math.round(acc.hunt.kills / (acc.hunt.minutes / 60)) : null;
   const open = (kind: "ball" | "potion") => (el: HTMLElement) => setPicker({ kind, anchor: el.getBoundingClientRect() });
   const pk = acc.pokemon;
+  const trainer = { level: acc.level, bar: acc.xp, perHour: acc.xpPerHour };
+  const mon = { level: pk?.level, bar: pk?.xp, name: pk?.name };
 
-  const gold = <AnimatedNumber value={acc.gold} />;
-  const gems = <AnimatedNumber value={acc.gems} />;
-  const goldHour = (
-    <span className="text-poke-gold">
-      +<AnimatedNumber value={acc.goldPerHour} />
-      <span className="text-xs font-semibold text-mute"> /h</span>
+  const xpHour = (
+    <span className="text-poke-green">
+      +<AnimatedNumber value={acc.xpPerHour} />
     </span>
   );
-  const kills =
-    killsPerHour == null ? (
-      "—"
-    ) : (
-      <>
-        <AnimatedNumber value={killsPerHour} />
-        <span className="text-xs font-semibold text-mute"> /h</span>
-      </>
-    );
-  const potionTile = (
-    <Tile icon={<ItemSprite icon={potion?.icon} size={32} alt={potion?.name} />} className="order-2 sm:order-none" label="Poção equipada" hint={potion ? `Poção equipada: ${potion.name}. Clique para trocar` : "Clique para escolher a poção"} onPress={options ? open("potion") : undefined}>
-      <Equipped item={potion} />
-    </Tile>
+  const unitHour = <span className="text-xs font-semibold text-mute"> /h</span>;
+  const stats = (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 rounded-[10px] border border-line bg-tile px-3 py-2.5 sm:grid-cols-4">
+      <Stat icon={<Coin kind="gold" />} label="Gold"><AnimatedNumber value={acc.gold} /></Stat>
+      <Stat icon={<Coin kind="gem" />} label="Gemas"><AnimatedNumber value={acc.gems} /></Stat>
+      <Stat icon={<GoldPerHourIcon />} label="Ouro por hora">
+        <span className="text-poke-gold">+<AnimatedNumber value={acc.goldPerHour} /></span>
+        {unitHour}
+      </Stat>
+      <Stat icon={<Swords className="size-full text-fg" />} label="Abates por hora">
+        {killsPerHour == null ? "—" : <AnimatedNumber value={killsPerHour} />}
+        {unitHour}
+      </Stat>
+    </div>
   );
-  const ballTile = (
-    <Tile icon={<ItemSprite icon={ball?.icon} size={32} alt={ball?.name} />} className="order-5 sm:order-none" label="Bola equipada" hint={ball ? `Bola equipada: ${ball.name}. Clique para trocar` : "Clique para escolher a bola"} onPress={options ? open("ball") : undefined}>
-      <Equipped item={ball} />
-    </Tile>
+  const chips = (block = false) => (
+    <>
+      <EquipChip item={potion} label="Poção equipada" onPress={options ? open("potion") : undefined} block={block} />
+      <EquipChip item={ball} label="Bola equipada" onPress={options ? open("ball") : undefined} block={block} />
+    </>
   );
+  const huntKills =
+    acc.hunt && acc.hunt.kills > 0 ? (
+      <span className="tnum text-xs font-medium text-mute">
+        <AnimatedNumber value={acc.hunt.kills} /> abates nesta hunt
+      </span>
+    ) : null;
   const popover = (
     <AnimatePresence>
       {picker && options && (
@@ -194,126 +211,81 @@ function ResumoBody({ id, variant }: { id: string; variant: CardStyle }) {
       )}
     </AnimatePresence>
   );
-  const huntKills =
-    acc.hunt && acc.hunt.kills > 0 ? (
-      <span className="text-xs font-medium text-mute">
-        <AnimatedNumber value={acc.hunt.kills} /> nesta hunt
-      </span>
-    ) : null;
 
-  // ---------------------------------------------------------------- Modelo 2: anéis
-  if (variant === "aneis") {
+  // ---------------------------------------------------------------- Medalhão
+  if (variant === "medalhao") {
     return (
       <div className="space-y-2 sm:space-y-2.5">
-        <div className="tile grid grid-cols-[1fr_auto_1fr] items-start gap-1 px-2 py-3 sm:gap-3 sm:px-4 sm:py-4">
-          <XpRing who="Treinador" level={acc.level} bar={acc.xp} color={XP_TRAINER} perHour={acc.xpPerHour} />
-          <div className="flex min-w-[88px] flex-col items-center self-center text-center sm:min-w-[130px]">
-            <Star className="size-5 fill-poke-gold text-poke-gold sm:size-6" aria-hidden />
-            <div className="mt-1 text-[11px] font-medium leading-none text-mute sm:text-xs">XP por hora</div>
-            <div className="mt-1 text-xl font-extrabold leading-none text-poke-green sm:text-3xl">
-              +<AnimatedNumber value={acc.xpPerHour} />
-            </div>
-          </div>
-          <XpRing who="Pokémon" name={pk?.name} level={pk?.level} bar={pk?.xp} color={XP_MON} />
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 rounded-[10px] border border-line bg-tile px-3 py-2.5 sm:grid-cols-4">
-          <Stat icon={<Coin kind="gold" />} label="Gold">{gold}</Stat>
-          <Stat icon={<Coin kind="gem" />} label="Gemas">{gems}</Stat>
-          <Stat icon={<GoldPerHourIcon />} label="Ouro por hora">{goldHour}</Stat>
-          <Stat icon={<Swords className="size-full text-fg" />} label="Abates por hora">{kills}</Stat>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-          {potionTile}
-          {ballTile}
-        </div>
-        {huntKills && <p className="text-right">{huntKills}</p>}
-        {popover}
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------- Modelo 3: painel
-  if (variant === "painel") {
-    return (
-      <div className="space-y-2.5 sm:space-y-3">
-        <div className="tile tile-green px-3 py-2.5 sm:px-4 sm:py-3">
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium leading-none text-mute sm:text-xs">
-                <Star className="size-3.5 fill-poke-gold text-poke-gold" aria-hidden /> XP por hora
-              </div>
-              <div className="mt-1 text-2xl font-extrabold leading-none text-poke-green sm:text-4xl">
-                +<AnimatedNumber value={acc.xpPerHour} />
-              </div>
-            </div>
-            <div className="w-[46%] max-w-[220px] shrink-0">
-              <XpSpark id={id} />
-            </div>
-          </div>
-          <div className="mt-3 space-y-3 border-t border-[#2f6b3a]/60 pt-3 text-fg">
-            <XpMeter who="Treinador" level={acc.level} bar={acc.xp} color={XP_TRAINER} perHour={acc.xpPerHour} chunky />
-            <XpMeter who="Pokémon" name={pk?.name} level={pk?.level} bar={pk?.xp} color={XP_MON} chunky />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 divide-x divide-line rounded-[10px] border border-line bg-tile">
-          <div className="space-y-2.5 px-3 py-2.5">
-            <Stat icon={<Coin kind="gold" />} label="Gold">{gold}</Stat>
-            <Stat icon={<GoldPerHourIcon />} label="Ouro por hora">{goldHour}</Stat>
-          </div>
-          <div className="space-y-2.5 px-3 py-2.5">
-            <Stat icon={<Coin kind="gem" />} label="Gemas">{gems}</Stat>
-            <Stat icon={<Swords className="size-full text-fg" />} label="Abates por hora">{kills}</Stat>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-          {potionTile}
-          {ballTile}
-        </div>
-        {huntKills && <p className="text-right">{huntKills}</p>}
-        {popover}
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------- Modelo 1: barras (a grade de antes, com as barras de nível em cima)
-  return (
-    <div className="space-y-1.5 sm:space-y-2">
-      <div className="tile space-y-2.5 px-3 py-2.5 sm:px-4 sm:py-3">
-        <XpMeter who="Treinador" level={acc.level} bar={acc.xp} color={XP_TRAINER} perHour={acc.xpPerHour} />
-        <XpMeter who="Pokémon" name={pk?.name} level={pk?.level} bar={pk?.xp} color={XP_MON} />
-      </div>
-      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
-        <Tile icon={<Coin kind="gold" />} label="Gold" className="order-6 sm:order-none">
-          {gold}
-        </Tile>
-        <Tile icon={<Coin kind="gem" />} label="Gemas" className="order-3 sm:order-none">
-          {gems}
-        </Tile>
-        {potionTile}
-        {ballTile}
-        <Tile icon={<Star className="size-full fill-poke-gold text-poke-gold" />} label="XP por hora" className="tile-green order-1 sm:order-none">
-          <span className="text-poke-green">
-            +<AnimatedNumber value={acc.xpPerHour} />
-            <span className="hidden sm:inline"> XP/h</span>
-          </span>
-        </Tile>
-        <Tile icon={<GoldPerHourIcon />} label="Ouro por hora" className="tile-gold order-4 sm:order-none">
-          <span className="text-poke-gold">
-            +<AnimatedNumber value={acc.goldPerHour} />
-            <span className="hidden sm:inline"> Ouro/h</span>
-          </span>
-        </Tile>
-        <Tile icon={<Swords className="size-full text-fg" />} label="Abates por hora" className="order-7 col-span-full sm:order-none">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="text-fg">
-              {killsPerHour == null ? "—" : <AnimatedNumber value={killsPerHour} />}
-              <span className="text-mute"> abates/h</span>
+        <div className="tile px-3 py-3 sm:px-5 sm:py-4">
+          <XpMedallion trainer={trainer} mon={mon} sprite={<PokemonSprite looktype={pk?.looktype} size={64} />} />
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-mute">
+              <Star className="size-4 fill-poke-gold text-poke-gold" aria-hidden /> XP por hora
             </span>
-            {huntKills}
-          </span>
-        </Tile>
+            <span className="text-lg font-extrabold sm:text-xl">{xpHour}</span>
+          </div>
+        </div>
+        {stats}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          {chips()}
+          {huntKills && <span className="ml-auto">{huntKills}</span>}
+        </div>
         {popover}
       </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- Versus
+  if (variant === "versus") {
+    return (
+      <div className="space-y-2 sm:space-y-2.5">
+        <div className="tile px-2.5 py-3 sm:px-4 sm:py-4">
+          <XpVersus trainer={trainer} mon={mon}>
+            <div className="flex flex-col items-center gap-2.5 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full border-2 border-edge sm:size-16" style={{ background: "radial-gradient(circle at 50% 35%, #4a3519, #1a120a 75%)" }}>
+                <span className="origin-center scale-[.8] sm:scale-100"><PokemonSprite looktype={pk?.looktype} size={52} /></span>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1 text-[11px] font-medium leading-none text-mute sm:text-xs">
+                  <Star className="size-3.5 fill-poke-gold text-poke-gold" aria-hidden /> XP por hora
+                </div>
+                <div className="mt-1 text-2xl font-extrabold leading-none sm:text-3xl">{xpHour}</div>
+              </div>
+              <div className="w-full max-w-[200px]"><XpSpark id={id} /></div>
+              <div className="flex w-full max-w-[200px] flex-col gap-1.5">{chips(true)}</div>
+            </div>
+          </XpVersus>
+        </div>
+        {stats}
+        {huntKills && <p className="text-right">{huntKills}</p>}
+        {popover}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- Corrida
+  return (
+    <div className="space-y-2 sm:space-y-2.5">
+      <div className="tile px-3 py-3 sm:px-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-mute">
+            <Star className="size-4 fill-poke-gold text-poke-gold" aria-hidden /> XP por hora
+          </span>
+          <span className="text-lg font-extrabold sm:text-xl">{xpHour}</span>
+        </div>
+        <XpRace
+          trainer={trainer}
+          mon={mon}
+          trainerRunner={<Crown className="size-5 text-poke-gold" aria-hidden />}
+          monRunner={<span className="origin-center scale-[.55]"><PokemonSprite looktype={pk?.looktype} size={52} /></span>}
+        />
+      </div>
+      {stats}
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        {chips()}
+        {huntKills && <span className="ml-auto">{huntKills}</span>}
+      </div>
+      {popover}
     </div>
   );
 }
@@ -483,6 +455,7 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
       className={`card p-2.5 sm:p-3 ${drag?.canDrag ? "cursor-grab active:cursor-grabbing" : touchMode ? "select-none [-webkit-touch-callout:none]" : ""} ${lifted ? "ring-2 ring-poke-gold/70" : ""}`}
     >
       <header className="flex items-center gap-2.5 sm:gap-3.5">
+        {cardStyle === "corrida" && (
         <motion.div
           whileHover={{ rotate: -4, scale: 1.06 }}
           transition={{ type: "spring", stiffness: 320, damping: 16 }}
@@ -493,6 +466,7 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
             <PokemonSprite looktype={pk?.looktype} size={52} />
           </span>
         </motion.div>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">

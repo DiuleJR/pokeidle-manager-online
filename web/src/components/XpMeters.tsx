@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Flag } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHistory } from "@/lib/telemetry";
 import type { XpBar } from "@/lib/types";
@@ -108,109 +108,214 @@ export function GainChip({ ev, color }: { ev: XpTrack["ev"]; color: string }) {
 /** Ritmo para a conta: o do jogo (treinador) quando existe, senão o medido aqui. */
 const pace = (track: XpTrack, given?: number) => (given && given > 0 ? given : track.rate);
 
-interface MeterProps {
-  who: "Treinador" | "Pokémon";
-  /** Nome do Pokémon (só no Pokémon). */
-  name?: string | null;
+export interface XpWho {
   level: number | null | undefined;
   bar: XpBar | null | undefined;
-  color: string;
   /** XP por hora conhecido (treinador); se faltar, usa o medido aqui. */
   perHour?: number;
+  /** Nome do Pokémon (só no Pokémon). */
+  name?: string | null;
 }
 
-/** Linha com a barra do nível: quem é, nível, porcentagem, quanto falta e quando sobe. */
-export function XpMeter({ who, name, level, bar, color, perHour, chunky = false }: MeterProps & { chunky?: boolean }) {
-  const track = useXpTrack(bar?.atual, level);
-  const p = xpProgress(bar);
-  const reduce = useReducedMotion();
-  const r = pace(track, perHour);
-  const eta = p && r ? etaLabel(p.falta / r) : "";
-  const label = who === "Pokémon" && name ? name : who;
+/** Progresso, ritmo e previsão de um dos dois (treinador ou Pokémon). */
+function useWho(w: XpWho) {
+  const track = useXpTrack(w.bar?.atual, w.level);
+  const p = xpProgress(w.bar);
+  const r = pace(track, w.perHour);
+  return { track, p, eta: p && r ? etaLabel(p.falta / r) : "" };
+}
+type Who = ReturnType<typeof useWho>;
+
+/** Linha de legenda: quem é, nível, porcentagem grande, quanto falta e quando sobe. */
+function Legend({ label, level, w, color }: { label: string; level: number | null | undefined; w: Who; color: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-bold leading-tight">
-          <span className="size-2 shrink-0 translate-y-[-1px] rounded-full" style={{ background: color }} aria-hidden />
+          <span className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
           <span className="truncate">{label}</span>
-          {who === "Pokémon" && name && <span className="sr-only"> (Pokémon)</span>}
           {level != null && <span className="tnum shrink-0 text-xs font-semibold text-mute">Nv. {fmtShort(level)}</span>}
         </p>
-        <span className="flex shrink-0 items-center gap-2">
-          <GainChip ev={track.ev} color={color} />
-          {p && <span className="tnum text-sm font-extrabold" style={{ color }}>{pct(p.pct)}</span>}
-        </span>
+        <GainChip ev={w.track.ev} color={color} />
       </div>
-      {p ? (
-        <>
-          <div
-            className={`mt-1.5 overflow-hidden rounded-full bg-black/55 ${chunky ? "h-3" : "h-2"}`}
-            role="progressbar"
-            aria-label={`XP ${who === "Pokémon" ? "do Pokémon" : "do treinador"}`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(p.pct * 100)}
-          >
-            <motion.div
-              className="h-full w-full origin-left rounded-full"
-              style={{ background: `linear-gradient(90deg, ${color}aa, ${color})` }}
-              initial={false}
-              animate={{ scaleX: Math.max(p.pct, 0.012) }}
-              transition={reduce ? { duration: 0 } : { duration: 0.7, ease: EASE }}
-            />
-          </div>
-          <p className="tnum mt-1 flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-mute">
-            <span>
-              faltam <b className="font-semibold text-fg">{fmtShort(p.falta)}</b> de XP
-            </span>
-            {eta && <span>sobe em <b className="font-semibold text-fg">{eta}</b></span>}
-          </p>
-        </>
+      {w.p ? (
+        <p className="tnum mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-mute">
+          <b className="text-xl font-extrabold leading-none" style={{ color }}>{pct(w.p.pct)}</b>
+          <span>
+            faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
+            {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
+          </span>
+        </p>
       ) : (
-        <p className="mt-1 text-xs text-mute">Aguardando o XP desta conta…</p>
+        <p className="mt-0.5 text-xs text-mute">Aguardando o XP desta conta…</p>
       )}
     </div>
   );
 }
 
-/** Anel de progresso com o nível no meio. Dá para ver de relance qual dos dois está mais perto de subir. */
-export function XpRing({ who, name, level, bar, color, perHour }: MeterProps) {
-  const track = useXpTrack(bar?.atual, level);
-  const p = xpProgress(bar);
+/** Medalhão: o Pokémon no centro; o anel de fora é o treinador (dourado), o de dentro é o Pokémon (azul). */
+export function XpMedallion({ trainer, mon, sprite }: { trainer: XpWho; mon: XpWho; sprite: React.ReactNode }) {
+  const t = useWho(trainer);
+  const m = useWho(mon);
   const reduce = useReducedMotion();
-  const r = pace(track, perHour);
-  const eta = p && r ? etaLabel(p.falta / r) : "";
-  const R = 33;
+  const ring = (r: number, w: Who, color: string) => (
+    <>
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#000" strokeOpacity=".5" strokeWidth="8" />
+      <motion.circle
+        cx="60"
+        cy="60"
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="8"
+        strokeLinecap="round"
+        initial={false}
+        animate={{ pathLength: w.p ? Math.max(w.p.pct, 0.015) : 0 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
+        style={{ filter: `drop-shadow(0 0 4px ${color}66)` }}
+      />
+    </>
+  );
+  return (
+    <div className="flex items-center gap-3 sm:gap-5">
+      <div className="relative size-[116px] shrink-0 sm:size-[144px]">
+        <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label="Anel de fora: XP do treinador. Anel de dentro: XP do Pokémon.">
+          {ring(55, t, XP_TRAINER)}
+          {ring(43, m, XP_MON)}
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="origin-center scale-[.8] sm:scale-[1.05]">{sprite}</span>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 space-y-3">
+        <Legend label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} />
+        <Legend label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} />
+      </div>
+    </div>
+  );
+}
+
+/** Medidor vertical: enche de baixo para cima. */
+function Gauge({ label, level, w, color }: { label: string; level: number | null | undefined; w: Who; color: string }) {
+  const reduce = useReducedMotion();
   return (
     <div className="flex min-w-0 flex-col items-center text-center">
-      <div className="relative size-[84px] sm:size-24">
-        <svg viewBox="0 0 80 80" className="size-full -rotate-90" role="progressbar" aria-label={`XP ${who === "Pokémon" ? "do Pokémon" : "do treinador"}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p ? Math.round(p.pct * 100) : undefined}>
-          <circle cx="40" cy="40" r={R} fill="none" stroke="#000" strokeOpacity=".45" strokeWidth="7" />
-          <motion.circle
-            cx="40"
-            cy="40"
-            r={R}
-            fill="none"
-            stroke={color}
-            strokeWidth="7"
-            strokeLinecap="round"
-            initial={false}
-            animate={{ pathLength: p ? Math.max(p.pct, 0.015) : 0 }}
-            transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
-            style={{ filter: `drop-shadow(0 0 4px ${color}66)` }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <span className="text-[10px] font-semibold text-mute">Nv.</span>
-          <span className="tnum mt-0.5 text-lg font-extrabold sm:text-xl">{level != null ? fmtShort(level) : "—"}</span>
-        </div>
-        <span className="absolute -right-1 -top-1"><GainChip ev={track.ev} color={color} /></span>
+      <p className="max-w-full truncate text-sm font-bold leading-tight">{label}</p>
+      <p className="tnum text-xs leading-tight text-mute">{level != null ? `Nv. ${fmtShort(level)}` : "—"}</p>
+      <div className="mt-1 flex h-5 items-center">
+        <GainChip ev={w.track.ev} color={color} />
       </div>
-      <p className="mt-1.5 max-w-full truncate text-sm font-bold leading-tight">{who === "Pokémon" && name ? name : who}</p>
-      <p className="tnum text-xs leading-tight text-mute">
-        {p ? <><b className="font-extrabold" style={{ color }}>{pct(p.pct)}</b> · faltam {fmtShort(p.falta)}</> : "sem dados"}
-      </p>
-      {eta && <p className="tnum text-[11px] leading-tight text-mute">sobe em {eta}</p>}
+      <div
+        className="relative h-32 w-7 overflow-hidden rounded-full bg-black/55 ring-1 ring-white/5 sm:h-40 sm:w-8"
+        role="progressbar"
+        aria-label={`XP ${label}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={w.p ? Math.round(w.p.pct * 100) : undefined}
+      >
+        <motion.div
+          className="absolute inset-0 origin-bottom rounded-full"
+          style={{ background: `linear-gradient(0deg, ${color}aa, ${color})` }}
+          initial={false}
+          animate={{ scaleY: w.p ? Math.max(w.p.pct, 0.02) : 0 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
+        />
+        {[25, 50, 75].map((t) => (
+          <span key={t} className="absolute inset-x-0 h-px bg-black/45" style={{ bottom: `${t}%` }} aria-hidden />
+        ))}
+      </div>
+      {w.p ? (
+        <>
+          <p className="tnum mt-1.5 text-lg font-extrabold leading-none" style={{ color }}>{pct(w.p.pct)}</p>
+          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
+          {w.eta && <p className="tnum text-[11px] leading-tight text-mute">sobe em {w.eta}</p>}
+        </>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-mute">sem dados</p>
+      )}
+    </div>
+  );
+}
+
+/** Versus: treinador e Pokémon como dois medidores frente a frente; no meio, o ritmo e o que couber (children). */
+export function XpVersus({ trainer, mon, children }: { trainer: XpWho; mon: XpWho; children: React.ReactNode }) {
+  const t = useWho(trainer);
+  const m = useWho(mon);
+  return (
+    <div className="grid grid-cols-[minmax(0,84px)_minmax(0,1fr)_minmax(0,84px)] items-start gap-2 sm:grid-cols-[minmax(0,110px)_minmax(0,1fr)_minmax(0,110px)] sm:gap-4">
+      <Gauge label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} />
+      <div className="min-w-0 self-center">{children}</div>
+      <Gauge label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} />
+    </div>
+  );
+}
+
+/** Uma raia da corrida: o "corredor" anda pela pista até a bandeira do próximo nível. */
+function Lane({ label, level, w, color, runner }: { label: string; level: number | null | undefined; w: Who; color: string; runner: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  const pctV = w.p ? Math.max(w.p.pct, 0.012) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-bold leading-tight">
+          <span className="truncate">{label}</span>
+          {level != null && <span className="tnum shrink-0 text-xs font-semibold text-mute">Nv. {fmtShort(level)}</span>}
+        </p>
+        <span className="flex shrink-0 items-center gap-2">
+          <GainChip ev={w.track.ev} color={color} />
+          {w.p && <span className="tnum text-base font-extrabold" style={{ color }}>{pct(w.p.pct)}</span>}
+        </span>
+      </div>
+      <div
+        className="relative mx-5 h-11"
+        role="progressbar"
+        aria-label={`XP ${label}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={w.p ? Math.round(w.p.pct * 100) : undefined}
+      >
+        <div className="absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2 overflow-hidden rounded-full bg-black/55">
+          <motion.div
+            className="h-full w-full origin-left rounded-full"
+            style={{ background: `linear-gradient(90deg, ${color}66, ${color})` }}
+            initial={false}
+            animate={{ scaleX: pctV }}
+            transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
+          />
+        </div>
+        <Flag className="absolute -right-4 top-1/2 size-4 -translate-y-1/2 text-mute" aria-hidden />
+        <motion.div
+          className="absolute inset-y-0 left-0 w-full"
+          initial={false}
+          animate={{ x: `${(pctV - 1) * 100}%` }}
+          transition={reduce ? { duration: 0 } : { duration: 0.8, ease: EASE }}
+        >
+          <span
+            className="absolute right-0 top-1/2 flex size-9 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 bg-[#1d140b]"
+            style={{ borderColor: color, boxShadow: `0 0 10px -2px ${color}99` }}
+          >
+            {runner}
+          </span>
+        </motion.div>
+      </div>
+      {w.p && (
+        <p className="tnum -mt-0.5 text-xs text-mute">
+          faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
+          {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Corrida: duas pistas, uma para o treinador e outra para o Pokémon; quem estiver mais à frente sobe primeiro. */
+export function XpRace({ trainer, mon, trainerRunner, monRunner }: { trainer: XpWho; mon: XpWho; trainerRunner: React.ReactNode; monRunner: React.ReactNode }) {
+  const t = useWho(trainer);
+  const m = useWho(mon);
+  return (
+    <div className="space-y-2">
+      <Lane label="Treinador" level={trainer.level} w={t} color={XP_TRAINER} runner={trainerRunner} />
+      <Lane label={mon.name || "Pokémon"} level={mon.level} w={m} color={XP_MON} runner={monRunner} />
     </div>
   );
 }

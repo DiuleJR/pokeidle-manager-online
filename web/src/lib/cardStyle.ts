@@ -1,18 +1,18 @@
 import { useSyncExternalStore } from "react";
 
 /** Modelo visual do card de conta no Resumo. */
-export type CardStyle = "barras" | "aneis" | "painel";
+export type CardStyle = "medalhao" | "versus" | "corrida";
 
 export const CARD_STYLES: { id: CardStyle; label: string }[] = [
-  { id: "barras", label: "Barras" },
-  { id: "aneis", label: "Anéis" },
-  { id: "painel", label: "Painel" },
+  { id: "medalhao", label: "Medalhão" },
+  { id: "versus", label: "Versus" },
+  { id: "corrida", label: "Corrida" },
 ];
 
 const KEY = "pim.cardStyle";
 const valid = (v: unknown): v is CardStyle => CARD_STYLES.some((s) => s.id === v);
 
-let current: CardStyle = "barras";
+let current: CardStyle = "medalhao";
 try {
   const saved = localStorage.getItem(KEY);
   if (valid(saved)) current = saved;
