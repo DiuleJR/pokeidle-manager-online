@@ -65,6 +65,10 @@ const sameAccount = (a: AccountSnapshot, b: AccountSnapshot) =>
   JSON.stringify(a.pass) === JSON.stringify(b.pass) &&
   a.pokemon?.looktype === b.pokemon?.looktype &&
   a.pokemon?.level === b.pokemon?.level &&
+  a.xp?.atual === b.xp?.atual &&
+  a.xp?.proximo === b.xp?.proximo &&
+  a.pokemon?.xp?.atual === b.pokemon?.xp?.atual &&
+  a.pokemon?.xp?.proximo === b.pokemon?.xp?.proximo &&
   a.huntName === b.huntName &&
   a.hunt?.kills === b.hunt?.kills &&
   a.hunt?.minutes === b.hunt?.minutes &&

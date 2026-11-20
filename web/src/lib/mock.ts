@@ -10,7 +10,8 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
     nick: `Treinador${i + 1}`,
     level: [2104, 1306, 450, 40][i],
     status: statuses[i],
-    pokemon: { name: p, hp: 100, maxHp: 100, level: [565, 487, 333, 21][i] },
+    pokemon: { name: p, hp: 100, maxHp: 100, level: [565, 487, 333, 21][i], xp: { atual: 146_200_000_000 + i * 9e9, nivel: 146_121_000_000 + i * 9e9, proximo: 146_334_000_000 + i * 9e9 } },
+    xp: { atual: 52_000_000_000 + i * 3e9, nivel: 51_400_000_000 + i * 3e9, proximo: 52_900_000_000 + i * 3e9 },
     pass: [{ ultimo: D - 1, degrau: 6, total: 5, vipAte: 0, ciclos: 0, vipPegos: 0 }, { ultimo: D, degrau: 12, total: 40, vipAte: Date.now() + 9 * 86_400_000, ciclos: 1, vipPegos: 0b11111111111, ultimoVip: D }, { ultimo: D - 3, degrau: 3, total: 3, vipAte: 0, ciclos: 0, vipPegos: 0 }, null][i],
     map: [{ region: "outland", label: "Outland 2", outland: { tier: 2, label: "Outland 2", mult: 1.25 } }, { region: "hoenn", label: "Hoenn", outland: null }, { region: "kanto", label: "Kanto", outland: null }, { region: "outland", label: "Outland 1", outland: { tier: 1, label: "Outland 1", mult: 1 } }][i],
     xpPerHour: 90_000 + i * 12_000,
@@ -75,6 +76,17 @@ export function startMock(emit: (m: SnapshotMessage) => void, setState: (s: Conn
       a.pokemon!.hp = Math.max(5, Math.min(max, a.pokemon!.hp + Math.round((Math.random() - 0.55) * 20)));
       if (a.status === "online") {
         a.xpPerHour = Math.round(a.xpPerHour * (0.97 + Math.random() * 0.06));
+        // XP sobe a cada tick (ritmo acelerado para dar para ver a barra e o "+ganho" andando); o Pokémon passa de nível de vez em quando.
+        const gain = Math.round((a.xpPerHour / 3600) * 4000);
+        if (a.xp) a.xp = { ...a.xp, atual: (a.xp.atual ?? 0) + gain };
+        const px = a.pokemon!.xp;
+        if (px && px.atual != null && px.proximo != null) {
+          const next = px.atual + Math.round(gain * 0.6);
+          if (next >= px.proximo) {
+            a.pokemon!.level = (a.pokemon!.level ?? 1) + 1;
+            a.pokemon!.xp = { atual: px.proximo, nivel: px.proximo, proximo: px.proximo + 213_000_000 };
+          } else a.pokemon!.xp = { ...px, atual: next };
+        }
         a.goldPerHour = Math.round(a.goldPerHour * (0.97 + Math.random() * 0.06));
         a.gold += Math.round(a.goldPerHour / 3600);
         if (Math.random() < 0.3) a.balls = Math.max(0, a.balls - 1);

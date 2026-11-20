@@ -209,6 +209,7 @@ def account_snapshot(c: "AccountConnection") -> dict:
             "hp": pk.get("hp", 0),
             "maxHp": pk.get("maxHp", 0),
             "level": pk.get("level"),
+            "xp": {"atual": pk.get("xp"), "nivel": pk.get("xpNivel"), "proximo": pk.get("xpProximo")},
             "looktype": look_of(pk),
             "shiny": bool(pk.get("shiny")),
         } if pk else None,

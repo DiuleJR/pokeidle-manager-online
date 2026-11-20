@@ -5,11 +5,19 @@
  */
 export type AccountStatus = "online" | "paused_cooldown" | "blocked" | "offline";
 
+/** XP acumulado, XP em que o nível atual começou e XP em que o próximo nível começa. */
+export interface XpBar {
+  atual?: number | null;
+  nivel?: number | null;
+  proximo?: number | null;
+}
+
 export interface ActivePokemon {
   name: string;
   hp: number;
   maxHp: number;
   level?: number | null;
+  xp?: XpBar | null;
   looktype?: number | null;
   shiny?: boolean;
 }
@@ -58,6 +66,8 @@ export interface AccountSnapshot {
   session?: SessionInfo;
   pokemon: ActivePokemon | null;
   xpPerHour: number;
+  /** Barra de XP do treinador (o do Pokémon equipado vem em `pokemon.xp`). */
+  xp?: XpBar | null;
   goldPerHour: number;
   hunt?: { slug: string | null; kills: number; minutes: number } | null;
   map?: MapInfo | null;

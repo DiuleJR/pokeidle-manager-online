@@ -17,6 +17,7 @@ import { ConfirmDialog, Frame } from "@/components/ui";
 import { actions } from "@/lib/actions";
 import { startChat, totalUnread, useChat } from "@/lib/chat";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
+import { CARD_STYLES, setCardStyle, useCardStyle } from "@/lib/cardStyle";
 import { useCardOrder } from "@/lib/useCardOrder";
 
 type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "passe" | "pvp" | "config" | "chat";
@@ -170,6 +171,7 @@ function Dashboard({ mode }: { mode: CardMode }) {
 export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
   const [mode, setMode] = useState<CardMode>("resumo");
+  const cardStyle = useCardStyle();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetErr, setResetErr] = useState("");
@@ -269,6 +271,7 @@ export default function App() {
                   <motion.div key="mode" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, ease: EASE }}>
                     <div className="flex items-center gap-1.5 sm:gap-2.5">
                       <Segmented id="mode" options={MODES} value={mode} onChange={setMode} />
+                      {mode === "resumo" && <Segmented id="cardstyle" options={CARD_STYLES} value={cardStyle} onChange={setCardStyle} />}
                       <button
                         type="button"
                         className="btn"
