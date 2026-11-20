@@ -107,6 +107,8 @@ export interface PokemonRow {
   ivTotal: number;
   caughtAt: number | null;
   looktype?: number | null;
+  /** Potência (1 a 5). */
+  potency?: number | null;
 }
 
 export type ConnectionState = "connecting" | "open" | "reconnecting";

@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
+import { TypeChip } from "@/components/HuntRow";
+import { PokemonSelos } from "@/components/PokemonSelos";
 import { PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { Coin, ConfirmDialog } from "@/components/ui";
 import { sellDepot, usePokemons } from "@/lib/api";
@@ -182,13 +184,13 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                       {gemsOf(p) ? <GemTag v={gemsOf(p) as number} /> : null}
                       {p.slot !== null && <span className="rounded bg-poke-blue px-1 py-0.5 text-[9px] font-bold leading-none text-void">TIME</span>}
                     </div>
+                    <PokemonSelos pk={p} compact className="my-1" />
                     <div className="truncate text-xs text-mute">
-                      {account === "all" && <>{nick(p.account)} · </>}Nv. {fmtInt(p.level)} · IV {p.ivTotal}
+                      {account === "all" && <>{nick(p.account)} · </>}Nv. {fmtInt(p.level)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="tnum text-sm font-bold">{fmtShort(p.power ?? 0)}</div>
-                    <div className="tnum text-xs text-mute">{p.grade?.toFixed(2) ?? "—"}</div>
+                    <div className="tnum text-sm font-bold">⚔ {fmtShort(p.power ?? 0)}</div>
                   </div>
                 </motion.li>
               ))}
@@ -201,8 +203,7 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                     {account === "all" && <th className="px-2 py-2 font-normal">Conta</th>}
                     <th className="px-2 py-2 text-right font-normal">Nv.</th>
                     <th className="px-2 py-2 text-right font-normal">Poder</th>
-                    <th className="px-2 py-2 text-right font-normal">Nota</th>
-                    <th className="px-2 py-2 text-right font-normal">IV</th>
+                    <th className="px-3 py-2 font-normal">Atributos</th>
                     <th className="py-2 pl-3 font-normal">Tipos</th>
                   </tr>
                 </thead>
@@ -234,9 +235,8 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                       {account === "all" && <td className="px-2 py-1 text-mute">{nick(p.account)}</td>}
                       <td className="tnum px-2 py-1 text-right">{fmtInt(p.level)}</td>
                       <td className="tnum px-2 py-1 text-right">{fmtInt(p.power ?? 0)}</td>
-                      <td className="tnum px-2 py-1 text-right">{p.grade?.toFixed(2) ?? "—"}</td>
-                      <td className="tnum px-2 py-1 text-right">{p.ivTotal}</td>
-                      <td className="py-1 pl-3 text-sm capitalize text-mute">{p.types.map((t) => t.toLowerCase()).join(" / ")}</td>
+                      <td className="px-3 py-1"><PokemonSelos pk={p} /></td>
+                      <td className="py-1 pl-3"><span className="flex flex-wrap gap-1">{p.types.map((t) => <TypeChip key={t} type={t} />)}</span></td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,6 +7,7 @@ import { type Listing, type MarketItem, type Moeda, type Wallet, marketApi } fro
 import { useAccountsMap } from "@/lib/telemetry";
 import { fmtUsd } from "@/lib/valuation";
 import { fmtInt } from "@/lib/utils";
+import { PokemonSelos } from "@/components/PokemonSelos";
 import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { CalcCard } from "./CalcTab";
 import { AccountPicker, ErrorBox, Loading, Money, fmtWhen, secondsLabel, useAsync, useOnlineAccounts } from "./shared";
@@ -98,6 +99,7 @@ function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
           {isMon && l.ficha?.shiny && <ShinyMark />}
           {!isMon && l.qtd > 1 && <span className="shrink-0 font-semibold text-mute">×{fmtInt(l.qtd)}</span>}
         </p>
+        {ficha && <PokemonSelos pk={ficha as never} compact className="mt-1" />}
         <p className="mt-0.5 truncate text-xs text-mute">
           {r.nick}
           {left != null && (

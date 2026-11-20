@@ -107,7 +107,7 @@ def pokemon_rows(c: "AccountConnection") -> list[dict]:
             "name": p.get("nome"), "types": p.get("tipos") or [], "level": p.get("level"),
             "shiny": bool(p.get("shiny")), "quality": p.get("quality"), "power": p.get("poder"),
             "grade": p.get("nota"), "slot": p.get("slot"), "ivTotal": sum(v for v in ivs.values() if isinstance(v, (int, float))),
-            "caughtAt": p.get("caughtAt"), "looktype": look_of(p),
+            "caughtAt": p.get("caughtAt"), "looktype": look_of(p), "potency": p.get("potencia"),
         })
     return rows
 

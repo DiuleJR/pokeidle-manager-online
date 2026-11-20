@@ -1,6 +1,7 @@
 import { Check, Info, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { TypeChip } from "@/components/HuntRow";
+import { PokemonSelos } from "@/components/PokemonSelos";
 import { PokemonSprite } from "@/components/Sprites";
 import { GRID_COLS, GRID_ROWS, HOUSES, rangeBadge, type RosterRow } from "@/lib/pvpTeam";
 
@@ -206,7 +207,8 @@ export function RosterCard({ r, picked, onToggle, onInfo }: { r: RosterRow; pick
         <div className="truncate text-sm font-extrabold">{r.shiny ? "✨ " : ""}{r.name}</div>
         <div className="tnum truncate text-[11px] text-mute">Nv {nf.format(r.level)} · {r.inTeam ? "equipe" : r.hunting ? "hunt" : "coleção"} · {rangeBadge(r.range)}</div>
         <div className="tnum text-xs font-extrabold text-poke-gold">⚔ {nf.format(r.pvpPower)}</div>
-        <div className="mt-0.5 flex flex-wrap gap-1">{r.types.map((t) => <TypeChip key={t} type={t} />)}</div>
+        <PokemonSelos pk={r} compact className="mt-1" />
+        <div className="mt-1 flex flex-wrap gap-1">{r.types.map((t) => <TypeChip key={t} type={t} />)}</div>
       </div>
       <button type="button" onClick={(e) => { e.stopPropagation(); onInfo(); }} aria-label={`Ficha de ${r.name}`} className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-[#5a2f8f] text-white hover:bg-[#6d3aa8]"><Info className="size-3.5" aria-hidden /></button>
     </div>

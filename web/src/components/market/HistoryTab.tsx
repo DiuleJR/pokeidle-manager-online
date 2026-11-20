@@ -1,3 +1,4 @@
+import { PokemonSelos } from "@/components/PokemonSelos";
 import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { useMemo, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
@@ -62,6 +63,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
           <span className="truncate">{r.descricao ?? "—"}</span>
           {f?.shiny && <ShinyMark />}
         </p>
+        {r.tipo === "pokemon" && f && <PokemonSelos pk={f as never} compact className="my-1" />}
         <p className="truncate text-xs text-mute">
           {when} · {who}
         </p>

@@ -262,3 +262,20 @@
   .lg-price { grid-column: 4; grid-row: 1; font-size: 1rem; }
   .lg-time { grid-column: 5; grid-row: 1; font-size: 0.75rem; }
 }
+
+/* Selos de atributo do Pokémon (P, IV, Q, N): a cor diz de relance se o valor é bom. Mesmos degraus e cores do jogo. */
+.selo {
+  --selo: #b9aeb3; --selo-luz: #ded6da; --selo-esc: #70666a; --selo-glint: transparent; --selo-halo: 0 0 0 transparent;
+  display: inline-flex; align-items: center; white-space: nowrap; cursor: help;
+  font-weight: 800; font-size: 11px; line-height: 1; letter-spacing: .01em; font-variant-numeric: tabular-nums;
+  padding: 3px 6px; border-radius: 5px; color: #2b2135; text-shadow: 0 1px 0 #ffffff66;
+  background:
+    linear-gradient(107deg, transparent 0 34%, var(--selo-glint) 44% 52%, transparent 62% 100%),
+    linear-gradient(180deg, var(--selo-luz) 0 1px, color-mix(in srgb, var(--selo) 72%, var(--selo-luz)) 1px 42%, var(--selo) 42% 84%, color-mix(in srgb, var(--selo) 72%, var(--selo-esc)) 84% 100%);
+  box-shadow: inset 0 0 0 1px var(--selo-esc), var(--selo-halo);
+}
+.selo-sm { font-size: 10px; padding: 2px 5px; border-radius: 4px; }
+.selo.t2 { --selo: #6bc96b; --selo-luz: #a9e8a2; --selo-esc: #2c7a36; }
+.selo.t3 { --selo: #1fa5f5; --selo-luz: #b6e6ff; --selo-esc: #0a5496; --selo-glint: #ffffff4d; }
+.selo.t4 { --selo: #be66ff; --selo-luz: #ebcaff; --selo-esc: #5c13a8; --selo-glint: #ffffff66; --selo-halo: 0 0 7px #be66ff99; }
+.selo.t5 { --selo: #ffc02e; --selo-luz: #fff0b4; --selo-esc: #7d5313; --selo-glint: #fffdf0a6; --selo-halo: 0 0 7px #ffc02e66; }

@@ -3,6 +3,7 @@ import { Reveal } from "@/components/ui";
 import { Bell, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Check2 } from "@/components/SettingsView";
+import { PokemonSelos } from "@/components/PokemonSelos";
 import { PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Listing, type Moeda, marketApi, secondsUntil } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
@@ -145,7 +146,6 @@ export function PokemonTab() {
             {rows.map((l, n) => {
               const f = l.ficha ?? {};
               const wait = secondsUntil(l.compravelEm, drift);
-              const iv = f.ivTotal != null ? Math.round((f.ivTotal / 192) * 100) : null;
               return (
                 <Reveal as="li" key={l.id} index={n} step={0.025} max={14} className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
                   <div
@@ -160,11 +160,8 @@ export function PokemonTab() {
                       {f.shiny && <ShinyMark />}
                       <span className="shrink-0 text-xs text-mute">nv. {f.level ?? "?"}</span>
                     </p>
-                    <p className="mt-1 flex items-center gap-x-2 text-xs text-mute">
-                      {iv != null && <span className="shrink-0">IV {iv}%</span>}
-                      {f.potencia != null && <span className="shrink-0">P{f.potencia}</span>}
-                      <span className="truncate">{l.vendedor}</span>
-                    </p>
+                    <PokemonSelos pk={f as never} className="mt-1.5" />
+                    <p className="mt-1 truncate text-xs text-mute">{l.vendedor}</p>
                     {wait > 0 && <p className="tnum mt-0.5 text-xs text-poke-gold">libera em {fmtCountdown(wait)}</p>}
                   </div>
                   </div>
