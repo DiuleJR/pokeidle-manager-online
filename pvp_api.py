@@ -2,6 +2,7 @@
 
     GET  /api/pvp                       resumo de cada conta: rank, time, fila, partidas da sessão, histórico
     GET  /api/pvp/ladder?pagina=1       tabela do jogo (Top 1.000), compartilhada entre as contas
+    GET  /api/pvp/monthly?conta=1&pagina=0   Top PVP mensal (arrecadação, faixas, a posição da conta, tabela)
     POST /api/pvp/{conta}/queue         {action: "enter" | "leave"} entra/sai da fila agora
     POST /api/pvp/{conta}/auto          {on: bool} liga/desliga a fila automática da conta
     POST /api/pvp/auto                  {on: bool} liga/desliga em todas as contas habilitadas
@@ -82,6 +83,9 @@ def account_pvp(c: "AccountConnection") -> dict:
         "blockerText": REASONS.get(blocker) if blocker else None,
         "rank": _rank(pv.rank),
         "position": pv.position,
+        "finalPosition": pv.final_position,
+        "finalCut": pv.final_cut,
+        "rankAt": pv.rank_at,
         "totalRanked": pv.total_ranked,
         "team": _team_rows(c),
         "queue": {"on": bool(q.get("na")), "since": q.get("desde") or 0, "size": q.get("tamanho") or 0,
@@ -122,6 +126,22 @@ def register_pvp_routes(app: FastAPI, manager: "AccountManager", store: "Store",
         if data is None:
             return JSONResponse({"error": "O jogo não respondeu a tabela. Tente de novo."}, status_code=504)
         return data
+
+    @app.get("/api/pvp/monthly")
+    async def pvp_monthly(request: Request, tok: str | None = Query(None, alias="token"), conta: int = 0, pagina: int = 0):
+        """Top PVP mensal; `conta` escolhe de quem é a posição (a primeira online quando omitida)."""
+        if (denied := auth.read_guard(request, tok)):
+            return denied
+        pool = manager.pvp_monthly
+        conn = manager.get(conta) if conta else None
+        if conn is None or not conn.can_send:
+            conn = next((c for c in manager.connections() if c.can_send), None)
+        if conn is None:
+            return JSONResponse({"error": "Nenhuma conta online para consultar o Top mensal."}, status_code=409)
+        data = await pool.get(conn, pagina)
+        if data is None:
+            return JSONResponse({"error": "O jogo não respondeu o Top mensal. Tente de novo."}, status_code=504)
+        return {**data, "account": conn.acc.index}
 
     @app.post("/api/pvp/auto")
     async def pvp_auto_all(body: AutoIn, request: Request, tok: str | None = Query(None, alias="token")):

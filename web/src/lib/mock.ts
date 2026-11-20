@@ -208,7 +208,7 @@ function installMockApi(accs: AccountSnapshot[]) {
             id: i + 1, nick: a.nick, level: a.level, online: a.status !== "offline", vip: i === 1, auto: pvpAuto[i], nativeAuto: false, levelMin: 150,
             blocker: a.status === "offline" ? "offline" : i === 3 ? "team" : null, blockerText: i === 3 ? "Monte a equipe de PVP no jogo antes de entrar na fila." : null,
             rank: { pontos, pico: pontos, vitorias: Math.round(partidas * 0.55), derrotas: Math.round(partidas * 0.45), partidas, tierId, divisaoNum, de: 600, ate: 700, progresso: 0.45, naFaixa: 45, larguraFaixa: 100, escudo: i === 2 ? 1 : 0 },
-            position: i === 2 ? 4212 : null, totalRanked: 13509,
+            position: i === 2 ? 4212 : null, finalPosition: i === 2 ? 9618 : null, finalCut: 7341, totalRanked: 13509,
             team: i === 3 ? [] : [60003, 60248, 60094, 60130, 60025].slice(0, 5 - (i % 2)).map((looktype, k) => ({ id: k + 1, name: "Pokémon", level: 800 + k * 130, looktype, shiny: false, types: [], power: 3000 })),
             queue: { on: i === 0, since: Date.now() - 42_000, size: 6386, waitMs: i === 1 ? 12_000 : 0 },
             refusal: null,
@@ -266,6 +266,13 @@ function installMockApi(accs: AccountSnapshot[]) {
       if (path.startsWith("/api/pvp/species/")) return json(common);
       await wait();
       return json({ ...common, pokemon: { id: 3289961, speciesId: 248, nome: "Tyranitar", looktype: 60248, lookShiny: null, tipos: ["ROCK", "DARK"], level: 2064, xp: 146304204535, xpNivel: 146121877400, xpProximo: 146334572800, quality: 1.711, potencia: 1, shiny: false, slot: 2, hp: 48190, maxHp: 55284, poder: 8479, nota: 3.651, ivs: { hp: 17, atk: 23, def: 20, spAtk: 28, spDef: 32, speed: 32 }, stats: { hp: 4607, atk: 5741, def: 4758, spAtk: 4789, spDef: 5202, speed: 4297 }, refino: { hp: 0, atk: 1, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 1, tmElemental: null, caughtAt: 1789099341577, caughtBy: true }, calc: mockCalc, combatHp: 55284, pvpPower: 82354, pvpLevel: 488, pvePower: 26161752, bases: { hp: 100, atk: 135, def: 110, spAtk: 95, spDef: 100, speed: 61 } });
+    }
+    if (path === "/api/pvp/monthly") {
+      await wait();
+      const pg = Number(new URL(url, location.href).searchParams.get("pagina") || 0);
+      const linhas = Array.from({ length: 100 }, (_, k) => { const pos = pg * 100 + k + 1; return [pos, pos <= 2000 ? pos : 0, k === 3 && pg === 0 ? "Treinador3" : `Jogador${pos}`, 25700 - pos * 9, 4800 - pos, 2500 - pos, 7300 - pos * 2, pos <= 2000 ? "" : "p"]; });
+      const faixas = [{ de: 1, ate: 100, bp: 2500, porPosicao: 20508 }, { de: 101, ate: 500, bp: 1250, porPosicao: 2563 }, { de: 501, ate: 2000, bp: 1250, porPosicao: 683 }];
+      return json({ account: 1, mes: "2026-11", arrecadado: 8203342, vendas: 240591, pool: 4101669, pctBp: 5000, partidasMin: 10, contaDiasMin: 7, faixas, eu: { pos: 2314, vaga: null, pontos: 7288, validas: 6318, motivo: null }, tabela: { pagina: pg, porPagina: 100, total: 2500, linhas }, anterior: null, at: Date.now() });
     }
     if (path === "/api/pvp/ladder") {
       const pg = Number(new URL(url, location.href).searchParams.get("pagina") || 1);

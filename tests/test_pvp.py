@@ -210,6 +210,30 @@ def test_ladder_is_requested_once_and_cached(env):
     assert [f for f in conn.hunt._ws.sent if f["t"] == "pvp.tabela"] == [{"t": "pvp.tabela", "pagina": 1}]
 
 
+def test_monthly_top_is_cached_per_account_and_page_and_exposes_the_final_position(env):
+    client, conn, _, mgr = env
+    month = {"t": "pvpMensal", "mes": "2026-11", "arrecadado": 8203342, "vendas": 240591, "pool": 4101669, "pctBp": 5000,
+             "faixas": [{"de": 1, "ate": 100, "bp": 2500, "porPosicao": 20508}], "eu": {"pos": 0, "vaga": None, "pontos": 7288, "validas": 6318},
+             "tabela": {"pagina": 0, "porPagina": 100, "total": 2000, "linhas": [[1, 1, "Luizitow", 25697, 4774, 2519, 7293, ""]]}}
+
+    class Echo(FakeWS):
+        async def send(self, raw):
+            await super().send(raw)
+            asyncio.get_running_loop().call_soon(mgr.pvp_monthly.handle_frame, conn, month)
+
+    conn.hunt._ws = Echo()
+    first = client.get("/api/pvp/monthly?pagina=0", headers=H).json()
+    assert first["arrecadado"] == 8203342 and first["tabela"]["linhas"][0][2] == "Luizitow" and first["account"] == conn.acc.index
+    assert client.get("/api/pvp/monthly?pagina=0", headers=H).json()["pool"] == 4101669
+    assert [f for f in conn.hunt._ws.sent if f["t"] == "pvp.mensal"] == [{"t": "pvp.mensal", "pagina": 0}]
+
+
+def test_final_position_and_cut_come_from_the_info_frame():
+    pv = make()
+    pv.handle_frame({"t": "pvp", "posicaoFinal": 9618, "corteFinal": 7341})
+    assert pv.final_position == 9618 and pv.final_cut == 7341 and pv.rank_at > 0
+
+
 # ------------------------------------------------- poder e tabuleiro
 import pvp_power as pw  # noqa: E402
 

@@ -193,6 +193,7 @@ class AccountConnection:
         self.on_token_renewed = None      # callback(acc_id, novo_token)
         self.on_chat = None               # callback(conn, frame): frames de chat (ChatHub)
         self.on_ficha = None              # callback(conn, frame): ficha pública de um Pokémon (chat.verPokemon)
+        self.on_pvp_month = None          # callback(conn, frame): Top PVP mensal (pvpMensal)
         self.on_pvp_table = None          # callback(conn, frame): página da tabela do PVP (Top 1.000)
         self.on_online = None             # async callback(conn): a conta acabou de ficar online
         self.chat_mute_until = 0.0        # ms epoch: mute de chat aplicado pelo jogo
@@ -463,6 +464,8 @@ class AccountConnection:
                 self.pvp.handle_frame(msg)
                 if msg.get("t") == "ranking.ficha" and self.on_ficha:
                     self.on_ficha(self, msg)
+                if msg.get("t") == "pvpMensal" and self.on_pvp_month:
+                    self.on_pvp_month(self, msg)
                 if msg.get("t") == "pvpTabela" and self.on_pvp_table:
                     self.on_pvp_table(self, msg)
                 self._check_server_rares()

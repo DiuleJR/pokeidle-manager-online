@@ -12,6 +12,7 @@ import config
 from chat import ChatHub
 from pokemon_sheet_api import PublicFichas
 from pvp_ladder import LadderCache
+from pvp_monthly import MonthlyCache
 from config import Settings, build_account_config
 from connection import AccountConnection
 from market_service import MarketService
@@ -37,6 +38,7 @@ class AccountManager:
         self.market = MarketService(self, store, notifier)
         self.chat = ChatHub()
         self.pvp_ladder = LadderCache()
+        self.pvp_monthly = MonthlyCache()
         self.fichas = PublicFichas()
 
     # ------------------------------------------------------------ estado
@@ -65,6 +67,7 @@ class AccountManager:
         conn.on_token_renewed = self._on_token_renewed
         conn.on_chat = self.chat.handle_frame
         conn.on_pvp_table = self.pvp_ladder.handle_frame
+        conn.on_pvp_month = self.pvp_monthly.handle_frame
         conn.on_ficha = self.fichas.handle_frame
         conn.on_online = self.chat.on_online
         self._conns[acc.index] = conn

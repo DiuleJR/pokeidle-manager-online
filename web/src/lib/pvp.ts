@@ -74,6 +74,9 @@ export interface PvpAccount {
   blockerText: string | null;
   rank: PvpRank | null;
   position: number | null;
+  /** Posição "se a semana acabasse agora" e PR do último lugar premiado (Top 100). */
+  finalPosition?: number | null;
+  finalCut?: number | null;
   totalRanked: number | null;
   team: PvpTeamMember[];
   queue: { on: boolean; since: number; size: number; waitMs: number };

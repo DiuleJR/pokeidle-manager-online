@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Loader2, Pencil, Shield, Swords, Trophy } fr
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { PokemonSheet } from "@/components/PokemonSheet";
+import { PvpRewardClocks } from "@/components/PvpRewards";
 import { PvpTeamEditor } from "@/components/PvpTeamEditor";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
@@ -381,6 +382,8 @@ export function PvpView() {
           </label>
         </div>
       </section>
+
+      <PvpRewardClocks accounts={accounts} />
 
       {error && !data && <p className="rounded-md bg-poke-red/10 px-3 py-2 text-sm text-poke-red" role="alert">{error}</p>}
       {!data && !error && <p className="py-10 text-center text-mute">Carregando o PVP…</p>}

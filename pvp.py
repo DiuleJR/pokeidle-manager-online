@@ -51,6 +51,9 @@ class PvpManager:
         self.rank: dict | None = None
         self.position: int | None = None
         self.total_ranked: int | None = None
+        self.final_position: int | None = None   # posição "se a semana acabasse agora"
+        self.final_cut: int | None = None        # PR do último lugar premiado (Top 100)
+        self.rank_at = 0                         # ms epoch do último rank recebido
         self.rules: dict = {}
         self.team: list[int] = []
         self.houses: dict = {}
@@ -131,6 +134,12 @@ class PvpManager:
             self.rank = msg["rank"]
         if "posicao" in msg:
             self.position = msg["posicao"] if isinstance(msg["posicao"], int) else None
+        if "posicaoFinal" in msg:
+            self.final_position = msg["posicaoFinal"] if isinstance(msg["posicaoFinal"], int) else None
+        if "corteFinal" in msg:
+            self.final_cut = msg["corteFinal"] if isinstance(msg["corteFinal"], (int, float)) else None
+        if isinstance(msg.get("rank"), dict):
+            self.rank_at = int(time.time() * 1000)
         if "totalClassificados" in msg:
             self.total_ranked = msg["totalClassificados"] if isinstance(msg["totalClassificados"], int) else None
         if isinstance(msg.get("regras"), dict):
