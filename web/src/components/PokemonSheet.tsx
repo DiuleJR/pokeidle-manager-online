@@ -16,6 +16,7 @@ import {
   type SpeciesPayload,
 } from "@/lib/pvpTeam";
 import { effectiveness, TYPES } from "@/lib/typeChart";
+import { ivStatColor } from "@/lib/selos";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const VIOLET = "#b66bff";
