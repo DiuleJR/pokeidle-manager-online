@@ -478,7 +478,8 @@ function AccountCardImpl({ id, mode, index = 0, drag }: { id: string; mode: Card
             </h3>
             <StatusPill status={acc.status} />
           </div>
-          <div className="mt-0.5 flex items-center gap-x-2 text-xs text-mute sm:mt-1 sm:text-sm">
+          {/* Os níveis já aparecem no bloco de XP do Resumo; na aba Sessão continuam aqui. */}
+          <div className={`mt-0.5 items-center gap-x-2 text-xs text-mute sm:mt-1 sm:text-sm ${mode === "sessao" ? "flex" : "hidden"}`}>
             <span className="tnum shrink-0" title="Nível do treinador">
               <span className="sm:hidden">Trein. </span>
               <span className="hidden sm:inline">Treinador </span>
