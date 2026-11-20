@@ -95,6 +95,7 @@ type ChatEvent = { type: string; [k: string]: unknown };
 let chatEmit: ((ev: ChatEvent) => void) | null = null;
 let chatSeq = 1000;
 let lastSendAt = 0;
+const pvpAuto = [false, true, false, false];
 const mockMsg = (canal: string, de: string, nivel: number | null, text: string, kind = "msg", agoMin = 0, extra: Record<string, unknown> = {}) => ({
   id: ++chatSeq, ts: Date.now() - agoMin * 60_000, canal, de, nivel, cargo: null, guild: null, guildColor: null, ad: null, kind, text, ...extra,
 });
@@ -186,6 +187,55 @@ function installMockApi(accs: AccountSnapshot[]) {
       return json({ ts: Date.now(), days: 7, online: [1], items: [it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
     }
     if (path === "/api/creatures") return json(creatures);
+    if (path === "/api/pvp" && (!init?.method || init.method === "GET")) {
+      const tiers = [["bronze", "I", 40, 5], ["ouro", "II", 745, 41], ["diamante", "III", 1390, 120], ["bronze", "I", 0, 0]] as const;
+      return json({
+        ts: Date.now(),
+        accounts: accs.map((a, i) => {
+          const [tierId, divisaoNum, pontos, partidas] = tiers[i];
+          return {
+            id: i + 1, nick: a.nick, level: a.level, online: a.status !== "offline", vip: i === 1, auto: pvpAuto[i], nativeAuto: false, levelMin: 150,
+            blocker: a.status === "offline" ? "offline" : i === 3 ? "team" : null, blockerText: i === 3 ? "Monte a equipe de PVP no jogo antes de entrar na fila." : null,
+            rank: { pontos, pico: pontos, vitorias: Math.round(partidas * 0.55), derrotas: Math.round(partidas * 0.45), partidas, tierId, divisaoNum, de: 600, ate: 700, progresso: 0.45, naFaixa: 45, larguraFaixa: 100, escudo: i === 2 ? 1 : 0 },
+            position: i === 2 ? 4212 : null, totalRanked: 13509,
+            team: i === 3 ? [] : [60003, 60248, 60094, 60130, 60025].slice(0, 5 - (i % 2)).map((looktype, k) => ({ id: k + 1, name: "Pokémon", level: 800 + k * 130, looktype, shiny: false, types: [], power: 3000 })),
+            queue: { on: i === 0, since: Date.now() - 42_000, size: 6386, waitMs: i === 1 ? 12_000 : 0 },
+            refusal: null,
+            session: { wins: i === 1 ? 4 : 0, losses: i === 1 ? 2 : 0, delta: i === 1 ? 31 : 0, matches: i === 1 ? [10, 11, -8, 9, 10, -7].map((d, k) => ({ id: k, won: d > 0, delta: d, opponent: `Rival${k}`, at: Date.now() })) : [] },
+            history: [10, 11, 11, -9].map((d, k) => ({ id: 100 + k, won: d > 0, delta: d, opponent: `Selux${k}`, at: "2026-11-14T19:33:33Z" })),
+          };
+        }),
+      });
+    }
+    const pvpApiM = path.match(/^\/api\/pvp\/(\d+)\/(roster|team-view|team|pokemon\/\d+)$/);
+    if (pvpApiM || path.startsWith("/api/pvp/species/")) {
+      const row = (i: number) => ({ id: 1000 + i, speciesId: 1 + (i % 150), name: ["Tyranitar", "Venusaur", "Gengar", "Mamoswine", "Dragonite", "Lapras", "Barboach", "Togekiss"][i % 8], level: 2100 - i * 53, looktype: [60248, 60003, 60094, 60473, 60149, 60131, 60339, 60468][i % 8], shiny: i % 9 === 4, types: [["ROCK", "DARK"], ["GRASS", "POISON"], ["GHOST", "POISON"], ["ICE", "GROUND"], ["DRAGON", "FLYING"], ["WATER", "ICE"], ["WATER", "GROUND"], ["FAIRY", "FLYING"]][i % 8], pvpPower: 82000 - i * 2300, pvpLevel: 480 - i * 6, power: 8000 - i * 150, quality: 1.7, potency: 1, grade: 3.6, ivTotal: 152 - i, range: [1, 2, 4, 1, 1, 3, 1, 4][i % 8], hunting: i < 3, inTeam: i < 3, refined: false });
+      if (path.endsWith("/roster")) { await wait(); const rows = Array.from({ length: 140 }, (_, i) => row(i)); const sp = new URL(url, location.href).searchParams; const off = Number(sp.get("offset") || 0); return json({ total: rows.length, owned: rows.length, offset: off, items: rows.slice(off, off + 60) }); }
+      if (path.endsWith("/team-view")) return json({ ids: [1000, 1001, 1002], casas: { "1000": 2, "1001": 8, "1002": 23 }, members: [row(0), row(1), row(2)] });
+      if (path.endsWith("/team") && init?.method === "POST") { await wait(); return json({ ok: true }); }
+      const atk = (name: string, type: string, power: number, category: string, cd: number) => ({ name, type, power, category, cooldownMs: cd, learnLevel: 1 });
+      const species = { pokeId: 248, name: "Tyranitar", looktype: 416, type1: "ROCK", type2: "DARK", rarity: "EPIC", baseHp: 100, baseAtk: 134, baseDef: 110, baseSpAtk: 95, baseSpDef: 100, baseSpeed: 61, huntLevel: 100, evolvesToId: 0, evolveLevel: 0, sellValue: 62500, experience: 6008, loot: [{ name: "Rock Stone", chance: 143, minCount: 1, maxCount: 1 }, { name: "Small Stone", chance: 45961, minCount: 1, maxCount: 5 }], attacks: [atk("Rock Throw", "ROCK", 96, "PHYSICAL", 29100), atk("Bite", "DARK", 72, "PHYSICAL", 23400), atk("Crumbling Rain", "ROCK", 600, "PHYSICAL", 60000)] };
+      const common = { species, range: 1, evolution: { prev: { pokeId: 247, name: "Pupitar", looktype: 401 }, next: null, level: 0, prevLevel: 100 }, pokedex: { defeated: 25, captured: 1 }, foundIn: [{ slug: "tyranitar", name: "Tyranitar", level: 470, points: 15 }] };
+      if (path.startsWith("/api/pvp/species/")) return json(common);
+      await wait();
+      return json({ ...common, pokemon: { id: 3289961, speciesId: 248, nome: "Tyranitar", looktype: 60248, lookShiny: null, tipos: ["ROCK", "DARK"], level: 2064, xp: 146304204535, xpNivel: 146121877400, xpProximo: 146334572800, quality: 1.711, potencia: 1, shiny: false, slot: 2, hp: 48190, maxHp: 55284, poder: 8479, nota: 3.651, ivs: { hp: 17, atk: 23, def: 20, spAtk: 28, spDef: 32, speed: 32 }, stats: { hp: 4607, atk: 5741, def: 4758, spAtk: 4789, spDef: 5202, speed: 4297 }, refino: { hp: 0, atk: 1, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 1, tmElemental: null, caughtAt: 1789099341577, caughtBy: true }, combatHp: 55284, pvpPower: 82354, pvpLevel: 488, pvePower: 26161752, bases: { hp: 100, atk: 135, def: 110, spAtk: 95, spDef: 100, speed: 61 } });
+    }
+    if (path === "/api/pvp/ladder") {
+      const pg = Number(new URL(url, location.href).searchParams.get("pagina") || 1);
+      const rows = Array.from({ length: 100 }, (_, k) => ({ pos: (pg - 1) * 100 + k + 1, nick: k === 3 ? "Treinador3" : `Jogador${(pg - 1) * 100 + k + 1}`, tier: pg > 2 ? "diamante" : "mestre", division: pg > 2 ? "III" : "", points: 6200 - (pg - 1) * 90 - k, wins: 1600 - k, losses: 1500 + k }));
+      return json({ page: pg, pages: 10, week: "2026-11-15", rows, at: Date.now() });
+    }
+    const pvpAutoM = path.match(/^\/api\/pvp\/(\d+)\/(auto|queue)$/);
+    if (pvpAutoM && init?.method === "POST") {
+      await wait();
+      if (pvpAutoM[2] === "auto") pvpAuto[Number(pvpAutoM[1]) - 1] = JSON.parse(String(init.body)).on;
+      return json({ ok: true });
+    }
+    if (path === "/api/pvp/auto" && init?.method === "POST") {
+      await wait();
+      pvpAuto.fill(JSON.parse(String(init.body)).on);
+      return json({ ok: true, accounts: 4 });
+    }
     if (path === "/api/community") return json({ url: "https://discord.gg/pFVashEjtH", name: "Pokeidle Manager", online: 8, members: 32 });
     if (path === "/api/chat/send" && init?.method === "POST") {
       await wait();
