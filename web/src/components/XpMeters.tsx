@@ -1,6 +1,7 @@
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { animate, AnimatePresence, motion, useAnimationControls, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { ArrowUp, Flag } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedNumber } from "@/components/ui";
 import { useHistory } from "@/lib/telemetry";
 import type { XpBar } from "@/lib/types";
 import { fmtShort } from "@/lib/utils";
@@ -54,8 +55,11 @@ export function useXpTrack(atual: number | null | undefined, level: number | nul
     const now = Date.now();
     const lv = level ?? null;
     const p = prev.current;
-    if (p && lv === p.lv && atual > p.x) setEv({ key: now, gain: atual - p.x, up: false });
-    else if (p && lv != null && p.lv != null && lv > p.lv) setEv({ key: now, gain: 0, up: true });
+    if (p && lv === p.lv && atual > p.x) {
+      // Ganhos seguidos somam num chip só (em vez de empilhar um chip novo a cada abate).
+      const d = atual - p.x;
+      setEv((cur) => ({ key: now, gain: cur && !cur.up ? cur.gain + d : d, up: false }));
+    } else if (p && lv != null && p.lv != null && lv > p.lv) setEv({ key: now, gain: 0, up: true });
     const s = samples.current;
     if (p && lv !== p.lv) s.length = 0; // a barra recomeçou: a amostra antiga não vale
     prev.current = { x: atual, lv };
@@ -75,19 +79,24 @@ export function useXpTrack(atual: number | null | undefined, level: number | nul
   return { ev, rate };
 }
 
-/** "+1,2M" que sobe e some a cada ganho; "Subiu de nível" quando o nível muda. Só transform/opacity. */
+/**
+ * Chip do ganho recente. Fica um só na tela: entra subindo, o número vai contando para cima a cada novo ganho
+ * e, passados uns segundos sem ganho, sai flutuando. "Subiu de nível" troca com ele em fade.
+ * Só transform/opacity; o número roda por motion value (sem re-render por quadro).
+ */
 export function GainChip({ ev, color }: { ev: XpTrack["ev"]; color: string }) {
   const reduce = useReducedMotion();
+  const shift = reduce ? 0 : 6;
   return (
     <span className="relative inline-flex h-5 items-center" aria-live="polite">
-      <AnimatePresence>
+      <AnimatePresence mode="wait" initial={false}>
         {ev && (
           <motion.span
-            key={ev.key}
-            initial={{ opacity: 0, y: reduce ? 0 : 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: reduce ? 0 : -6 }}
-            transition={{ duration: 0.25, ease: EASE }}
+            key={ev.up ? "up" : "gain"}
+            initial={{ opacity: 0, y: shift, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -shift }}
+            transition={{ duration: 0.28, ease: EASE }}
             className="tnum inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-void"
             style={{ background: color }}
           >
@@ -96,12 +105,36 @@ export function GainChip({ ev, color }: { ev: XpTrack["ev"]; color: string }) {
                 <ArrowUp className="size-3" aria-hidden /> Subiu de nível!
               </>
             ) : (
-              <>+{fmtShort(ev.gain)}</>
+              <AnimatedNumber value={ev.gain} format={(n) => `+${fmtShort(n)}`} />
             )}
           </motion.span>
         )}
       </AnimatePresence>
     </span>
+  );
+}
+
+/** Porcentagem que conta até o novo valor e dá um pulinho a cada ganho. Ao zerar (subiu de nível) troca direto. */
+function Pct({ value, pulse, className, style }: { value: number; pulse?: number; className?: string; style?: React.CSSProperties }) {
+  const mv = useMotionValue(value);
+  const text = useTransform(mv, pct);
+  const controls = useAnimationControls();
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    if (reduce || value < mv.get()) {
+      mv.set(value);
+      return;
+    }
+    const c = animate(mv, value, { duration: 0.9, ease: EASE });
+    return () => c.stop();
+  }, [value, mv, reduce]);
+  useEffect(() => {
+    if (pulse && !reduce) void controls.start({ scale: [1, 1.14, 1], transition: { duration: 0.5, ease: EASE } });
+  }, [pulse, controls, reduce]);
+  return (
+    <motion.span animate={controls} className={`tnum inline-block origin-right ${className ?? ""}`} style={style}>
+      {text}
+    </motion.span>
   );
 }
 
@@ -140,9 +173,9 @@ function Legend({ label, level, w, color }: { label: string; level: number | nul
       </div>
       {w.p ? (
         <p className="tnum mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-mute">
-          <b className="text-xl font-extrabold leading-none" style={{ color }}>{pct(w.p.pct)}</b>
+          <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-xl font-extrabold leading-none" style={{ color }} />
           <span>
-            faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
+            faltam <b className="font-semibold text-fg"><AnimatedNumber value={w.p.falta} /></b>
             {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
           </span>
         </p>
@@ -226,8 +259,8 @@ function Gauge({ label, level, w, color }: { label: string; level: number | null
       </div>
       {w.p ? (
         <>
-          <p className="tnum mt-1.5 text-lg font-extrabold leading-none" style={{ color }}>{pct(w.p.pct)}</p>
-          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam {fmtShort(w.p.falta)}</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-none"><Pct value={w.p.pct} pulse={w.track.ev?.key} style={{ color }} /></p>
+          <p className="tnum mt-0.5 text-[11px] leading-tight text-mute">faltam <AnimatedNumber value={w.p.falta} /></p>
           {w.eta && <p className="tnum text-[11px] leading-tight text-mute">sobe em {w.eta}</p>}
         </>
       ) : (
@@ -263,7 +296,7 @@ function Lane({ label, level, w, color, runner }: { label: string; level: number
         </p>
         <span className="flex shrink-0 items-center gap-2">
           <GainChip ev={w.track.ev} color={color} />
-          {w.p && <span className="tnum text-base font-extrabold" style={{ color }}>{pct(w.p.pct)}</span>}
+          {w.p && <Pct value={w.p.pct} pulse={w.track.ev?.key} className="text-base font-extrabold" style={{ color }} />}
         </span>
       </div>
       <div
@@ -300,7 +333,7 @@ function Lane({ label, level, w, color, runner }: { label: string; level: number
       </div>
       {w.p && (
         <p className="tnum -mt-0.5 text-xs text-mute">
-          faltam <b className="font-semibold text-fg">{fmtShort(w.p.falta)}</b>
+          faltam <b className="font-semibold text-fg"><AnimatedNumber value={w.p.falta} /></b>
           {w.eta && <> · sobe em <b className="font-semibold text-fg">{w.eta}</b></>}
         </p>
       )}
