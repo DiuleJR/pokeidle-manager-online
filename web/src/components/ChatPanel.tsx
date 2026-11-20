@@ -11,6 +11,7 @@ import {
   type ChannelId,
   type ChatMsg,
 } from "@/lib/chat";
+import { useSheet } from "@/lib/sheet";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 
 const MIN_LEVEL = 10; // igual ao jogo: abaixo disso a conta não fala no chat
@@ -78,11 +79,26 @@ function renderBody(text: string, mine: string[], linkable: boolean): { nodes: R
   return { nodes, toMe };
 }
 
+/** Texto com o nome do Pokémon virando botão que abre a ficha. */
+function withPokemonLink(text: string, pk: NonNullable<ChatMsg["pk"]>, open: (el: Element) => void): ReactNode {
+  const at = text.indexOf(pk.label);
+  const btn = (
+    <button type="button" className="cm-pk" title="Ver a ficha do Pokémon" onClick={(e) => open(e.currentTarget)}>
+      {pk.label}
+    </button>
+  );
+  if (at < 0) return <>{text} ({btn})</>;
+  return <>{text.slice(0, at)}{btn}{text.slice(at + pk.label.length)}</>;
+}
+
 const Row = memo(function Row({ m, mine }: { m: ChatMsg; mine: string[] }) {
+  const openSheet = useSheet();
   const role = m.cargo && ROLES.has(m.cargo) ? m.cargo : "";
   const kindCls = m.kind === "ad" ? "ad" : m.kind === "rare" ? "rare" : m.kind === "shiny" && !role ? "shiny" : "";
   const ad = m.ad;
   const parsed = m.kind === "msg" || m.kind === "share" ? renderBody(m.text, mine, !!m.cargo && LINKERS.has(m.cargo)) : null;
+  const pk = m.pk;
+  const openPk = (el: Element) => pk && openSheet({ kind: "public", nick: pk.nick, id: pk.id }, el);
   return (
     <li className={`cm selectable ${role} ${kindCls} ${parsed?.toMe ? "cm-para-mim" : ""}`}>
       <span className="cm-t">{clock(m.ts)}</span>
@@ -101,13 +117,15 @@ const Row = memo(function Row({ m, mine }: { m: ChatMsg; mine: string[] }) {
       )}
       <span className="cm-tx">
         {ad ? (
-          <>
+          <button type="button" className="cm-pk cm-pk-ad" title="Ver a ficha do Pokémon anunciado" onClick={(e) => openSheet({ kind: "listing", id: ad.id }, e.currentTarget)}>
             estou anunciando {ad.qtd}x <span className="cm-ad-nome">{ad.nome}</span> por{" "}
             <span className={`cm-ad-preco ${ad.moeda}`}>
               {ad.preco} {ad.moeda === "gemas" ? "Gemas" : "Gold"}
             </span>
             {ad.qtd > 1 ? " cada" : ""}, confira meu anúncio!
-          </>
+          </button>
+        ) : pk ? (
+          withPokemonLink(m.text, pk, openPk)
         ) : (
           (parsed?.nodes ?? m.text)
         )}

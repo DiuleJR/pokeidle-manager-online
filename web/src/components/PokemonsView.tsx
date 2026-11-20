@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { Coin, ConfirmDialog } from "@/components/ui";
 import { sellDepot, usePokemons } from "@/lib/api";
+import { accountNumber, sheetTrigger, useSheet } from "@/lib/sheet";
 import { useAccountsMap } from "@/lib/telemetry";
 import type { PokemonRow, SellDepotResult } from "@/lib/types";
 import { fmtInt, fmtShort } from "@/lib/utils";
@@ -37,6 +38,7 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
   const [refreshNonce, setRefreshNonce] = useState(0);
   const { rows, error } = usePokemons(account, refreshNonce);
   const accounts = useAccountsMap();
+  const openSheet = useSheet();
   const shinyGems = useMemo(() => new Map((valuation?.shinies ?? []).map((v) => [`${v.account}-${v.id}`, v.gems])), [valuation]);
   const gemsOf = (p: PokemonRow) => (p.shiny ? shinyGems.get(`${Number(p.account.replace(/[^0-9]/g, ""))}-${p.id}`) : null);
   const [query, setQuery] = useState("");
@@ -168,7 +170,9 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: Math.min(i, 12) * 0.02 }}
-                  className="tile flex items-center gap-2.5 px-2.5 py-1.5"
+                  className="tile flex cursor-pointer items-center gap-2.5 px-2.5 py-1.5 transition-colors hover:border-[#b66bff]"
+                  aria-label={`Abrir a ficha de ${p.name}`}
+                  {...sheetTrigger(() => openSheet({ kind: "own", account: accountNumber(p.account), id: p.id }))}
                 >
                   <PokemonSprite looktype={p.looktype} size={52} />
                   <div className="min-w-0 flex-1">
@@ -204,9 +208,18 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                 </thead>
                 <tbody>
                   {slice.map((p) => (
-                    <tr key={`${p.account}-${p.id}`} className="border-b border-line transition-colors duration-150 hover:bg-tile">
+                    <tr
+                      key={`${p.account}-${p.id}`}
+                      className="cursor-pointer border-b border-line transition-colors duration-150 hover:bg-tile"
+                      onClick={() => openSheet({ kind: "own", account: accountNumber(p.account), id: p.id })}
+                    >
                       <td className="py-1 pr-2">
-                        <span className="flex items-center gap-2 font-semibold">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 text-left font-semibold"
+                          aria-label={`Abrir a ficha de ${p.name}`}
+                          onClick={(e) => { e.stopPropagation(); openSheet({ kind: "own", account: accountNumber(p.account), id: p.id }); }}
+                        >
                           <PokemonSprite looktype={p.looktype} size={48} />
                           {p.name}
                           {p.shiny && <ShinyMark />}
@@ -216,7 +229,7 @@ export function PokemonsView({ account, valuation }: { account: string; valuatio
                               TIME
                             </span>
                           )}
-                        </span>
+                        </button>
                       </td>
                       {account === "all" && <td className="px-2 py-1 text-mute">{nick(p.account)}</td>}
                       <td className="tnum px-2 py-1 text-right">{fmtInt(p.level)}</td>

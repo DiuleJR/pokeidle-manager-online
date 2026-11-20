@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal, Notice } from "@/components/SettingsView";
 import { type BuyResult, type Listing, marketApi } from "@/lib/market";
+import { useSheet } from "@/lib/sheet";
 import { fmtInt } from "@/lib/utils";
 import { Money, errMsg, useOnlineAccounts } from "./shared";
 
@@ -14,6 +15,7 @@ const RESULT_TEXT: Record<BuyResult["status"], { tone: "ok" | "warn" | "error"; 
 /** Compra manual de um anúncio. Pede confirmação com o total e mostra o resultado. */
 export function BuyDialog({ listing, name, onClose, onDone }: { listing: Listing; name: string; onClose: () => void; onDone: () => void }) {
   const accs = useOnlineAccounts();
+  const openSheet = useSheet();
   const [account, setAccount] = useState<number | undefined>(undefined);
   const acc = accs.find((a) => a.id === account) ?? accs[0];
   const maxQty = listing.tipo === "pokemon" ? 1 : listing.qtd;
@@ -52,6 +54,11 @@ export function BuyDialog({ listing, name, onClose, onDone }: { listing: Listing
             <p className="flex items-center gap-2">
               Preço por unidade: <Money v={listing.preco} moeda={listing.moeda} />
             </p>
+            {listing.tipo === "pokemon" && listing.ficha && (
+              <button type="button" className="btn mt-1" onClick={(e) => openSheet({ kind: "pokemon", pokemon: { ...listing.ficha, dono: listing.vendedor }, listing: { id: listing.id, price: listing.preco, currency: listing.moeda === "orb" ? "orb" : "gold", qty: listing.qtd } }, e.currentTarget)}>
+                Ver ficha completa
+              </button>
+            )}
           </div>
           {accs.length === 0 ? (
             <Notice tone="warn">Nenhuma conta online para comprar.</Notice>

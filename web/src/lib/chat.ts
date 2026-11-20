@@ -28,7 +28,9 @@ export interface ChatMsg {
   kind: "msg" | "shiny" | "rare" | "share" | "ad";
   text: string;
   /** Só nos anúncios do mercado: a oferta separada, para destacar nome e preço. */
-  ad: { qtd: number; nome: string; preco: string; moeda: "gold" | "gemas" } | null;
+  ad: { qtd: number; nome: string; preco: string; moeda: "gold" | "gemas"; id: number } | null;
+  /** O Pokémon que a mensagem cita (compartilhado, shiny, lendário): o `label` é o trecho do texto que vira link para a ficha. */
+  pk?: { nick: string; id: number; label: string } | null;
 }
 export interface ChatNotice {
   key: number;

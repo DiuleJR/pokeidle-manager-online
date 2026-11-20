@@ -198,6 +198,15 @@
 }
 .cm a.cm-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
 .cm a.cm-link:hover { text-decoration-thickness: 2px; }
+/* Nome de Pokémon e anúncio no chat: abrem a ficha. Botão com cara de texto, sublinhado pontilhado. */
+.cm .cm-pk {
+  display: inline; padding: 0; margin: 0; border: 0; background: none; font: inherit; color: inherit; text-align: inherit;
+  cursor: pointer; font-weight: 800; text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-thickness: 1.5px;
+  border-radius: 3px; -webkit-tap-highlight-color: transparent;
+}
+.cm .cm-pk:hover { text-decoration-style: solid; filter: brightness(1.2); }
+.cm .cm-pk:focus-visible { outline: 2px solid #f3c04a; outline-offset: 1px; }
+.cm .cm-pk-ad { font-weight: inherit; text-align: left; }
 
 /* Mercado no celular: alvos de toque de pelo menos 40px (só em tela de toque, só nesta aba). */
 @media (pointer: coarse) {

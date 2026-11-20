@@ -368,7 +368,7 @@ export function PvpTeamEditor({ account, nick, levelMin, onClose, onSaved }: { a
           <p className="mt-1.5 hidden text-[11px] text-mute lg:block">Arraste um Pokémon da lista para uma casa, ou toque nele e depois na casa. Quem ficar sem casa é posicionado pelo alcance. Nível mínimo: {levelMin}. A equipe é fechada antes da fila e não muda durante a partida.</p>
         </footer>
       </motion.div>
-      <AnimatePresence>{sheet != null && <PokemonSheet account={account} pokemonId={sheet} onClose={() => setSheet(null)} />}</AnimatePresence>
+      <AnimatePresence>{sheet != null && <PokemonSheet source={{ kind: "own", account, id: sheet }} onClose={() => setSheet(null)} />}</AnimatePresence>
     </motion.div>
   );
 }

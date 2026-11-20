@@ -153,6 +153,13 @@ export interface SpeciesPayload {
   pokedex: { defeated: number | null; captured: number | null };
   foundIn: { slug: string; name: string; level: number; points: number }[];
 }
+/** O anúncio de onde a ficha veio (preço e moeda). */
+export interface SheetListing {
+  id: number;
+  price: number;
+  currency: "gold" | "orb";
+  qty: number;
+}
 export interface PokemonSheetPayload extends SpeciesPayload {
   pokemon: {
     id: number;
@@ -163,13 +170,14 @@ export interface PokemonSheetPayload extends SpeciesPayload {
     tipos: string[];
     level: number;
     xp: number;
-    xpNivel: number;
-    xpProximo: number;
+    /** Fichas de outros jogadores (mercado, chat) não trazem os limites do nível. */
+    xpNivel?: number;
+    xpProximo?: number;
     quality: number;
     potencia: number;
     shiny: boolean;
     slot: number | null;
-    hp: number;
+    hp?: number;
     maxHp: number;
     poder: number;
     nota: number;
@@ -179,8 +187,13 @@ export interface PokemonSheetPayload extends SpeciesPayload {
     refinoTotal?: number;
     tmElemental: string | null;
     caughtAt: number;
-    caughtBy: boolean;
+    caughtBy?: boolean | string;
+    apelido?: string | null;
   };
+  /** Dono do Pokémon quando não é de uma das suas contas (jogador do chat ou vendedor do anúncio). */
+  owner?: string | null;
+  /** Só quando a ficha veio de um anúncio do mercado. */
+  listing?: SheetListing;
   combatHp: number;
   pvpPower: number;
   pvpLevel: number;
@@ -201,5 +214,8 @@ export const teamApi = {
   save: (acc: number, ids: number[], casas: Record<string, number>) =>
     call<{ ok: boolean; ids: number[]; casas: Record<string, number> }>("POST", `/api/pvp/${acc}/team`, { ids, casas }),
   pokemon: (acc: number, id: number) => call<PokemonSheetPayload>("GET", `/api/pvp/${acc}/pokemon/${id}`),
+  fromPokemon: (pokemon: Record<string, unknown>, listing?: SheetListing) => call<PokemonSheetPayload>("POST", "/api/pokemon/sheet", { pokemon, listing }),
+  publicPokemon: (nick: string, pid: number) => call<PokemonSheetPayload>("GET", `/api/pokemon/public?nick=${encodeURIComponent(nick)}&pid=${pid}`),
+  listing: (id: number) => call<PokemonSheetPayload>("GET", `/api/pokemon/listing/${id}`),
   species: (id: number, acc?: number) => call<SpeciesPayload>("GET", `/api/pvp/species/${id}${acc ? `?account=${acc}` : ""}`),
 };

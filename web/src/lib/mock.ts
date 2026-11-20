@@ -107,10 +107,11 @@ export function startMockChat(emit: (ev: ChatEvent) => void) {
       mockMsg("mundo", "Vanz1n", 539, "brabo, bater em área ajuda mt", "msg", 12, { cargo: "vip", guild: "DL", guildColor: "#4dd0ff" }),
       mockMsg("mundo", "burnato", 4157, "Dúvidas onde farmar? pokeidleguide.io/#hunt Acesse aqui e informe seu pokemon!", "msg", 11, { cargo: "helper", guild: "TFT", guildColor: "#ff9f43" }),
       mockMsg("mundo", "Wakewakee", 1901, "⚔️ Derrotei 31.216 Riolu, ✅ capturei 755, ✨ vi 6 shinys e ✨ capturei 0 shinys!", "msg", 10, { cargo: "compartilhar" }),
+      mockMsg("mundo", "Liang", 10, "mostrou o Pokémon Leafeon", "share", 9, { cargo: "compartilhar", pk: { nick: "Liang", id: 5151, label: "Leafeon" } }),
       mockMsg("mundo", "Diule_JR", 1306, "clk", "msg", 9, { guild: "FON", guildColor: "#6fd47c" }),
-      mockMsg("mundo", "JalyTorey", 3312, "", "ad", 8, { cargo: "anuncio", ad: { qtd: 1, nome: "Blastoise Nv 80", preco: "450", moeda: "gemas" } }),
-      mockMsg("mundo", "Dubas", 2944, "", "ad", 7, { cargo: "anuncio", ad: { qtd: 3, nome: "Rare Candy", preco: "100.000", moeda: "gold" } }),
-      mockMsg("mundo", "✨ Shiny", null, "✨ Luskashi33 capturou um Gengar shiny!", "shiny", 5, { cargo: "shiny" }),
+      mockMsg("mundo", "JalyTorey", 3312, "", "ad", 8, { cargo: "anuncio", ad: { qtd: 1, nome: "Blastoise Nv 80", preco: "450", moeda: "gemas", id: 7 } }),
+      mockMsg("mundo", "Dubas", 2944, "", "ad", 7, { cargo: "anuncio", ad: { qtd: 3, nome: "Rare Candy", preco: "100.000", moeda: "gold", id: 9999 } }),
+      mockMsg("mundo", "✨ Shiny", null, "✨ Luskashi33 capturou um Gengar shiny!", "shiny", 5, { cargo: "shiny", pk: { nick: "Luskashi33", id: 4242, label: "Gengar" } }),
       mockMsg("mundo", "🏷️ Tag IDLE", null, "🏷️ O jogador Mhynx resgatou 5 diamantes utilizando a TAG IDLE no Discord, venha receber também!", "msg", 4, { cargo: "anuncio" }),
       mockMsg("mundo", "Noyan", 257, "@Treinador1 saquei, vlw", "msg", 2, { guild: "DL", guildColor: "#4dd0ff" }),
       mockMsg("mundo", "Syfras999", 2110, "@junitsu bora trocar aquela Rare Candy?", "msg", 1),
@@ -205,6 +206,31 @@ function installMockApi(accs: AccountSnapshot[]) {
             history: [10, 11, 11, -9].map((d, k) => ({ id: 100 + k, won: d > 0, delta: d, opponent: `Selux${k}`, at: "2026-11-14T19:33:33Z" })),
           };
         }),
+      });
+    }
+    if (path === "/api/market/vitrine") {                  // vitrine de Pokémon do modo de demonstração (formato real do servidor)
+      const ficha = { id: 176926002, xp: 15694800, ivs: { hp: 31, atk: 25, def: 28, spAtk: 11, spDef: 19, speed: 8 }, nome: "Furious Scizor", nota: 3.58, level: 100, maxHp: 2808, poder: 366, shiny: false, stats: { hp: 234, atk: 294, def: 254, spAtk: 126, spDef: 192, speed: 143 }, tipos: ["BUG", "STEEL"], refino: { hp: 0, atk: 0, def: 0, spAtk: 0, spDef: 0 }, apelido: null, ivTotal: 122, quality: 1.734, caughtAt: 1795130280057, looktype: 60212, potencia: 2, lookShiny: null, speciesId: 2050, refinoTotal: 0, tmElemental: null, caughtBy: "Nitrixon04" };
+      const listings = [0, 1, 2].map((i) => ({ id: 1691538 + i, expiraEm: Date.now() + 86_400_000, dias: 1, vendedor: ["Nitrixon04", "Dubas", "Ana"][i], vendedorId: 135408 + i, tipo: "pokemon", itemId: null, pokemonId: 176926002 + i, qtd: 1, ficha: { ...ficha, id: 176926002 + i, level: 100 + i * 40 }, preco: 39_000_000 - i * 4_000_000, moeda: "gold", estado: "aberto", criadoEm: Date.now() - 600_000, compravelEm: Date.now() - 1000, editavelEm: Date.now() + 600_000, comprador: null, favoritos: 0 }));
+      return json({ now: Date.now(), total: 3, page: 0, perPage: 20, listings });
+    }
+    if (path === "/api/pokemons") {                       // inventário de Pokémon do modo de demonstração
+      const names = ["Tyranitar", "Venusaur", "Gengar", "Mamoswine", "Dragonite", "Scizor"];
+      const looks = [60248, 60003, 60094, 60473, 60149, 60212];
+      const pokemons = Array.from({ length: 24 }, (_, i) => ({ id: 3289961 + i, account: accs[i % accs.length].id, speciesId: 248, name: names[i % 6], types: ["ROCK", "DARK"], level: 2100 - i * 31, shiny: i % 7 === 3, quality: 1.7, power: 82000 - i * 1500, grade: 4.6 - i * 0.05, slot: i < 3 ? i : null, ivTotal: 150 - i, caughtAt: 1789099341577, looktype: looks[i % 6] }));
+      return json({ pokemons });
+    }
+    if (path.startsWith("/api/pokemon/")) {                // ficha de Pokémon de outros jogadores (chat e mercado)
+      await wait();
+      const q = new URL(url, location.href).searchParams;
+      if (path.startsWith("/api/pokemon/listing/") && path.endsWith("/9999")) return json({ error: "Esse anúncio é de item, não de Pokémon.", code: "item" }, 422);
+      const sent = path.endsWith("/sheet") && init?.body ? (JSON.parse(String(init.body)) as { pokemon?: { dono?: string }; listing?: unknown }) : null;
+      const owner = sent?.pokemon?.dono ?? (path.endsWith("/public") ? q.get("nick") : "JalyTorey");
+      const sp = { pokeId: 2050, name: "Scizor", looktype: 60212, type1: "BUG", type2: "STEEL", rarity: "RARE", baseHp: 70, baseAtk: 130, baseDef: 100, baseSpAtk: 55, baseSpDef: 80, baseSpeed: 65, huntLevel: 90, evolvesToId: 0, evolveLevel: 0, sellValue: 9000, experience: 1200, loot: [], attacks: [{ name: "Fury Cutter", type: "BUG", power: 80, category: "PHYSICAL", cooldownMs: 22000, learnLevel: 1 }] };
+      return json({
+        owner, ...(path.startsWith("/api/pokemon/listing/") ? { listing: { id: 7, price: 450, currency: "orb", qty: 1 } } : sent?.listing ? { listing: sent.listing } : {}),
+        species: sp, range: 1, evolution: { prev: null, next: null, level: 0, prevLevel: 0 }, pokedex: { defeated: null, captured: null }, foundIn: [{ slug: "scizor", name: "Scizor", level: 90, points: 12 }],
+        pokemon: { id: 176926002, speciesId: 2050, nome: "Furious Scizor", looktype: 60212, lookShiny: null, tipos: ["BUG", "STEEL"], level: 100, xp: 15694800, quality: 1.734, potencia: 2, shiny: false, slot: null, maxHp: 2808, poder: 366, nota: 3.58, ivs: { hp: 31, atk: 25, def: 28, spAtk: 11, spDef: 19, speed: 8 }, stats: { hp: 234, atk: 294, def: 254, spAtk: 126, spDef: 192, speed: 143 }, refino: { hp: 0, atk: 0, def: 0, spAtk: 0, spDef: 0 }, refinoTotal: 0, tmElemental: null, caughtAt: 1795130280057, caughtBy: owner },
+        combatHp: 2808, pvpPower: 3116, pvpLevel: 100, pvePower: 366000, bases: { hp: 70, atk: 130, def: 100, spAtk: 55, spDef: 80, speed: 65 },
       });
     }
     const pvpApiM = path.match(/^\/api\/pvp\/(\d+)\/(roster|team-view|team|pokemon\/\d+)$/);

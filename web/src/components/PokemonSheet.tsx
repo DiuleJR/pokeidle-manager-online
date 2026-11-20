@@ -9,6 +9,7 @@ import {
   teamApi,
   type EvolutionBrief,
   type PokemonSheetPayload,
+  type SheetListing,
   type Species,
   type SpeciesPayload,
 } from "@/lib/pvpTeam";
@@ -135,10 +136,16 @@ function Evolution({ ev, self }: { ev: SpeciesPayload["evolution"]; self: Evolut
 // -------------------------------------------------------------- aba Pokémon
 function PokemonTab({ d }: { d: PokemonSheetPayload }) {
   const p = d.pokemon;
-  const ivSum = Object.values(p.ivs).reduce((s, v) => s + v, 0);
-  const maxStat = Math.max(...Object.values(p.stats), 1);
+  const ivs = p.ivs ?? {};
+  const stats = p.stats ?? {};
+  const tipos = p.tipos ?? [];
+  const ivSum = Object.values(ivs).reduce((s, v) => s + v, 0);
+  const maxStat = Math.max(...Object.values(stats), 1);
   const bases = d.bases ?? {};
   const maxBase = Math.max(...Object.values(bases), 1);
+  const xpNivel = p.xpNivel ?? 0;
+  const xpProximo = p.xpProximo ?? 0;
+  const hasXpBar = p.xpProximo != null && p.xpNivel != null;
   const gradeIdx = Math.min(9, Math.max(0, Math.ceil(p.nota) - 1));
   const refino = p.refino ?? {};
   const self: EvolutionBrief = { pokeId: p.speciesId, name: p.nome, looktype: p.looktype };
@@ -152,7 +159,13 @@ function PokemonTab({ d }: { d: PokemonSheetPayload }) {
             {p.shiny && <span title="Shiny">✨</span>}
             <span className="tnum rounded-full border border-line bg-tile px-2 py-0.5 text-xs font-bold">Nv {nf.format(p.level)}</span>
           </div>
-          <div className="flex flex-wrap gap-1.5">{p.tipos.map((t) => <TypeChip key={t} type={t} />)}</div>
+          <div className="flex flex-wrap gap-1.5">{tipos.map((t) => <TypeChip key={t} type={t} />)}</div>
+          {d.owner && (
+            <p className="text-xs text-mute">
+              {d.listing ? "À venda por" : "Do jogador"} <b className="text-fg">{d.owner}</b>
+              {d.listing && <> · <b className="tnum text-poke-gold">{nf.format(d.listing.price)} {d.listing.currency === "orb" ? "Gemas" : "Gold"}</b>{d.listing.qty > 1 ? " cada" : ""}</>}
+            </p>
+          )}
           <p className="text-xs text-mute">Alcance no PVP: <b className="text-fg">{rangeBadge(d.range)} {rangeText(d.range)}</b>{p.tmElemental ? ` · Z-Move ${p.tmElemental}` : ""}</p>
           <div className="grid grid-cols-3 gap-2">
             <Fact label="Potência" value={`P${p.potencia}`} tone={POTENCY_COLOR[p.potencia - 1]} />
@@ -177,8 +190,8 @@ function PokemonTab({ d }: { d: PokemonSheetPayload }) {
 
       <Card title="Stats atuais">
         <div className="flex flex-wrap items-center justify-center gap-3 sm:flex-nowrap">
-          <Radar values={STAT_LABEL.map(([k]) => p.stats[k] ?? 0)} max={maxStat} />
-          <StatBars rows={STAT_LABEL.map(([k, label, iv]) => ({ label, value: p.stats[k] ?? 0, iv: p.ivs[iv], max: maxStat }))} />
+          <Radar values={STAT_LABEL.map(([k]) => stats[k] ?? 0)} max={maxStat} />
+          <StatBars rows={STAT_LABEL.map(([k, label, iv]) => ({ label, value: stats[k] ?? 0, iv: ivs[iv], max: maxStat }))} />
         </div>
         <p className="mt-2 text-[11px] leading-snug text-mute">O IV ao lado de cada stat é sorteado na captura (1 a 32 por stat, soma até 192). Sp.Atk e Sp.Def só contam em golpes especiais.</p>
       </Card>
@@ -196,19 +209,24 @@ function PokemonTab({ d }: { d: PokemonSheetPayload }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card title="Experiência">
-          <div className="h-2.5 overflow-hidden rounded-full bg-tile ring-1 ring-line">
-            <div className="h-full rounded-full bg-[#5cc8e8]" style={{ width: `${Math.min(100, ((p.xp - p.xpNivel) / Math.max(1, p.xpProximo - p.xpNivel)) * 100)}%` }} />
-          </div>
-          <div className="tnum mt-1 text-right text-[11px] text-mute">{nf.format(p.xp - p.xpNivel)} / {nf.format(p.xpProximo - p.xpNivel)} xp</div>
+          {hasXpBar && (
+            <>
+              <div className="h-2.5 overflow-hidden rounded-full bg-tile ring-1 ring-line">
+                <div className="h-full rounded-full bg-[#5cc8e8]" style={{ width: `${Math.min(100, ((p.xp - xpNivel) / Math.max(1, xpProximo - xpNivel)) * 100)}%` }} />
+              </div>
+              <div className="tnum mt-1 text-right text-[11px] text-mute">{nf.format(p.xp - xpNivel)} / {nf.format(xpProximo - xpNivel)} xp</div>
+            </>
+          )}
           <div className="mt-1 grid grid-cols-2 gap-2">
             <Fact label="XP acumulado" value={compact(p.xp)} />
-            <Fact label="Faltam" value={compact(Math.max(0, p.xpProximo - p.xp))} />
+            {hasXpBar && <Fact label="Faltam" value={compact(Math.max(0, xpProximo - p.xp))} />}
           </div>
         </Card>
         <Card title="Identidade">
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <div><dt className="text-[10px] font-extrabold uppercase text-mute">Identidade</dt><dd className="tnum font-bold" style={{ color: VIOLET }}>#{p.id}</dd></div>
             <div><dt className="text-[10px] font-extrabold uppercase text-mute">Capturado em</dt><dd className="font-bold">{p.caughtAt ? new Date(p.caughtAt).toLocaleDateString("pt-BR") : "—"}</dd></div>
+            {typeof p.caughtBy === "string" && p.caughtBy && <div className="col-span-2"><dt className="text-[10px] font-extrabold uppercase text-mute">Capturado por</dt><dd className="font-bold">{p.caughtBy}</dd></div>}
             <div className="col-span-2"><dt className="text-[10px] font-extrabold uppercase text-mute">Espécie</dt><dd className="font-bold">#{p.speciesId} {p.nome}</dd></div>
           </dl>
         </Card>
@@ -324,7 +342,7 @@ function SpeciesTab({ d }: { d: SpeciesPayload }) {
                 <li key={h.slug} className="flex justify-between gap-2"><span className="truncate font-semibold">{h.name}</span><span className="tnum shrink-0 text-mute">Nv {nf.format(h.level)}</span></li>
               ))}
             </ul>
-          ) : <p className="text-sm text-mute">Não aparece em nenhuma hunt desta conta.</p>}
+          ) : <p className="text-sm text-mute">Não aparece em nenhuma hunt.</p>}
         </Card>
       </div>
     </div>
@@ -332,16 +350,32 @@ function SpeciesTab({ d }: { d: SpeciesPayload }) {
 }
 
 // ----------------------------------------------------------------- janela
-export function PokemonSheet({ account, pokemonId, onClose }: { account: number; pokemonId: number; onClose: () => void }) {
+/** De onde vem a ficha: um Pokémon de uma conta sua, um Pokémon em mãos (anúncio da vitrine), um jogador do chat ou um anúncio. */
+export type SheetSource =
+  | { kind: "own"; account: number; id: number }
+  | { kind: "pokemon"; pokemon: Record<string, unknown>; listing?: SheetListing }
+  | { kind: "public"; nick: string; id: number }
+  | { kind: "listing"; id: number };
+
+const loadSheet = (s: SheetSource) =>
+  s.kind === "own" ? teamApi.pokemon(s.account, s.id)
+  : s.kind === "pokemon" ? teamApi.fromPokemon(s.pokemon, s.listing)
+  : s.kind === "public" ? teamApi.publicPokemon(s.nick, s.id)
+  : teamApi.listing(s.id);
+
+export function PokemonSheet({ source, onClose }: { source: SheetSource; onClose: () => void }) {
   const [tab, setTab] = useState<"pokemon" | "species">("pokemon");
   const [data, setData] = useState<PokemonSheetPayload | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let live = true;
-    teamApi.pokemon(account, pokemonId).then((d) => live && setData(d)).catch((e) => live && setErr(e instanceof Error ? e.message : "Falha ao abrir a ficha"));
+    setData(null);
+    setErr("");
+    loadSheet(source).then((d) => live && setData(d)).catch((e) => live && setErr(e instanceof Error ? e.message : "Falha ao abrir a ficha"));
     return () => { live = false; };
-  }, [account, pokemonId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(source)]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

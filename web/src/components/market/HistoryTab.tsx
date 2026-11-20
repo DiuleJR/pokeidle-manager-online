@@ -1,3 +1,4 @@
+import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { useMemo, useState } from "react";
 import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { type Moeda, type TapeRow, marketApi } from "@/lib/market";
@@ -28,6 +29,7 @@ function Variation({ row }: { row: TapeRow }) {
 }
 
 function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
+  const openSheet = useSheet();
   const when = r.em ? fmtTime(r.em) : "";
   if (r.tipo === "deposito" || r.tipo === "saque") {
     return (
@@ -44,9 +46,14 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
     );
   }
   const f = r.ficha;
+  const canOpen = r.tipo === "pokemon" && !!f && (!!f.stats || !!f.ivs);
   const who = mode === "vendas" ? `para ${r.comprador ?? "?"}` : mode === "compras" ? `de ${r.vendedor ?? "?"}` : `${r.vendedor ?? "?"} → ${r.comprador ?? "?"}`;
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
+      <div
+        className={`flex min-w-0 flex-1 items-center gap-3 ${canOpen ? "-m-1 cursor-pointer rounded-lg p-1 transition-colors hover:bg-white/5" : ""}`}
+        {...(canOpen ? { "aria-label": `Abrir a ficha de ${r.descricao ?? "Pokémon"}`, ...sheetTrigger((el) => openSheet({ kind: "pokemon", pokemon: { ...f, dono: r.vendedor ?? undefined } }, el)) } : {})}
+      >
       <span className="grid size-10 shrink-0 place-items-center">
         {r.tipo === "pokemon" ? <PokemonSprite looktype={f?.looktype} size={40} /> : r.itemIcon ? <ItemSprite icon={r.itemIcon} size={36} alt="" /> : <span className="text-2xl" aria-hidden>📦</span>}
       </span>
@@ -58,6 +65,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
         <p className="truncate text-xs text-mute">
           {when} · {who}
         </p>
+      </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5">
         <Money v={r.bruto} moeda={(r.moeda ?? "gold") as Moeda} className="font-bold" />

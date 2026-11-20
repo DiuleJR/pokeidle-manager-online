@@ -6,6 +6,7 @@ import { Check2 } from "@/components/SettingsView";
 import { PokemonSprite, ShinyMark } from "@/components/Sprites";
 import { type Listing, type Moeda, marketApi, secondsUntil } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
+import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { BuyDialog } from "./BuyDialog";
 import { RuleDialog } from "./RulesTab";
 import { CurrencyToggle, ErrorBox, Loading, Money, type MoedaSel, Pager, fmtCountdown, useAsync, useTick } from "./shared";
@@ -19,6 +20,7 @@ const ORDERS = [
 
 /** Vitrine de Pokémon à venda. Os filtros avançados ficam recolhidos. */
 export function PokemonTab() {
+  const openSheet = useSheet();
   const [moeda, setMoeda] = useState<MoedaSel>("gold");
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
@@ -146,6 +148,11 @@ export function PokemonTab() {
               const iv = f.ivTotal != null ? Math.round((f.ivTotal / 192) * 100) : null;
               return (
                 <Reveal as="li" key={l.id} index={n} step={0.025} max={14} className="tile flex items-center gap-2.5 p-2 sm:gap-3 sm:p-2.5">
+                  <div
+                    className="-m-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-white/5 sm:gap-3"
+                    aria-label={`Abrir a ficha de ${f.nome ?? "Pokémon"}`}
+                    {...sheetTrigger(() => openSheet({ kind: "pokemon", pokemon: { ...f, dono: l.vendedor }, listing: { id: l.id, price: l.preco, currency: l.moeda === "orb" ? "orb" as const : "gold" as const, qty: l.qtd } }))}
+                  >
                   <PokemonSprite looktype={f.looktype} size={56} />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
@@ -159,6 +166,7 @@ export function PokemonTab() {
                       <span className="truncate">{l.vendedor}</span>
                     </p>
                     {wait > 0 && <p className="tnum mt-0.5 text-xs text-poke-gold">libera em {fmtCountdown(wait)}</p>}
+                  </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <Money v={l.preco} moeda={l.moeda} short className="text-[15px] font-bold" />

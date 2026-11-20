@@ -248,7 +248,7 @@ function AccountPvp({ a, index, onChanged }: { a: PvpAccount; index: number; onC
       {createPortal(
         <AnimatePresence>
           {editing && <PvpTeamEditor account={a.id} nick={a.nick} levelMin={a.levelMin} onClose={() => setEditing(false)} onSaved={onChanged} />}
-          {sheet != null && <PokemonSheet account={a.id} pokemonId={sheet} onClose={() => setSheet(null)} />}
+          {sheet != null && <PokemonSheet source={{ kind: "own", account: a.id, id: sheet }} onClose={() => setSheet(null)} />}
         </AnimatePresence>,
         document.body,
       )}

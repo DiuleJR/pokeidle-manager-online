@@ -7,6 +7,7 @@ import { type Listing, type MarketItem, type Moeda, type Wallet, marketApi } fro
 import { useAccountsMap } from "@/lib/telemetry";
 import { fmtUsd } from "@/lib/valuation";
 import { fmtInt } from "@/lib/utils";
+import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { CalcCard } from "./CalcTab";
 import { AccountPicker, ErrorBox, Loading, Money, fmtWhen, secondsLabel, useAsync, useOnlineAccounts } from "./shared";
 
@@ -80,8 +81,14 @@ function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
   const floor = !isMon && it ? (l.moeda === "orb" ? it.minOrb : it.minGold) : null;
   const avg = !isMon && it ? (l.moeda === "orb" ? it.avgOrb : it.avgGold) : null;
   const vsAvg = avg ? l.preco / avg - 1 : null;
+  const openSheet = useSheet();
+  const ficha = isMon ? l.ficha : undefined;
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
+      <div
+        className={`flex min-w-0 flex-1 items-center gap-3 ${ficha ? "-m-1 cursor-pointer rounded-lg p-1 transition-colors hover:bg-white/5" : ""}`}
+        {...(ficha ? { "aria-label": `Abrir a ficha de ${ficha.nome ?? "Pokémon"}`, ...sheetTrigger((el) => openSheet({ kind: "pokemon", pokemon: { ...ficha, dono: r.nick }, listing: { id: l.id, price: l.preco, currency: l.moeda === "orb" ? "orb" as const : "gold" as const, qty: l.qtd } }, el)) } : {})}
+      >
       <span className="grid size-10 shrink-0 place-items-center">
         {isMon ? <PokemonSprite looktype={l.ficha?.looktype} size={40} /> : <ItemSprite icon={it?.icon} size={36} alt="" />}
       </span>
@@ -100,6 +107,7 @@ function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
             </>
           )}
         </p>
+      </div>
       </div>
       <div className="shrink-0 text-right">
         <Money v={l.preco} moeda={l.moeda} className="text-base font-extrabold" />
