@@ -119,6 +119,18 @@ def register_market_routes(app: FastAPI, manager: "AccountManager", store: "Stor
         except MarketError as e:
             return fail(e)
 
+    _pokemon_names: list[str] = []
+
+    @app.get("/api/market/pokemon-names")
+    async def pokemon_names(request: Request, tok: str | None = Query(None, alias="token")):
+        """Nomes de todas as espécies (sem repetir, em ordem alfabética), para a busca com sugestões."""
+        if (r := guard(request, tok)):
+            return r
+        if not _pokemon_names:
+            from game_data import POKEMON_NAMES
+            _pokemon_names.extend(sorted({str(n) for n in POKEMON_NAMES.values() if n}, key=str.lower))
+        return {"names": _pokemon_names}
+
     @app.get("/api/market/item")
     async def item(request: Request, itemId: int = Query(ge=1), moeda: Literal["gold", "orb"] = "gold",
                    account: int | None = None, tok: str | None = Query(None, alias="token")):

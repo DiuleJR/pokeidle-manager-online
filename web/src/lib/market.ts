@@ -235,6 +235,7 @@ const qs = (p: Record<string, string | number | boolean | null | undefined>) => 
 };
 
 export const marketApi = {
+  pokemonNames: () => call<{ names: string[] }>("GET", "/api/market/pokemon-names"),
   overview: (force = false) => call<Overview>("GET", `/api/market/overview${qs({ force })}`),
   item: (itemId: number, moeda: Moeda, account?: number) =>
     call<ItemListings>("GET", `/api/market/item${qs({ itemId, moeda, account })}`),

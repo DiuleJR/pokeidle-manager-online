@@ -88,24 +88,41 @@ export function HistoryTab() {
   const [moeda, setMoeda] = useState("");
   const [busca, setBusca] = useState("");
   const [applied, setApplied] = useState("");
-  const [item, setItem] = useState<{ id: number; name: string } | null>(null); // item escolhido na busca (Só itens)
+  const [item, setItem] = useState<{ id: number; name: string } | null>(null); // item escolhido na busca
   const [showList, setShowList] = useState(false);
   const [page, setPage] = useState(0);
   const L = useItemLabel();
-  const ov = useAsync(() => marketApi.overview(), [], { every: 300000, skip: tipo !== "item" });
-  const itemMatches = useMemo(() => {
+  const canSearch = tipo === "" || tipo === "item" || tipo === "pokemon";
+  const ov = useAsync(() => marketApi.overview(), [], { every: 300000, skip: !(tipo === "" || tipo === "item") });
+  const names = useAsync(() => marketApi.pokemonNames(), [], { skip: !(tipo === "" || tipo === "pokemon") });
+  type Hit = { kind: "item"; id: number; name: string; icon: string | null } | { kind: "pokemon"; name: string };
+  const hits = useMemo<Hit[]>(() => {
     const q = busca.trim().toLowerCase();
-    if (!q || item) return [];
-    return (ov.data?.items ?? []).filter((i) => i.name.toLowerCase().includes(q) || L(i.name, i.id).toLowerCase().includes(q)).slice(0, 8);
-  }, [ov.data, busca, item, L]);
-  const pickItem = (i: { id: number; name: string }) => {
-    setItem({ id: i.id, name: i.name });
-    setBusca(L(i.name, i.id));
+    if (!q || item || applied) return [];
+    const out: Hit[] = [];
+    if (tipo !== "pokemon") for (const i of ov.data?.items ?? []) if (i.name.toLowerCase().includes(q) || L(i.name, i.id).toLowerCase().includes(q)) out.push({ kind: "item", id: i.id, name: i.name, icon: i.icon });
+    if (tipo !== "item") for (const n of names.data?.names ?? []) if (n.toLowerCase().includes(q)) out.push({ kind: "pokemon", name: n });
+    // quem começa com o texto vem primeiro
+    return out.sort((a, b) => Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q))).slice(0, 8);
+  }, [ov.data, names.data, busca, item, applied, tipo, L]);
+  const pick = (h: Hit) => {
     setShowList(false);
     setPage(0);
+    if (h.kind === "item") {
+      setTipo("item");
+      setItem({ id: h.id, name: h.name });
+      setApplied("");
+      setBusca(L(h.name, h.id));
+    } else {
+      setTipo("pokemon");
+      setItem(null);
+      setApplied(h.name);
+      setBusca(h.name);
+    }
   };
-  const clearItem = () => {
+  const clearSearch = () => {
     setItem(null);
+    setApplied("");
     setBusca("");
     setPage(0);
   };
@@ -170,44 +187,51 @@ export function HistoryTab() {
             <option value="orb">Só Gemas</option>
           </select>
         )}
-        {tipo === "item" && (
+        {canSearch && (
           <form
             className="relative flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (itemMatches[0]) pickItem(itemMatches[0]);
+              if (hits[0]) pick(hits[0]);
+              else if (tipo === "pokemon" && busca.trim()) {
+                setApplied(busca.trim());
+                setPage(0);
+                setShowList(false);
+              }
             }}
           >
             <div className="relative">
               <input
                 className="field w-52 pr-8"
                 type="search"
-                placeholder="Nome do item"
+                placeholder={tipo === "item" ? "Nome do item" : tipo === "pokemon" ? "Nome do Pokémon" : "Nome do item ou Pokémon"}
                 value={busca}
                 onChange={(e) => {
                   setBusca(e.target.value);
                   setItem(null);
+                  setApplied("");
                   setShowList(true);
                   setPage(0);
                 }}
                 onFocus={() => setShowList(true)}
                 onBlur={() => window.setTimeout(() => setShowList(false), 120)}
                 maxLength={40}
-                aria-label="Buscar item pelo nome"
+                aria-label="Buscar pelo nome"
                 aria-autocomplete="list"
               />
-              {item && (
-                <button type="button" onClick={clearItem} aria-label="Limpar a busca" className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-mute hover:text-fg">
+              {(item || applied) && (
+                <button type="button" onClick={clearSearch} aria-label="Limpar a busca" className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-mute hover:text-fg">
                   <X className="size-4" aria-hidden />
                 </button>
               )}
-              {showList && itemMatches.length > 0 && (
+              {showList && hits.length > 0 && (
                 <ul role="listbox" className="absolute left-0 top-full z-30 mt-1 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-auto rounded-xl border border-edge bg-surface p-1 shadow-xl">
-                  {itemMatches.map((i) => (
-                    <li key={i.id} role="option" aria-selected="false">
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickItem(i)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold hover:bg-tile">
-                        <ItemSprite icon={i.icon} size={26} alt="" />
-                        <span className="truncate">{L(i.name, i.id)}</span>
+                  {hits.map((h) => (
+                    <li key={h.kind === "item" ? `i${h.id}` : `p${h.name}`} role="option" aria-selected="false">
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(h)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold hover:bg-tile">
+                        {h.kind === "item" ? <ItemSprite icon={h.icon} size={26} alt="" /> : <span className="grid size-[26px] shrink-0 place-items-center text-base" aria-hidden>🐾</span>}
+                        <span className="min-w-0 flex-1 truncate">{h.kind === "item" ? L(h.name, h.id) : h.name}</span>
+                        {tipo === "" && <span className="shrink-0 text-[11px] font-medium text-mute">{h.kind === "item" ? "Item" : "Pokémon"}</span>}
                       </button>
                     </li>
                   ))}
@@ -219,27 +243,12 @@ export function HistoryTab() {
             </button>
           </form>
         )}
-        {tipo === "pokemon" && (
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setApplied(busca.trim());
-              setPage(0);
-            }}
-          >
-            <input className="field w-40" type="search" placeholder="Nome do Pokémon" value={busca} onChange={(e) => setBusca(e.target.value)} maxLength={40} />
-            <button className="btn" type="submit">
-              Buscar
-            </button>
-          </form>
-        )}
       </div>
 
       <p className="text-xs text-mute">
         {mode === "global"
-          ? tipo === "item" && !item
-            ? "As vendas mais recentes de todo o servidor. Digite o nome de um item e escolha na lista para ver só as vendas dele. ▲/▼ compara com a venda anterior do mesmo item."
+          ? canSearch && !item && !applied
+            ? "As vendas mais recentes de todo o servidor. Digite um nome e escolha na lista para ver só as vendas dele. ▲/▼ compara com a venda anterior do mesmo item."
             : "As vendas mais recentes de todo o servidor. Use como referência de preço. ▲/▼ compara com a venda anterior do mesmo item."
           : mode === "vendas"
             ? "O que a conta escolhida vendeu."
