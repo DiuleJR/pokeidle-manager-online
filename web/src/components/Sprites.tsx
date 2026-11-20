@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAtlas } from "@/lib/api";
+import { call } from "@/lib/admin";
 
 const SITE = "https://pokeidle.io";
 
@@ -23,10 +24,59 @@ export function ShinyMark({ className = "" }: { className?: string }) {
   );
 }
 
+/** Looktype a desenhar: o da forma shiny quando o Pokémon é shiny e o jogo informou qual é. */
+export const lookOf = (p?: { shiny?: boolean; lookShiny?: unknown; looktype?: number | null } | null): number | null | undefined =>
+  p?.shiny && typeof p.lookShiny === "number" ? p.lookShiny : p?.looktype;
+
+/** Quadro do Pokémon fora do atlas (formas Mega, shinies): página de textura do jogo + retângulo do quadro. */
+interface Outfit {
+  image: string;
+  pageW: number;
+  pageH: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+const outfitDone = new Map<number, Outfit | null>();
+const outfitPending = new Map<number, Promise<Outfit | null>>();
+
+function loadOutfit(looktype: number): Promise<Outfit | null> {
+  let p = outfitPending.get(looktype);
+  if (!p) {
+    p = call<Outfit>("GET", `/api/sprite/${looktype}`)
+      .catch(() => null)
+      .then((o) => {
+        outfitDone.set(looktype, o);
+        outfitPending.delete(looktype);
+        if (!o) setTimeout(() => outfitDone.delete(looktype), 60_000); // falha/ausente: tenta de novo depois
+        return o;
+      });
+    outfitPending.set(looktype, p);
+  }
+  return p;
+}
+
+/** Sprite de outfit do jogo para um looktype que não está no atlas. `enabled` espera o atlas carregar antes de perguntar. */
+function useOutfit(looktype: number | null | undefined, enabled: boolean): Outfit | null | undefined {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!enabled || looktype == null || outfitDone.has(looktype)) return;
+    let live = true;
+    void loadOutfit(looktype).then(() => live && force((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [looktype, enabled]);
+  return enabled && looktype != null ? outfitDone.get(looktype) : undefined;
+}
+
 /** Retrato do Pokémon (atlas de marcadores do jogo, indexado por looktype). */
 export function PokemonSprite({ looktype, size = 64 }: { looktype?: number | null; size?: number; shiny?: boolean }) {
   const atlas = useAtlas();
   const slot = looktype != null ? atlas?.slots[String(looktype)] : undefined;
+  const outfit = useOutfit(looktype, !!atlas && !slot);
+  const fit = outfit ? Math.min(size / outfit.w, size / outfit.h) : 1;
   return (
     <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
       {slot && atlas ? (
@@ -38,6 +88,18 @@ export function PokemonSprite({ looktype, size = 64 }: { looktype?: number | nul
             backgroundImage: `url('${atlas.image}')`,
             backgroundSize: `${atlas.cols * size}px ${atlas.rows * size}px`,
             backgroundPosition: `${-slot[0] * size}px ${-slot[1] * size}px`,
+            imageRendering: "pixelated",
+          }}
+        />
+      ) : outfit ? (
+        <span
+          role="img"
+          style={{
+            width: outfit.w * fit,
+            height: outfit.h * fit,
+            backgroundImage: `url('${outfit.image}')`,
+            backgroundSize: `${outfit.pageW * fit}px ${outfit.pageH * fit}px`,
+            backgroundPosition: `${-outfit.x * fit}px ${-outfit.y * fit}px`,
             imageRendering: "pixelated",
           }}
         />

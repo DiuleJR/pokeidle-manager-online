@@ -211,8 +211,14 @@ function installMockApi(accs: AccountSnapshot[]) {
     }
     if (path === "/api/market/vitrine") {                  // vitrine de Pokémon do modo de demonstração (formato real do servidor)
       const ficha = { id: 176926002, xp: 15694800, ivs: { hp: 31, atk: 25, def: 28, spAtk: 11, spDef: 19, speed: 8 }, nome: "Furious Scizor", nota: 3.58, level: 100, maxHp: 2808, poder: 366, shiny: false, stats: { hp: 234, atk: 294, def: 254, spAtk: 126, spDef: 192, speed: 143 }, tipos: ["BUG", "STEEL"], refino: { hp: 0, atk: 0, def: 0, spAtk: 0, spDef: 0 }, apelido: null, ivTotal: 122, quality: 1.734, caughtAt: 1795130280057, looktype: 60212, potencia: 2, lookShiny: null, speciesId: 2050, refinoTotal: 0, tmElemental: null, caughtBy: "Nitrixon04" };
-      const listings = [0, 1, 2].map((i) => ({ id: 1691538 + i, expiraEm: Date.now() + 86_400_000, dias: 1, vendedor: ["Nitrixon04", "Dubas", "Ana"][i], vendedorId: 135408 + i, tipo: "pokemon", itemId: null, pokemonId: 176926002 + i, qtd: 1, ficha: { ...ficha, id: 176926002 + i, level: 100 + i * 40 }, preco: 39_000_000 - i * 4_000_000, moeda: "gold", estado: "aberto", criadoEm: Date.now() - 600_000, compravelEm: Date.now() - 1000, editavelEm: Date.now() + 600_000, comprador: null, favoritos: 0 }));
+      const listings = [0, 1, 2].map((i) => ({ id: 1691538 + i, expiraEm: Date.now() + 86_400_000, dias: 1, vendedor: ["Nitrixon04", "Dubas", "Ana"][i], vendedorId: 135408 + i, tipo: "pokemon", itemId: null, pokemonId: 176926002 + i, qtd: 1, ficha: { ...ficha, id: 176926002 + i, level: 100 + i * 40, ...(i === 1 ? { nome: "Mega Tyranitar", shiny: true, looktype: 80248, lookShiny: 85248 } : {}) }, preco: 39_000_000 - i * 4_000_000, moeda: "gold", estado: "aberto", criadoEm: Date.now() - 600_000, compravelEm: Date.now() - 1000, editavelEm: Date.now() + 600_000, comprador: null, favoritos: 0 }));
       return json({ now: Date.now(), total: 3, page: 0, perPage: 20, listings });
+    }
+    if (path === "/api/sprite-atlas") return json({ cell: 64, cols: 16, rows: 1, version: "mock", image: "https://pokeidle.io/assets/site/assets/maps/marker-atlas.png", slots: {} });
+    if (path.startsWith("/api/sprite/")) {                // sprite de outfit (Mega/shiny): o servidor real devolve o quadro da página do jogo
+      const lt = Number(path.split("/").pop());
+      if (lt === 1) return json({ error: "esse looktype não tem sprite" }, 404);
+      return json({ image: "https://pokeidle.io/assets/asset-packs/outfits/male/80248/outfits-male-80248-00-4b1d43b135e5.webp", pageW: 4094, pageH: 66, x: 398, y: 2, w: 64, h: 64 });
     }
     if (path === "/api/pokemons") {                       // inventário de Pokémon do modo de demonstração
       const names = ["Tyranitar", "Venusaur", "Gengar", "Mamoswine", "Dragonite", "Scizor"];

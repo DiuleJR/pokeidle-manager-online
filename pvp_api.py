@@ -16,6 +16,8 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from sprite_outfit import look_of
+
 if TYPE_CHECKING:
     from auth import Auth
     from connection import AccountConnection
@@ -45,7 +47,7 @@ def _team_rows(c: "AccountConnection") -> list[dict]:
         if p is None:
             rows.append({"id": pid, "missing": True})
             continue
-        rows.append({"id": pid, "name": p.get("nome"), "level": p.get("level"), "looktype": p.get("looktype"),
+        rows.append({"id": pid, "name": p.get("nome"), "level": p.get("level"), "looktype": look_of(p),
                      "shiny": bool(p.get("shiny")), "types": p.get("tipos") or [], "power": p.get("poder")})
     return rows
 

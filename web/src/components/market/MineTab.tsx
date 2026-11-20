@@ -1,7 +1,7 @@
 import { ChevronDown, Lock, TrendingUp } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Notice } from "@/components/SettingsView";
-import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
+import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { Coin } from "@/components/ui";
 import { type Listing, type MarketItem, type Moeda, type Wallet, marketApi } from "@/lib/market";
 import { useAccountsMap } from "@/lib/telemetry";
@@ -90,7 +90,7 @@ function ListingRow({ r, it }: { r: Row; it?: MarketItem }) {
         {...(ficha ? { "aria-label": `Abrir a ficha de ${ficha.nome ?? "Pokémon"}`, ...sheetTrigger((el) => openSheet({ kind: "pokemon", pokemon: { ...ficha, dono: r.nick }, listing: { id: l.id, price: l.preco, currency: l.moeda === "orb" ? "orb" as const : "gold" as const, qty: l.qtd } }, el)) } : {})}
       >
       <span className="grid size-10 shrink-0 place-items-center">
-        {isMon ? <PokemonSprite looktype={l.ficha?.looktype} size={40} /> : <ItemSprite icon={it?.icon} size={36} alt="" />}
+        {isMon ? <PokemonSprite looktype={lookOf(l.ficha as never)} size={40} /> : <ItemSprite icon={it?.icon} size={36} alt="" />}
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-bold leading-tight">

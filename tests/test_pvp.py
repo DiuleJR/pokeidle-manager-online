@@ -401,3 +401,48 @@ def test_chat_rows_carry_the_pokemon_and_listing_links():
     assert shiny["pk"] == {"nick": "yLuffyD", "id": 9, "label": "Staravia"} and "Staravia" in shiny["text"]
     assert normalize({**base, "id": 3, "texto": "oi"})["pk"] is None
     assert normalize({**base, "id": 4, "pkShare": {"nick": "A", "nome": "B"}})["pk"] is None      # sem id: sem link
+
+
+# ------------------------------------------------- sprites fora do atlas (Mega, shiny)
+def test_look_of_prefers_the_shiny_form_only_for_shinies():
+    from sprite_outfit import look_of
+    assert look_of({"looktype": 60248, "lookShiny": 70248, "shiny": True}) == 70248
+    assert look_of({"looktype": 60248, "lookShiny": 70248, "shiny": False}) == 60248
+    assert look_of({"looktype": 60248, "shiny": True}) == 60248            # shiny sem forma conhecida: a comum
+    assert look_of(None) is None
+
+
+def test_outfit_frame_is_the_first_front_frame_and_skips_masks():
+    from sprite_outfit import pick_frame
+    fr = lambda x: {"frames": [{"page": 0, "x": x, "y": 2, "w": 64, "h": 64}]}      # noqa: E731
+    manifest = {"assets": {
+        "/assets/outfits/male/9/2_1_1_1.png": fr(100),         # quadro 2 de outra direção
+        "/assets/outfits/male/9/2_1_1_3.png": fr(300),         # quadro 2 de frente
+        "/assets/outfits/male/9/1_1_1_3.png": fr(200),         # quadro 1 de frente  <- o escolhido
+        "/assets/outfits/male/9/1_1_1_3_template.png": fr(999),  # máscara de colorização
+    }}
+    assert pick_frame(manifest) == {"page": 0, "x": 200, "y": 2, "w": 64, "h": 64}
+    only_side = {"assets": {"/a/1_1_1_2.png": fr(7)}}
+    assert pick_frame(only_side)["x"] == 7                      # sem direção de frente: usa a que houver
+    assert pick_frame({"assets": {}}) is None
+
+
+def test_sprite_route_serves_the_resolved_frame_and_reports_missing(sheets, monkeypatch):
+    client, _, _, _ = sheets
+    import sprite_outfit
+
+    async def fake_resolve(self, looktype):
+        return None if looktype == 1 else {"image": "https://pokeidle.io/x.webp", "pageW": 4094, "pageH": 34, "x": 2, "y": 2, "w": 32, "h": 32}
+
+    monkeypatch.setattr(sprite_outfit.OutfitSprites, "_resolve", fake_resolve)
+    ok = client.get("/api/sprite/80248", headers=H)
+    assert ok.status_code == 200 and ok.json()["w"] == 32 and "max-age" in ok.headers["cache-control"]
+    assert client.get("/api/sprite/1", headers=H).status_code == 404
+    assert client.get("/api/sprite/80248").status_code in (401, 403)
+
+
+def test_lists_use_the_shiny_look(sheets):
+    client, conn, acc_id, _ = sheets
+    conn.estado["pokemons"] = [{**TYR_PK, "id": 9, "nome": "Tyranitar", "shiny": True, "looktype": 60248, "lookShiny": 70248, "tipos": []}]
+    row = client.get(f"/api/pvp/{acc_id}/roster", headers=H).json()["items"][0]
+    assert row["looktype"] == 70248

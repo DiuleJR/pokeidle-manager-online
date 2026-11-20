@@ -13,28 +13,27 @@ export const rangeLabel = (r: number) => (r > 1 ? `${r} à distância` : "corpo 
 const rangeColor = (r: number) => (r > 1 ? "#2f8a5a" : "#c25a2a");
 
 /**
- * Imagem que acompanha o ponteiro ao arrastar: só o sprite, com o alcance em cima (como no jogo),
- * em vez do cartão inteiro que o navegador usaria por padrão.
- */
-const atlasImages = new Map<string, HTMLImageElement>();
-const bgUrl = (el: HTMLElement) => /url\(["']?(.*?)["']?\)/.exec(el.style.backgroundImage)?.[1] ?? null;
-
-/** Carrega o atlas de retratos antes do primeiro arrasto: o navegador só captura a imagem do arrasto na hora, sem esperar. */
-export function warmAtlas(root: ParentNode | null) {
-  const el = root?.querySelector<HTMLElement>('[role="img"]');
-  const url = el ? bgUrl(el) : null;
-  if (url && !atlasImages.has(url)) {
-    const img = new Image();
-    img.src = url;
-    atlasImages.set(url, img);
-  }
-}
-
-/**
  * Imagem que acompanha o ponteiro ao arrastar: só o sprite, com o alcance em cima (como no jogo), em vez do
  * cartão inteiro. É desenhada num canvas porque o navegador captura o arrasto na hora e um fundo CSS recém-criado
- * ainda não foi pintado (saía só o selo, sem o Pokémon).
+ * ainda não foi pintado (saía só o selo, sem o Pokémon). Serve para qualquer sprite do painel: célula do atlas
+ * ou quadro de outfit (Mega, shiny), pois lê a imagem, a escala e o deslocamento direto do estilo do elemento.
  */
+const spriteImages = new Map<string, HTMLImageElement>();
+const bgUrl = (el: HTMLElement) => /url\(["']?(.*?)["']?\)/.exec(el.style.backgroundImage)?.[1] ?? null;
+
+/** Carrega as imagens dos sprites visíveis antes do arrasto: o navegador só captura a imagem na hora, sem esperar. */
+export function warmSprites(root: ParentNode | null) {
+  let n = 0;
+  root?.querySelectorAll<HTMLElement>('[role="img"]').forEach((el) => {
+    const url = n < 80 ? bgUrl(el) : null;
+    if (!url || spriteImages.has(url)) return;
+    n++;
+    const img = new Image();
+    img.src = url;
+    spriteImages.set(url, img);
+  });
+}
+
 function setDragGhost(e: React.DragEvent, root: HTMLElement | null, range: number) {
   const k = 1.6;
   const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
@@ -45,10 +44,12 @@ function setDragGhost(e: React.DragEvent, root: HTMLElement | null, range: numbe
   measure.font = font;
   const pillW = Math.ceil(measure.measureText(label).width) + 18;
   const sprite = root?.querySelector<HTMLElement>('[role="img"]') ?? null;
-  const size = sprite ? parseInt(sprite.style.width, 10) || 48 : 0;
-  const box = size * k;
-  const W = Math.max(pillW, box, 40);
-  const H = 16 + 4 + box;
+  const sw = sprite ? parseFloat(sprite.style.width) || 48 : 0;
+  const sh = sprite ? parseFloat(sprite.style.height) || sw : 0;
+  const boxW = sw * k;
+  const boxH = sh * k;
+  const W = Math.max(pillW, boxW, 40);
+  const H = 16 + 4 + boxH;
   const c = document.createElement("canvas");
   c.width = W * dpr;
   c.height = H * dpr;
@@ -68,16 +69,13 @@ function setDragGhost(e: React.DragEvent, root: HTMLElement | null, range: numbe
   ctx.textBaseline = "middle";
   ctx.fillText(label, W / 2, 8.5);
   const url = sprite ? bgUrl(sprite) : null;
-  const img = url ? atlasImages.get(url) : undefined;
+  const img = url ? spriteImages.get(url) : undefined;
   if (sprite && img?.complete && img.naturalWidth) {
-    const [bw, bh] = sprite.style.backgroundSize.split(" ").map((v) => parseFloat(v));
+    const [bw] = sprite.style.backgroundSize.split(" ").map((v) => parseFloat(v));
     const [px, py] = sprite.style.backgroundPosition.split(" ").map((v) => parseFloat(v));
-    const cols = bw / size;
-    const rows = bh / size;
-    const cw = img.naturalWidth / cols;
-    const ch = img.naturalHeight / rows;
+    const scale = bw / img.naturalWidth;                  // quanto a imagem está ampliada no elemento
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, (-px / size) * cw, (-py / size) * ch, cw, ch, (W - box) / 2, 20, box, box);
+    ctx.drawImage(img, -px / scale, -py / scale, sw / scale, sh / scale, (W - boxW) / 2, 20, boxW, boxH);
   }
   document.body.appendChild(c);
   e.dataTransfer.setDragImage(c, W / 2, H - 8);
@@ -130,8 +128,8 @@ export function Board({
   }, [ids, placement]);
   const [over, setOver] = useState<number | null>(null);
   useEffect(() => {
-    warmAtlas(document);
-    const t = setTimeout(() => warmAtlas(document), 1200);   // a lista carrega depois; o atlas já está no cache do navegador
+    warmSprites(document);
+    const t = setTimeout(() => warmSprites(document), 1200);   // a lista e os sprites de outfit carregam depois
     return () => clearTimeout(t);
   }, [ids]);
   return (
@@ -165,6 +163,7 @@ export function Board({
               {m && id != null && (
                 <span
                   draggable
+                  onPointerEnter={(e) => warmSprites(e.currentTarget)}
                   onDragStart={(e) => { e.dataTransfer.setData("text/plain", `tile:${id}`); e.dataTransfer.effectAllowed = "move"; setDragGhost(e, e.currentTarget, m.range); }}
                   className="absolute inset-0 flex cursor-grab flex-col items-center justify-center active:cursor-grabbing"
                 >
@@ -191,6 +190,7 @@ export function RosterCard({ r, picked, onToggle, onInfo }: { r: RosterRow; pick
   return (
     <div
       draggable
+      onPointerEnter={(e) => warmSprites(e.currentTarget)}
       onDragStart={(e) => { e.dataTransfer.setData("text/plain", `pk:${r.id}`); e.dataTransfer.effectAllowed = "copyMove"; setDragGhost(e, e.currentTarget, r.range); }}
       role="button"
       tabIndex={0}

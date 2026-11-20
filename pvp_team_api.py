@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 import pvp_power as pw
 from actions_api import load_catalog
+from sprite_outfit import look_of
 
 if TYPE_CHECKING:
     from auth import Auth
@@ -43,7 +44,7 @@ def roster_row(pk: dict, esp: dict | None, in_team: bool) -> dict:
     types = pk.get("tipos") or [t for t in ((esp or {}).get("type1"), (esp or {}).get("type2")) if t]
     return {
         "id": pk.get("id"), "speciesId": pk.get("speciesId"), "name": pk.get("nome"), "level": pk.get("level") or 1,
-        "looktype": pk.get("looktype"), "shiny": bool(pk.get("shiny")), "types": types,
+        "looktype": look_of(pk), "shiny": bool(pk.get("shiny")), "types": types,
         "pvpPower": pw.pvp_power(pk, esp), "pvpLevel": pw.arena_level(pk.get("level")), "power": pk.get("poder"),
         "quality": pk.get("quality"), "potency": pk.get("potencia"), "grade": pk.get("nota"), "ivTotal": _iv_total(pk),
         "range": pw.species_range(esp), "hunting": pk.get("slot") is not None, "inTeam": in_team,

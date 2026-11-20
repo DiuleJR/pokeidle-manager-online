@@ -1,6 +1,6 @@
 import { sheetTrigger, useSheet } from "@/lib/sheet";
 import { useMemo, useState } from "react";
-import { ItemSprite, PokemonSprite, ShinyMark } from "@/components/Sprites";
+import { ItemSprite, PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Moeda, type TapeRow, marketApi } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
 import { AccountPicker, ErrorBox, Loading, Money, Pager, Seg, dayHeading, fmtTime, useAsync } from "./shared";
@@ -55,7 +55,7 @@ function Row({ r, mode }: { r: TapeRow; mode: Mode }) {
         {...(canOpen ? { "aria-label": `Abrir a ficha de ${r.descricao ?? "Pokémon"}`, ...sheetTrigger((el) => openSheet({ kind: "pokemon", pokemon: { ...f, dono: r.vendedor ?? undefined } }, el)) } : {})}
       >
       <span className="grid size-10 shrink-0 place-items-center">
-        {r.tipo === "pokemon" ? <PokemonSprite looktype={f?.looktype} size={40} /> : r.itemIcon ? <ItemSprite icon={r.itemIcon} size={36} alt="" /> : <span className="text-2xl" aria-hidden>📦</span>}
+        {r.tipo === "pokemon" ? <PokemonSprite looktype={lookOf(f as never)} size={40} /> : r.itemIcon ? <ItemSprite icon={r.itemIcon} size={36} alt="" /> : <span className="text-2xl" aria-hidden>📦</span>}
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-bold">

@@ -15,6 +15,7 @@ from __future__ import annotations
 from battle_pass import passe_publico
 from maps import REGION_LABELS, region_of_hunt
 from session_stats import hunt_is_outland
+from sprite_outfit import look_of
 
 import asyncio
 import json
@@ -106,7 +107,7 @@ def pokemon_rows(c: "AccountConnection") -> list[dict]:
             "name": p.get("nome"), "types": p.get("tipos") or [], "level": p.get("level"),
             "shiny": bool(p.get("shiny")), "quality": p.get("quality"), "power": p.get("poder"),
             "grade": p.get("nota"), "slot": p.get("slot"), "ivTotal": sum(v for v in ivs.values() if isinstance(v, (int, float))),
-            "caughtAt": p.get("caughtAt"), "looktype": p.get("looktype"),
+            "caughtAt": p.get("caughtAt"), "looktype": look_of(p),
         })
     return rows
 
@@ -208,7 +209,7 @@ def account_snapshot(c: "AccountConnection") -> dict:
             "hp": pk.get("hp", 0),
             "maxHp": pk.get("maxHp", 0),
             "level": pk.get("level"),
-            "looktype": pk.get("looktype"),
+            "looktype": look_of(pk),
             "shiny": bool(pk.get("shiny")),
         } if pk else None,
         "xpPerHour": round(s.xp_por_hora) if s else 0,
@@ -407,6 +408,8 @@ def create_app(
         register_pvp_team_routes(app, manager, auth)
         from pokemon_sheet_api import register_pokemon_sheet_routes
         register_pokemon_sheet_routes(app, manager, auth)
+        from sprite_outfit import register_sprite_routes
+        register_sprite_routes(app, auth)
     if updater is not None:
         from updater import register_update_routes
         register_update_routes(app, updater, auth)

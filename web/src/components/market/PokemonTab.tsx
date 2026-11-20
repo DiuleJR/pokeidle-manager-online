@@ -3,7 +3,7 @@ import { Reveal } from "@/components/ui";
 import { Bell, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Check2 } from "@/components/SettingsView";
-import { PokemonSprite, ShinyMark } from "@/components/Sprites";
+import { PokemonSprite, ShinyMark, lookOf } from "@/components/Sprites";
 import { type Listing, type Moeda, marketApi, secondsUntil } from "@/lib/market";
 import { fmtInt } from "@/lib/utils";
 import { sheetTrigger, useSheet } from "@/lib/sheet";
@@ -153,7 +153,7 @@ export function PokemonTab() {
                     aria-label={`Abrir a ficha de ${f.nome ?? "Pokémon"}`}
                     {...sheetTrigger(() => openSheet({ kind: "pokemon", pokemon: { ...f, dono: l.vendedor }, listing: { id: l.id, price: l.preco, currency: l.moeda === "orb" ? "orb" as const : "gold" as const, qty: l.qtd } }))}
                   >
-                  <PokemonSprite looktype={f.looktype} size={56} />
+                  <PokemonSprite looktype={lookOf(f as never)} size={56} />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
                       <span className="break-words text-[15px] font-bold">{f.nome ?? "Pokémon"}</span>
