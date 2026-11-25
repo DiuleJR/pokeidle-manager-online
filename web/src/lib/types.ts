@@ -103,6 +103,8 @@ export interface SnapshotMessage {
   order?: string[];
   /** true: cada item de `accounts` leva só o `id` e as chaves que mudaram (junte com o que já tem). */
   delta?: boolean;
+  /** Modo economia ligado no servidor (Configurações). */
+  economy?: boolean;
   accounts: (AccountSnapshot | (Partial<AccountSnapshot> & { id: string }))[];
 }
 

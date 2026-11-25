@@ -864,6 +864,17 @@ function GlobalForm() {
         </Labeled>
       </Group>
 
+      <Group title="Bateria e dados" badge={<Chip on={s.economy_mode} label={s.economy_mode ? "Modo economia" : "Desligado"} />}>
+        <div className="space-y-2">
+          <Check2 checked={s.economy_mode} onChange={(v) => run(async () => fill(await admin.saveSettings({ economy_mode: v })), v ? "Modo economia ligado." : "Modo economia desligado.")}>
+            Modo economia (recomendado para quem roda no celular)
+          </Check2>
+          <p className="text-xs text-mute">
+            Ligado, o painel recebe só o que mudou (em vez do estado completo a cada segundo), fica em repouso quando a aba está oculta e o bot deixa de conferir a fila de hunt e o PVP várias vezes por segundo. Gasta menos bateria e menos dados, e o painel pode demorar até 5 segundos para atualizar com a aba oculta. Desligado, tudo funciona como sempre.
+          </p>
+        </div>
+      </Group>
+
       <Group title="Relatório diário">
         <label className="flex items-center justify-between gap-3 text-sm">
           O dia vira às

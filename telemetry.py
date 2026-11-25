@@ -27,6 +27,7 @@ from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import config
 from connection import State
 from game_data import ball_name, item_meta
 from item_labels import display_name, is_zmove_item, item_icon_path, item_name
@@ -411,7 +412,7 @@ def create_app(
             await ws.close(code=4401)  # antes do accept => HTTP 403 no handshake
             return
         await ws.accept()
-        hidden = asyncio.Event()      # o navegador avisa quando a aba some (economia de bateria e de dados)
+        hidden = asyncio.Event()      # o navegador avisa quando a aba some (só vale no modo economia)
         wake = asyncio.Event()        # acorda o laço na hora quando a aba volta
 
         async def listen() -> None:
@@ -425,17 +426,24 @@ def create_app(
                 pass
 
         listener = asyncio.create_task(listen())
-        last: dict[str, dict] = {}    # último estado enviado por conta: só o que mudou vai de novo
+        last: dict[str, dict] = {}    # modo economia: último estado enviado por conta; só o que mudou vai de novo
         last_order: list[str] = []
         last_sent = 0.0
         force = False
         try:
             while not listener.done():
+                eco = config.economy_mode()
                 snap = build_snapshot(get_conns())
+                if not eco:
+                    # Padrão: o estado completo a cada `interval`, como sempre foi.
+                    last, last_order = {}, []
+                    await ws.send_json({**snap, "economy": False})
+                    await asyncio.sleep(interval)
+                    continue
                 msg, last, last_order, changed = delta_message(snap, last, last_order)
                 now = time.monotonic()
                 if changed or force or now - last_sent >= HEARTBEAT_S:   # sem mudança: só a batida, para o painel saber que está vivo
-                    await ws.send_json(msg)
+                    await ws.send_json({**msg, "economy": True})
                     last_sent = now
                 wake.clear()
                 force = False

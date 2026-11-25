@@ -352,7 +352,7 @@ function useMonthly(account: number, page: number) {
 
   useEffect(() => {
     void load();
-    const stop = everyWhileVisible(() => void load(true), 60_000);
+    const stop = everyWhileVisible(() => void load(true), 60_000, { always: true });
     return () => {
       seq.current++;
       stop();

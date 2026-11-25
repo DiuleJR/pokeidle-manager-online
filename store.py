@@ -32,6 +32,7 @@ SETTING_DEFAULTS: dict[str, str] = {
     "alert_sell_pct": "30",  # quanto acima da média (%) para avisar
     "alert_sold": "1",       # Discord: um anúncio de uma das minhas contas foi vendido
     "external_login_wait_min": "5",   # min de espera antes de reconectar uma conta aberta em outro lugar
+    "economy_mode": "0",     # modo economia (bateria/dados): painel só recebe o que mudou, aba oculta em repouso, laços por evento
 }
 SECRET_SETTINGS = {"discord_webhook"}
 

@@ -73,6 +73,8 @@ export interface GlobalSettings {
   alert_sold: boolean;
   /** Minutos de espera antes de reconectar uma conta aberta em outro lugar. */
   external_login_wait_min: number;
+  /** Modo economia: o painel só recebe o que mudou, a aba oculta fica em repouso e o bot dorme até haver trabalho. */
+  economy_mode: boolean;
   defaultWsUrl: string;
 }
 

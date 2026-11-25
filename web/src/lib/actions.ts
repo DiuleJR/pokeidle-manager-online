@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { call } from "./admin";
-import { everyWhileVisible } from "./visible";
+import { economyMode, everyWhileVisible } from "./visible";
 
 /** "acc3" -> 3 (as rotas de ação usam o id numérico da conta). */
 export const numId = (accId: string) => Number(accId.replace(/\D/g, ""));
@@ -105,9 +105,9 @@ export function useHuntCatalog(account: string | null) {
         })
         .catch((e) => alive && setError(e instanceof Error ? e.message : "Erro inesperado"));
     void load();
-    // Catálogo vazio (contas ainda conectando): tenta de novo logo. Com hunts, só renova de vez em quando.
+    // Catálogo vazio (contas ainda conectando): tenta de novo logo. No modo economia, com hunts, só renova a cada minuto.
     const stop = everyWhileVisible(() => {
-      if (!okAt || Date.now() - okAt > 60_000) void load();
+      if (!economyMode() || !okAt || Date.now() - okAt > 60_000) void load();
     }, 6000);
     return () => {
       alive = false;

@@ -685,14 +685,18 @@ class AccountConnection:
         quando o jogo confirma (evento `hunt`). Se o jogo ignorar (ex.: um hit chegou na hora), tenta de novo."""
         attempts = 0
         while True:
+            eco = config.economy_mode()
+            if not eco:
+                await asyncio.sleep(0.25)    # padrão: confere de 0,25 em 0,25 s, como sempre foi
             slug = self.pending_hunt
             if not slug:
                 attempts = 0
-                self._hunt_wake.clear()      # sem fila: dorme até queue_hunt avisar (a espera longa é só uma rede de segurança)
-                try:
-                    await asyncio.wait_for(self._hunt_wake.wait(), timeout=60)
-                except asyncio.TimeoutError:
-                    pass
+                if eco:                      # modo economia: dorme até queue_hunt avisar (60 s é só rede de segurança)
+                    self._hunt_wake.clear()
+                    try:
+                        await asyncio.wait_for(self._hunt_wake.wait(), timeout=60)
+                    except asyncio.TimeoutError:
+                        pass
                 continue
             s = self.hunt.session
             if s is not None and s.slug == slug:
@@ -701,7 +705,8 @@ class AccountConnection:
             lock = self.combat_lock_ms()
             if lock > 0 or not self.can_send:
                 # dorme até a trava acabar (um hit novo a reinicia: acordando, confere de novo)
-                await asyncio.sleep(max(0.25, min(lock / 1000, 2.0)) if lock > 0 else 1.0)
+                if eco:
+                    await asyncio.sleep(max(0.25, min(lock / 1000, 2.0)) if lock > 0 else 1.0)
                 continue
             try:
                 await self.hunt.select_hunt(slug)

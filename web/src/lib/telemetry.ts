@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { wsUrl } from "./api";
+import { setEconomyMode } from "./visible";
 import type { AccountSnapshot, ConnectionState, SnapshotMessage } from "./types";
 
 /**
@@ -83,6 +84,7 @@ const sameAccount = (a: AccountSnapshot, b: AccountSnapshot) =>
   a.pokemon?.maxHp === b.pokemon?.maxHp;
 
 export function applySnapshot(msg: SnapshotMessage) {
+  if (typeof msg.economy === "boolean") setEconomyMode(msg.economy);
   const prev = data.get();
   let changed = false;
   const accounts: Record<string, AccountSnapshot> = {};

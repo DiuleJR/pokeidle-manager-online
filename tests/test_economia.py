@@ -1,8 +1,18 @@
 """Economia de rede e bateria: telemetria em delta e laços que dormem até haver trabalho."""
 import asyncio
 
+import pytest
+
+import config
 from pvp import PvpManager
 from telemetry import delta_message
+
+
+@pytest.fixture(autouse=True)
+def _economia_volta_ao_padrao():
+    config.set_economy_mode(False)
+    yield
+    config.set_economy_mode(False)
 
 
 def _snap(ts, **accs):
@@ -36,9 +46,10 @@ def test_websocket_manda_delta_e_obedece_o_aviso_de_aba_oculta(store, tmp_path, 
     from tests.test_auth import make, PW
     c, _ = make(store, tmp_path, monkeypatch)
     c.post("/api/auth/setup", json={"password": PW})
+    config.set_economy_mode(True)
     with c.websocket_connect("/ws/telemetry") as ws:
         first = ws.receive_json()
-        assert first["type"] == "snapshot" and first["delta"] is False and "order" in first
+        assert first["type"] == "snapshot" and first["delta"] is False and "order" in first and first["economy"] is True
         ws.send_json({"type": "visibility", "hidden": True})
         ws.send_json({"type": "visibility", "hidden": False})     # volta: o servidor acorda e manda na hora (batida)
         nxt = ws.receive_json()
@@ -47,6 +58,7 @@ def test_websocket_manda_delta_e_obedece_o_aviso_de_aba_oculta(store, tmp_path, 
 
 def test_pvp_dorme_com_automatico_desligado_e_acorda_ao_ligar():
     async def go():
+        config.set_economy_mode(True)
         pvp = PvpManager("acc", {}, auto=False)
         pvp._ws = None
         ticks = []
@@ -71,3 +83,44 @@ def test_pvp_dorme_com_automatico_desligado_e_acorda_ao_ligar():
         assert len(ticks) > base
         task.cancel()
     asyncio.run(go())
+
+
+def test_padrao_continua_igual_snapshot_completo_a_cada_envio(store, tmp_path, monkeypatch):
+    from tests.test_auth import make, PW
+    c, _ = make(store, tmp_path, monkeypatch)
+    c.post("/api/auth/setup", json={"password": PW})
+    assert config.economy_mode() is False
+    with c.websocket_connect("/ws/telemetry") as ws:
+        a, b = ws.receive_json(), ws.receive_json()
+    for m in (a, b):
+        assert m["type"] == "snapshot" and "delta" not in m and m["economy"] is False
+
+
+def test_pvp_padrao_confere_a_cada_segundo():
+    async def go():
+        pvp = PvpManager("acc", {}, auto=False)
+        ticks = []
+
+        async def fake_tick(level):
+            ticks.append(level)
+
+        async def noop():
+            return None
+        pvp._tick = fake_tick                      # type: ignore[method-assign]
+        pvp.request_info = noop                    # type: ignore[method-assign]
+        task = asyncio.create_task(pvp.run_forever(lambda: 200))
+        await asyncio.sleep(5.2)                   # 2 s iniciais + ~3 ciclos de 1 s
+        assert len(ticks) >= 3
+        task.cancel()
+    asyncio.run(go())
+
+
+def test_configuracao_do_painel_liga_e_desliga(store, tmp_path, monkeypatch):
+    from tests.test_auth import make, PW
+    c, _ = make(store, tmp_path, monkeypatch)
+    c.post("/api/auth/setup", json={"password": PW})
+    assert c.get("/api/settings").json()["economy_mode"] is False
+    assert c.put("/api/settings", json={"economy_mode": True}).json()["economy_mode"] is True
+    assert config.economy_mode() is True
+    assert c.put("/api/settings", json={"economy_mode": False}).json()["economy_mode"] is False
+    assert config.economy_mode() is False

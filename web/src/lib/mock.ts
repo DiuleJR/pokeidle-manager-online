@@ -175,7 +175,7 @@ function installMockApi(accs: AccountSnapshot[]) {
       especies: [{ pokeId: id, nome: n, pontos: 15 }],
     })),
   );
-  const mockSettings = { ws_url: "wss://pokeidle.io", report_hour: 0, report_tz: "America/Sao_Paulo", public_url: "", hasWebhook: true, webhookHint: "abc…", alert_sell: true, alert_sell_pct: 30, alert_sold: true, external_login_wait_min: 5, defaultWsUrl: "wss://pokeidle.io" };
+  const mockSettings = { ws_url: "wss://pokeidle.io", report_hour: 0, report_tz: "America/Sao_Paulo", public_url: "", hasWebhook: true, webhookHint: "abc…", alert_sell: true, alert_sell_pct: 30, alert_sold: true, external_login_wait_min: 5, economy_mode: false, defaultWsUrl: "wss://pokeidle.io" };
   const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json" } });
   const real = window.fetch.bind(window);
   let realHunts: Promise<unknown[]> | null = null;

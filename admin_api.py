@@ -100,6 +100,7 @@ class SettingsIn(BaseModel):
     alert_sell_pct: int | None = Field(None, ge=5, le=500)
     alert_sold: bool | None = None
     external_login_wait_min: int | None = Field(None, ge=1, le=1440)   # espera após login em outro lugar
+    economy_mode: bool | None = None                                    # modo economia (bateria e dados)
 
 
 # ----------------------------------------------------------------- parser da importação
@@ -384,6 +385,7 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
                 "alert_sell": s["alert_sell"] == "1", "alert_sold": s["alert_sold"] == "1",
                 "alert_sell_pct": int(s["alert_sell_pct"] or 30),
                 "external_login_wait_min": int(s["external_login_wait_min"] or 5),
+                "economy_mode": s["economy_mode"] == "1",
                 "webhookHint": mask(hook, 6), "defaultWsUrl": config.DEFAULT_WS_URL}
 
     @app.get("/api/settings")
@@ -431,6 +433,8 @@ def register_admin_routes(app: FastAPI, manager: "AccountManager", store: Store,
             store.set_setting("alert_sold", "1" if body.alert_sold else "0")
         if "external_login_wait_min" in sent and body.external_login_wait_min is not None:
             store.set_setting("external_login_wait_min", str(body.external_login_wait_min))
+        if "economy_mode" in sent and body.economy_mode is not None:
+            store.set_setting("economy_mode", "1" if body.economy_mode else "0")
         if "alert_sell_pct" in sent and body.alert_sell_pct is not None:
             store.set_setting("alert_sell_pct", str(body.alert_sell_pct))
         await manager.apply_global_settings()

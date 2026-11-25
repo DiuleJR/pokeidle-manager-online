@@ -215,9 +215,10 @@ conta normalmente. A conta sai pelo IP do próprio celular.
    envie o texto copiado para o celular (por exemplo, por uma mensagem para você mesmo) e cole
    no painel.
 
-Para economizar bateria e dados (desde a versão 1.10.1 o painel só recebe o que mudou e fica quase
-em repouso com a aba oculta), coloque `TELEMETRY_INTERVAL_S=3` no arquivo `.env`: o painel passa a
-atualizar a cada 3 s em vez de 1 s.
+Para economizar bateria e dados, ligue o **Modo economia** em **Configurações > Bateria e dados** (versão
+1.10.1 ou mais nova). Ele vem desligado: ligado, o painel só recebe o que mudou, fica em repouso com a aba
+oculta e o bot deixa de acordar à toa. Para ir além, coloque `TELEMETRY_INTERVAL_S=3` no `.env`: o painel
+passa a atualizar a cada 3 s em vez de 1 s.
 
 Para o bot não parar em segundo plano (estas dicas **ainda não foram testadas**; o restante
 acima foi):

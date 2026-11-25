@@ -82,6 +82,7 @@ class AccountManager:
 
     async def start_all(self) -> None:
         config.set_external_login_wait_min(self.store.get_setting("external_login_wait_min"))
+        config.set_economy_mode(self.store.get_setting("economy_mode"))
         for row in self.store.list_accounts():
             if row["enabled"]:
                 self._spawn(row)
@@ -142,6 +143,7 @@ class AccountManager:
                                 self.store.get_setting("report_tz"))
         notify.set_public_url(self.store.get_setting("public_url"))
         config.set_external_login_wait_min(self.store.get_setting("external_login_wait_min"))
+        config.set_economy_mode(self.store.get_setting("economy_mode"))
         new_ws = self.settings().ws_url
         if any(c.settings.ws_url != new_ws for c in self._conns.values()):
             for acc_id in list(self._conns):

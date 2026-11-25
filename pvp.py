@@ -19,6 +19,8 @@ import json
 import logging
 import time
 
+import config
+
 log = logging.getLogger("pvp")
 
 LEVEL_MIN = 150               # PVP_NIVEL_MIN do jogo (o servidor manda o valor real em `regras.nivelMin`)
@@ -306,10 +308,10 @@ class PvpManager:
         await asyncio.sleep(2.0)
         await self.request_info()
         while True:
-            if self.auto and not self.native_auto:
+            if not config.economy_mode() or (self.auto and not self.native_auto):
                 await asyncio.sleep(TICK_S)
             else:
-                # Automático desligado (ou feito pelo jogo): só precisa renovar o rank de vez em quando.
+                # Modo economia, com o automático desligado (ou feito pelo jogo): só renova o rank de vez em quando.
                 self._wake.clear()
                 try:
                     await asyncio.wait_for(self._wake.wait(), timeout=IDLE_TICK_S)

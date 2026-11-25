@@ -240,3 +240,17 @@ def set_external_login_wait_min(minutes) -> None:
 
 def external_login_wait_s() -> float:
     return _external_login_wait_min * 60
+
+
+_economy_mode = False
+
+
+def set_economy_mode(value) -> None:
+    """Modo economia (configuração do painel, desligado por padrão). Ligado: o painel só recebe o que mudou, a aba
+    oculta fica em repouso e os laços do bot dormem até haver trabalho. Desligado: tudo como sempre foi."""
+    global _economy_mode
+    _economy_mode = str(value).strip().lower() in ("1", "true", "on", "yes")
+
+
+def economy_mode() -> bool:
+    return _economy_mode

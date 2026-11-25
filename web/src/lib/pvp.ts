@@ -143,7 +143,7 @@ export function usePvp() {
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const stop = everyWhileVisible(() => void refresh(), 2000);
+    const stop = everyWhileVisible(() => void refresh(), 2000, { always: true });
     return () => {
       alive.current = false;
       stop();
