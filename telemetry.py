@@ -273,7 +273,7 @@ _SECURITY_HEADERS = {
 
 # O worker da "Melhor hunt" roda o motor de um site de terceiros (PokéIdle Hub). Esta CSP, entregue com o próprio
 # arquivo do worker, só deixa esse código falar com o Hub: ele não alcança a nossa API nem outros sites.
-HUNT_HUB = "https://pokeidle-gg.pages.dev"
+HUNT_HUB = "https://pokeidleguide.io"
 _WORKER_CSP = f"default-src 'none'; script-src {HUNT_HUB}; connect-src {HUNT_HUB}"
 _WORKER_PATH = "/hunt-worker.js"
 

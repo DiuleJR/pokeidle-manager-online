@@ -12,7 +12,7 @@ const ORDERS: { id: HuntOrder; label: string }[] = [
 ];
 const SHOWN = 3;
 const MAX = 10;
-const HUB = "https://pokeidle-gg.pages.dev/#hunt";
+const HUB = "https://pokeidleguide.io/#hunt";
 
 const per = (n: number) => fmtShort(Math.round(n));
 

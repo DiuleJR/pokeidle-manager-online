@@ -185,7 +185,7 @@ function installMockApi(accs: AccountSnapshot[]) {
     const wait = () => new Promise((r) => setTimeout(r, 350));
     if (path === "/api/hunts") {
       // Dev: usa as hunts reais do Hub (mesmos slugs do jogo), para a "Melhor hunt" casar com o mapa. Sem rede, cai nas de mentira.
-      realHunts ??= real("https://pokeidle-gg.pages.dev/data/jogo/hunts.json")
+      realHunts ??= real("https://pokeidleguide.io/data/jogo/hunts.json")
         .then((r) => r.json())
         .then((d: { hunts: { slug: string; nome: string; regiao: string; nivel: number; especies: { pokeId: number; pontos: number }[] }[] }) =>
           d.hunts.map((h) => ({ slug: h.slug, nome: h.nome, area: h.regiao === "kanto" || h.regiao === "outland" ? h.regiao : "orre", regiao: h.regiao, nivel: h.nivel, totalSpawns: 15, looktype: null, especies: h.especies.map((e) => ({ ...e, nome: h.nome })) })))

@@ -174,7 +174,7 @@ def test_hunt_worker_is_confined_by_its_own_csp(store, tmp_path, monkeypatch):
     monkeypatch.setenv("WEB_DIR", str(tmp_path))
     c = TestClient(create_app([], Auth(store, exposed=False, env_token="")))
     worker = c.get("/hunt-worker.js").headers["content-security-policy"]
-    assert "pokeidle-gg.pages.dev" in worker and "'self'" not in worker   # não alcança a nossa API
+    assert "pokeidleguide.io" in worker and "'self'" not in worker   # não alcança a nossa API
     assert "'self'" in c.get("/").headers["content-security-policy"]       # o painel segue com a CSP normal
 
 

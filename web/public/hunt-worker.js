@@ -1,10 +1,10 @@
 // Worker da "Melhor hunt" (aba Mapa). Roda o motor da calculadora de hunt do PokéIdle Hub
-// (https://pokeidle-gg.pages.dev), carregado do site deles na hora: o código NÃO é copiado para este projeto.
+// (https://pokeidleguide.io), carregado do site deles na hora: o código NÃO é copiado para este projeto.
 //
 // Segurança: este arquivo é servido com uma CSP própria (ver telemetry.py) que só permite falar com o
 // site do Hub. Mesmo sendo da mesma origem do painel, o código de fora não consegue chamar a nossa API.
 // Entrada: o Pokémon equipado (já com os stats do jogo) e o nível do treinador. Nada disso sai do navegador.
-const HUB = "https://pokeidle-gg.pages.dev";
+const HUB = "https://pokeidleguide.io";
 const BLOCO = 100;
 const ZERO = { hp: 0, atk: 0, def: 0, spAtk: 0, spDef: 0, speed: 0 };
 

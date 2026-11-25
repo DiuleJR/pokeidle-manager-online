@@ -3,7 +3,7 @@ import { actions, type PokemonSheet } from "./actions";
 
 /**
  * "Melhor hunt" para o Pokémon equipado. O cálculo é o motor da calculadora de hunt do PokéIdle Hub
- * (https://pokeidle-gg.pages.dev), que roda num worker (public/hunt-worker.js) carregando o código do site deles.
+ * (https://pokeidleguide.io), que roda num worker (public/hunt-worker.js) carregando o código do site deles.
  * O Pokémon vem direto do estado do jogo (sem colar ficha) e nada dele sai do navegador.
  */
 export type HuntOrder = "xp" | "ouro";
