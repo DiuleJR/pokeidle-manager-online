@@ -20,6 +20,7 @@ import {
   type ProxyInput,
 } from "@/lib/admin";
 import type { AccountStatus } from "@/lib/types";
+import { everyWhileVisible } from "@/lib/visible";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado");
@@ -1021,8 +1022,7 @@ export function SettingsView() {
 
   useEffect(() => {
     void load();
-    const i = setInterval(() => void load(), 4000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => void load(), 4000);
   }, [load]);
 
   const insecure = location.protocol === "http:" && !LOCAL_HOSTS.includes(location.hostname);

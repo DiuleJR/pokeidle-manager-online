@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { ConfirmDialog } from "@/components/ui";
 import { admin, AuthError, type UpdateState } from "@/lib/admin";
 import { httpBase } from "@/lib/api";
+import { everyWhileVisible } from "@/lib/visible";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado");
 
@@ -105,11 +106,11 @@ export function useUpdate() {
 function useUpdatePolling() {
   useEffect(() => {
     void refresh();
-    const id = setInterval(() => void refresh(), 60_000);
+    const stop = everyWhileVisible(() => void refresh(), 60_000);
     const onFocus = () => void refresh(); // voltou para a aba: mostra o estado atual na hora
     window.addEventListener("focus", onFocus);
     return () => {
-      clearInterval(id);
+      stop();
       window.removeEventListener("focus", onFocus);
     };
   }, []);

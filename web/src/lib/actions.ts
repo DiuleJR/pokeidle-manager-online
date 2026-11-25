@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { call } from "./admin";
+import { everyWhileVisible } from "./visible";
 
 /** "acc3" -> 3 (as rotas de ação usam o id numérico da conta). */
 export const numId = (accId: string) => Number(accId.replace(/\D/g, ""));
@@ -93,16 +94,24 @@ export function useHuntCatalog(account: string | null) {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
+    let okAt = 0; // quando o catálogo veio com hunts pela última vez
     const load = () =>
       call<HuntCatalog>("GET", `/api/hunts${account ? `?account=${account}` : ""}`)
-        .then((d) => alive && (setData(d), setError(null)))
+        .then((d) => {
+          if (!alive) return;
+          setData(d);
+          setError(null);
+          okAt = d.hunts.length ? Date.now() : 0;
+        })
         .catch((e) => alive && setError(e instanceof Error ? e.message : "Erro inesperado"));
     void load();
-    // Se o catálogo veio vazio (contas ainda conectando), tenta de novo logo.
-    const i = setInterval(() => void load(), 6000);
+    // Catálogo vazio (contas ainda conectando): tenta de novo logo. Com hunts, só renova de vez em quando.
+    const stop = everyWhileVisible(() => {
+      if (!okAt || Date.now() - okAt > 60_000) void load();
+    }, 6000);
     return () => {
       alive = false;
-      clearInterval(i);
+      stop();
     };
   }, [account]);
   return { data, error };

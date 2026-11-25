@@ -28,6 +28,7 @@ import {
 } from "@/lib/pass";
 import { serverNow, useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import type { AccountSnapshot } from "@/lib/types";
+import { everyWhileVisible } from "@/lib/visible";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -44,8 +45,7 @@ const TIER: Record<Tier, { color: string; label: string }> = {
 function useNow(): number {
   const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
-    const i = setInterval(() => setNow(serverNow()), 1000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => setNow(serverNow()), 1000);
   }, []);
   return now;
 }

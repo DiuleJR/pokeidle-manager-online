@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call } from "./admin";
+import { everyWhileVisible } from "./visible";
 
 /** Ordem e nomes das faixas do PVP ranqueado (as mesmas do jogo). */
 export const TIER_NAME: Record<string, string> = {
@@ -142,12 +143,10 @@ export function usePvp() {
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const i = setInterval(() => {
-      if (!document.hidden) void refresh();
-    }, 2000);
+    const stop = everyWhileVisible(() => void refresh(), 2000);
     return () => {
       alive.current = false;
-      clearInterval(i);
+      stop();
     };
   }, [refresh]);
 

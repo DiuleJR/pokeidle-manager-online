@@ -4,6 +4,7 @@ import { Notice } from "@/components/SettingsView";
 import { type Moeda } from "@/lib/market";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { fmtInt, fmtShort } from "@/lib/utils";
+import { everyWhileVisible } from "@/lib/visible";
 
 export const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado");
 
@@ -37,8 +38,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], opts: { every
     setData(null);
     void load();
     if (!opts.every) return;
-    const t = setInterval(() => void load(true), opts.every);
-    return () => clearInterval(t);
+    return everyWhileVisible(() => void load(true), opts.every);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, opts.skip, opts.every]);
 
@@ -49,8 +49,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], opts: { every
 export function useTick(ms = 1000) {
   const [, set] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => set((n) => n + 1), ms);
-    return () => clearInterval(t);
+    return everyWhileVisible(() => set((n) => n + 1), ms);
   }, [ms]);
 }
 

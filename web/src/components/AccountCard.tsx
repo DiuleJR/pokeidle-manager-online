@@ -12,6 +12,7 @@ import { type CardStyle, useCardStyle } from "@/lib/cardStyle";
 import { dragState, justDragged } from "@/lib/useCardOrder";
 import { fmtDuration, fmtShort } from "@/lib/utils";
 import type { MapInfo } from "@/lib/types";
+import { everyWhileVisible } from "@/lib/visible";
 
 export type CardMode = "resumo" | "sessao";
 
@@ -21,8 +22,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 function SessionClock({ startedAt }: { startedAt: number | null | undefined }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const i = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => tick((n) => n + 1), 1000);
   }, []);
   if (!startedAt) return <span>—</span>;
   const s = Math.max(0, Math.floor((serverNow() - startedAt) / 1000));

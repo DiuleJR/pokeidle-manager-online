@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PokemonRow, SellDepotResult } from "./types";
+import { everyWhileVisible } from "./visible";
 
 /** Resolve as URLs do backend a partir de VITE_TELEMETRY_URL (ws://host/ws/telemetry?token=..)
  *  ou, se vazio, da mesma origem (em dev o Vite faz proxy de /ws e /api). */
@@ -84,10 +85,10 @@ export function usePokemons(account: string, refreshNonce = 0) {
     };
     if (refreshNonce === 0) setRows(null); // só mostra "Carregando…" na troca de conta, não no refresh pós-venda
     void load();
-    const i = setInterval(load, 15000);
+    const stop = everyWhileVisible(load, 15000);
     return () => {
       alive = false;
-      clearInterval(i);
+      stop();
     };
   }, [account, refreshNonce]);
 

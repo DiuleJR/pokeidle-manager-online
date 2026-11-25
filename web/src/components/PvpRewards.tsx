@@ -34,6 +34,7 @@ import {
 } from "@/lib/pvpRewards";
 import { useScrollLock } from "@/lib/scrollLock";
 import { PLACEMENT_MATCHES, rankIcon, TIER_COLOR, TIER_NAME, type PvpAccount } from "@/lib/pvp";
+import { everyWhileVisible } from "@/lib/visible";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const nf = new Intl.NumberFormat("pt-BR");
@@ -45,8 +46,7 @@ function useClock(kind: ClockKind): Clock {
   const [c, set] = useState(() => clockOf(kind));
   useEffect(() => {
     set(clockOf(kind));
-    const i = setInterval(() => set(clockOf(kind)), 1000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => set(clockOf(kind)), 1000);
   }, [kind]);
   return c;
 }
@@ -352,10 +352,10 @@ function useMonthly(account: number, page: number) {
 
   useEffect(() => {
     void load();
-    const i = setInterval(() => !document.hidden && void load(true), 60_000);
+    const stop = everyWhileVisible(() => void load(true), 60_000);
     return () => {
       seq.current++;
-      clearInterval(i);
+      stop();
     };
   }, [load]);
   return { data, err, loading, retry: () => void load() };

@@ -261,6 +261,27 @@ def build_snapshot(conns: "list[AccountConnection]") -> dict:
     }
 
 
+HEARTBEAT_S = 4.0         # sem mudança nenhuma, manda só o relógio (~100 bytes); o indicador "Ao vivo" do painel exige < 5 s
+HIDDEN_INTERVAL_S = 5.0   # com a aba oculta o painel só precisa de uma atualização de vez em quando
+
+
+def delta_message(snap: dict, last: dict[str, dict], last_order: list[str]) -> tuple[dict, dict[str, dict], list[str], bool]:
+    """Compara o snapshot novo com o último enviado e devolve (mensagem, novo 'último', nova ordem, houve mudança).
+    A primeira mensagem (nada enviado ainda) leva tudo; depois cada conta leva só as chaves que mudaram."""
+    order = [a["id"] for a in snap["accounts"]]
+    accounts: list[dict] = []
+    for a in snap["accounts"]:
+        prev = last.get(a["id"])
+        if prev is None:
+            accounts.append(a)
+        else:
+            diff = {k: v for k, v in a.items() if prev.get(k) != v}
+            if diff:
+                accounts.append({"id": a["id"], **diff})
+    msg = {"type": "snapshot", "ts": snap["ts"], "order": order, "delta": bool(last), "accounts": accounts}
+    return msg, {a["id"]: a for a in snap["accounts"]}, order, bool(accounts) or order != last_order
+
+
 _CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://pokeidle.io; "
         "connect-src 'self' ws: wss:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
@@ -390,12 +411,43 @@ def create_app(
             await ws.close(code=4401)  # antes do accept => HTTP 403 no handshake
             return
         await ws.accept()
+        hidden = asyncio.Event()      # o navegador avisa quando a aba some (economia de bateria e de dados)
+        wake = asyncio.Event()        # acorda o laço na hora quando a aba volta
+
+        async def listen() -> None:
+            try:
+                while True:
+                    msg = await ws.receive_json()
+                    if isinstance(msg, dict) and msg.get("type") == "visibility":
+                        (hidden.set if msg.get("hidden") else hidden.clear)()
+                        wake.set()
+            except (WebSocketDisconnect, RuntimeError, ValueError):
+                pass
+
+        listener = asyncio.create_task(listen())
+        last: dict[str, dict] = {}    # último estado enviado por conta: só o que mudou vai de novo
+        last_order: list[str] = []
+        last_sent = 0.0
+        force = False
         try:
-            while True:
-                await ws.send_json(build_snapshot(get_conns()))
-                await asyncio.sleep(interval)
+            while not listener.done():
+                snap = build_snapshot(get_conns())
+                msg, last, last_order, changed = delta_message(snap, last, last_order)
+                now = time.monotonic()
+                if changed or force or now - last_sent >= HEARTBEAT_S:   # sem mudança: só a batida, para o painel saber que está vivo
+                    await ws.send_json(msg)
+                    last_sent = now
+                wake.clear()
+                force = False
+                try:
+                    await asyncio.wait_for(wake.wait(), timeout=max(interval, HIDDEN_INTERVAL_S) if hidden.is_set() else interval)
+                    force = True      # a aba voltou (ou foi ocultada): confirma o estado na hora
+                except asyncio.TimeoutError:
+                    pass
         except (WebSocketDisconnect, RuntimeError):
             pass
+        finally:
+            listener.cancel()
 
     if manager is not None and store is not None:
         from admin_api import register_admin_routes

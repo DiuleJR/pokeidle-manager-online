@@ -99,7 +99,11 @@ export interface AccountSnapshot {
 export interface SnapshotMessage {
   type: "snapshot";
   ts: number;
-  accounts: AccountSnapshot[];
+  /** Ids das contas, na ordem. Mensagens "delta" só trazem, em `accounts`, as contas que mudaram. */
+  order?: string[];
+  /** true: cada item de `accounts` leva só o `id` e as chaves que mudaram (junte com o que já tem). */
+  delta?: boolean;
+  accounts: (AccountSnapshot | (Partial<AccountSnapshot> & { id: string }))[];
 }
 
 export interface PokemonRow {

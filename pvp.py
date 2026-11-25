@@ -25,6 +25,7 @@ LEVEL_MIN = 150               # PVP_NIVEL_MIN do jogo (o servidor manda o valor 
 TEAM_MAX = 5
 BETWEEN_MATCHES_S = 20.0      # PVP_ENTRE_PARTIDAS_MS
 TICK_S = 1.0
+IDLE_TICK_S = 15.0           # passo do laço com o automático desligado (só confere se é hora de renovar o rank)
 ENTER_GAP_S = 4.0             # mínimo entre dois pedidos de entrada (o servidor pode demorar a confirmar)
 CONFIRM_S = 12.0              # sem confirmação da fila nesse tempo, pede de novo
 REFUSE_BACKOFF_S = 45.0       # recusa sem prazo informado
@@ -42,10 +43,29 @@ class PvpManager:
     def __init__(self, account_name: str, estado: dict, auto: bool = False) -> None:
         self.account_name = account_name
         self.estado = estado
-        self.auto = auto
+        self._wake = asyncio.Event()    # acorda o laço quando o automático liga (sem ficar conferindo a cada segundo)
+        self._auto = auto
         self._ws = None
         self._seen_shapes: set[tuple] = set()
         self._reset()
+
+    @property
+    def auto(self) -> bool:
+        return self._auto
+
+    @auto.setter
+    def auto(self, on: bool) -> None:
+        self._auto = on
+        self._wake.set()
+
+    @property
+    def native_auto(self) -> bool:
+        return self._native_auto
+
+    @native_auto.setter
+    def native_auto(self, on: bool) -> None:
+        self._native_auto = on
+        self._wake.set()
 
     def _reset(self) -> None:
         self.rank: dict | None = None
@@ -286,7 +306,15 @@ class PvpManager:
         await asyncio.sleep(2.0)
         await self.request_info()
         while True:
-            await asyncio.sleep(TICK_S)
+            if self.auto and not self.native_auto:
+                await asyncio.sleep(TICK_S)
+            else:
+                # Automático desligado (ou feito pelo jogo): só precisa renovar o rank de vez em quando.
+                self._wake.clear()
+                try:
+                    await asyncio.wait_for(self._wake.wait(), timeout=IDLE_TICK_S)
+                except asyncio.TimeoutError:
+                    pass
             try:
                 await self._tick(level_of())
             except Exception:

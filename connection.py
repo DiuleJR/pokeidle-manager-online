@@ -234,6 +234,8 @@ class AccountConnection:
         self.shop = ShopManager(account.name, self.estado)
         self.market = MarketClient(account.name, self.estado)
         self.pending_hunt: str | None = None      # hunt pedida no painel, aguardando a trava de combate acabar
+        self.frames = 0                           # frames recebidos do jogo (aparece no log de status: mede o ritmo por conta)
+        self._hunt_wake = asyncio.Event()         # acorda o laço da fila quando há hunt nova (sem ficar conferindo de 0,25 em 0,25 s)
         self.restockers: list[AutoRestock] = []
         if account.auto_potion:
             self.restockers.append(AutoRestock(
@@ -444,6 +446,7 @@ class AccountConnection:
         try:
             async for raw in ws:
                 self._last_frame = time.monotonic()
+                self.frames += 1
                 msg = _parse(raw)
                 self._check_erro(msg)
                 if msg.get("t") == "sessao.renovada" and msg.get("token"):
@@ -604,11 +607,15 @@ class AccountConnection:
     async def _status_logger(self) -> None:
         """Loga periodicamente Pokémon ativo, HP, XP/h, Gold/h, progresso da
         hunt e um resumo compacto do inventário (balls/potions/pokémons)."""
+        last_frames, last_t = self.frames, time.monotonic()
         while True:
             await asyncio.sleep(config.STATUS_LOG_INTERVAL)
-            log.info("[%s] %s | capturas=%s falhas=%s | %s", self.acc.name,
+            now = time.monotonic()
+            rate = (self.frames - last_frames) / max(now - last_t, 1e-6)
+            last_frames, last_t = self.frames, now
+            log.info("[%s] %s | capturas=%s falhas=%s | %s | frames=%.1f/s", self.acc.name,
                      self.hunt.status_line(), self.balls.caught, self.balls.failed,
-                     self.inventory.summary_line())
+                     self.inventory.summary_line(), rate)
 
     async def _inventory_logger(self) -> None:
         """Relatório detalhado de inventário (todos os items, pokémons,
@@ -670,6 +677,7 @@ class AccountConnection:
     def queue_hunt(self, slug: str | None) -> None:
         """Guarda a hunt desejada: troca sozinha assim que a trava de combate acabar (None cancela)."""
         self.pending_hunt = slug
+        self._hunt_wake.set()
         log.info("[%s] hunt na fila: %s", self.acc.name, slug)
 
     async def _hunt_queue_loop(self) -> None:
@@ -677,16 +685,23 @@ class AccountConnection:
         quando o jogo confirma (evento `hunt`). Se o jogo ignorar (ex.: um hit chegou na hora), tenta de novo."""
         attempts = 0
         while True:
-            await asyncio.sleep(0.25)
             slug = self.pending_hunt
             if not slug:
                 attempts = 0
+                self._hunt_wake.clear()      # sem fila: dorme até queue_hunt avisar (a espera longa é só uma rede de segurança)
+                try:
+                    await asyncio.wait_for(self._hunt_wake.wait(), timeout=60)
+                except asyncio.TimeoutError:
+                    pass
                 continue
             s = self.hunt.session
             if s is not None and s.slug == slug:
                 self.pending_hunt = None
                 continue
-            if self.combat_lock_ms() > 0 or not self.can_send:
+            lock = self.combat_lock_ms()
+            if lock > 0 or not self.can_send:
+                # dorme até a trava acabar (um hit novo a reinicia: acordando, confere de novo)
+                await asyncio.sleep(max(0.25, min(lock / 1000, 2.0)) if lock > 0 else 1.0)
                 continue
             try:
                 await self.hunt.select_hunt(slug)

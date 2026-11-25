@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLink } from "@/lib/telemetry";
+import { everyWhileVisible } from "@/lib/visible";
 
 /** Saúde do link com a VPS: Ao vivo (<5s) / Atrasado (≤15s) / Sem dados / Reconectando. */
 export function ConnectionIndicator() {
   const link = useLink();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const i = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => setNow(Date.now()), 1000);
   }, []);
 
   const age = link.lastMessageAt ? (now - link.lastMessageAt) / 1000 : null;

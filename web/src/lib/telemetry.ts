@@ -86,22 +86,35 @@ export function applySnapshot(msg: SnapshotMessage) {
   const prev = data.get();
   let changed = false;
   const accounts: Record<string, AccountSnapshot> = {};
-  for (const acc of msg.accounts) {
-    const old = prev.accounts[acc.id];
-    if (old && sameAccount(old, acc)) accounts[acc.id] = old;
+  // O servidor manda só o que mudou (delta): junta com o último estado conhecido da conta.
+  const incoming: Record<string, AccountSnapshot> = {};
+  for (const part of msg.accounts) {
+    const old = prev.accounts[part.id];
+    incoming[part.id] = msg.delta && old ? ({ ...old, ...part } as AccountSnapshot) : (part as AccountSnapshot);
+  }
+  const order = msg.order ?? msg.accounts.map((a) => a.id);
+  for (const id of order) {
+    const old = prev.accounts[id];
+    const acc = incoming[id];
+    if (!acc) {
+      if (old) accounts[id] = old;
+      continue;
+    }
+    if (old && sameAccount(old, acc)) accounts[id] = old;
     else {
-      accounts[acc.id] = acc;
+      accounts[id] = acc;
       changed = true;
     }
   }
-  const order = msg.accounts.map((a) => a.id);
   const orderChanged = order.length !== prev.order.length || order.some((id, i) => id !== prev.order[i]);
 
   // Historico para os graficos: um ponto por snapshot.
   const point: HistoryPoint = { t: msg.ts };
-  for (const acc of msg.accounts) {
-    point[`${acc.id}:gold`] = acc.goldPerHour;
-    point[`${acc.id}:xp`] = acc.xpPerHour;
+  for (const id of order) {
+    const acc = accounts[id];
+    if (!acc) continue;
+    point[`${id}:gold`] = acc.goldPerHour;
+    point[`${id}:xp`] = acc.xpPerHour;
   }
   const history = [...prev.history, point].slice(-HISTORY_MAX);
 
@@ -144,7 +157,11 @@ function connect() {
     scheduleRetry();
     return;
   }
-  ws.onopen = () => link.set({ ...link.get(), state: "open", attempts: 0 });
+  ws.onopen = () => {
+    link.set({ ...link.get(), state: "open", attempts: 0 });
+    sendVisibility(ws);
+  };
+  current = ws;
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data as string);
@@ -153,9 +170,24 @@ function connect() {
       /* mensagem invalida: ignora */
     }
   };
-  ws.onclose = scheduleRetry;
+  ws.onclose = () => {
+    if (current === ws) current = null;
+    scheduleRetry();
+  };
   ws.onerror = () => ws.close();
 }
+
+// Aba oculta (tela apagada, outro app): o servidor passa a mandar com menos frequência. Ao voltar, manda na hora.
+let current: WebSocket | null = null;
+function sendVisibility(ws: WebSocket | null = current) {
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  try {
+    ws.send(JSON.stringify({ type: "visibility", hidden: document.hidden }));
+  } catch {
+    /* socket fechando: o reconectar cuida */
+  }
+}
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => sendVisibility());
 
 function scheduleRetry() {
   const attempts = link.get().attempts + 1;

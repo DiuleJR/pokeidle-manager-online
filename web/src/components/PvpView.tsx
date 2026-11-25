@@ -21,6 +21,7 @@ import {
   type PvpMatch,
 } from "@/lib/pvp";
 import { serverNow } from "@/lib/telemetry";
+import { everyWhileVisible } from "@/lib/visible";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const pt = new Intl.NumberFormat("pt-BR");
@@ -31,8 +32,7 @@ function useTick(active: boolean) {
   const [, set] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const i = setInterval(() => set((n) => n + 1), 1000);
-    return () => clearInterval(i);
+    return everyWhileVisible(() => set((n) => n + 1), 1000);
   }, [active]);
 }
 
