@@ -1,5 +1,5 @@
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "framer-motion";
-import { useEffect } from "react";
+import { Component, useEffect } from "react";
 import { fmtShort } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -174,4 +174,25 @@ export function Reveal({
       {children}
     </Tag>
   );
+}
+
+/** Se uma aba quebrar ao desenhar, mostra o erro nela (em vez de uma tela vazia) e deixa tentar de novo. */
+export class TabBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("Aba quebrou:", error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card p-4 text-sm" role="alert">
+        <b className="text-poke-red">Esta aba não conseguiu abrir.</b>
+        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs text-mute">{this.state.error.message}</pre>
+        <button type="button" className="btn mt-3" onClick={() => this.setState({ error: null })}>Tentar de novo</button>
+      </div>
+    );
+  }
 }

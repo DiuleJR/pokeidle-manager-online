@@ -248,6 +248,59 @@ function installMockApi(accs: AccountSnapshot[]) {
       const it = (id: number, name: string, minGold: number | null, minOrb: number | null, avgGold: number | null, avgOrb: number | null) => ({ id, name, category: "stone", icon: null, ads: 3, units: 12, minGold, minOrb, avgGold, avgOrb, fav: false });
       return json({ ts: Date.now(), days: 7, online: [1], items: [{ ...it(59194, "Fragmento de Z-Move", 850000000, 152, 700000000, 131), category: "fragment" }, it(23, "Sun Stone", 68999, 410, 74500, 450), it(24, "Rare Candy", 100000, null, 112000, null), it(25, "Leaf Stone", 49005, 300, 52000, 320), it(26, "Fire Stone", 51000, 310, 55000, 330), it(27, "Moon Stone", null, null, 80000, null)] });
     }
+    if (path.startsWith("/api/bosses")) {
+      if (init?.method === "POST") return json({ ok: true });
+      const ic = (f: string) => `https://pokeidle.io/assets/site/assets/items/${f}`;
+      const drop = (name: string, icon: string, chance: number | null, itemId: number, qty: [number, number] | null = null) => ({ itemId, name, icon: ic(icon), chance, qty });
+      const prizes = {
+        tm: [drop("TM Disk Piece", "tm_disk_elemental.png", 0.02, 59194, [1, 3]), drop("TM Elemental", "tm_disk_elemental.png", 0.001, 59195)],
+        mega: [drop("Fragmento de MEGA Stone", "bronze_boss_token.png", 0.013, 59300), drop("Fragmento de MEGA Shiny Stone", "bronze_boss_token.png", 0.01, 59301)],
+        tickets: [drop("Safari Ticket", "bronze_boss_token.png", 0.005, 59400), drop("Mystic Ticket", "bronze_boss_token.png", 0.00001, 59401)],
+      };
+      const order = ["tm", "mega", "tickets"] as const;
+      const w = window as unknown as { __bossEnded?: number };
+      const ended = (w.__bossEnded ??= Date.now() - 60_000);
+      const mk = (key: string, name: string, pokeId: number, looktype: number, region: string, trio: string, position: number, level: number, types: string[], playable = true) => ({
+        key, name, level, region, regionName: region[0].toUpperCase() + region.slice(1), trio, position, looktype, img: null, pokeId, types, playable, minTrainerLevel: level,
+        teamLevel: playable ? level : null, idealTeam: playable ? 5 : null,
+        entry: playable ? { itemId: 70000, name: "Bronze Boss Token", icon: ic("bronze_boss_token.png"), qty: 1 } : null,
+        days: [0, 1, 2].map((d) => { const prize = order[(position - d + 9) % 3]; return playable ? { prize, drops: prizes[prize] } : { prize: null, drops: [] }; }),
+        dropNames: playable ? [] : ["Rare Candy", "Mega Stone"],
+      });
+      const catalog = [
+        mk("articuno", "Articuno", 144, 60144, "kanto", "Trio Aves Lendárias", 0, 300, ["ICE", "FLYING"]),
+        mk("moltres", "Moltres", 146, 60146, "kanto", "Trio Aves Lendárias", 1, 300, ["FIRE", "FLYING"]),
+        mk("zapdos", "Zapdos", 145, 60145, "kanto", "Trio Aves Lendárias", 2, 300, ["ELECTRIC", "FLYING"]),
+        mk("suicune", "Suicune", 245, 60245, "johto", "Trio Bestas Lendárias", 0, 650, ["WATER"]),
+        mk("entei", "Entei", 244, 60244, "johto", "Trio Bestas Lendárias", 1, 650, ["FIRE"]),
+        mk("raikou", "Raikou", 243, 60243, "johto", "Trio Bestas Lendárias", 2, 650, ["ELECTRIC"]),
+        mk("groudon", "Groudon", 383, 60383, "hoenn", "Trio Climático", 0, 3100, ["GROUND"]),
+        mk("dialga", "Dialga", 483, 60483, "sinnoh", "Trio da Criação", 0, 9750, ["STEEL", "DRAGON"], false),
+      ];
+      return json({
+        ts: Date.now(), nextRotation: Date.now() + 14.5 * 3600_000, catalog,
+        revive: { itemId: 205, name: "Revive", icon: "https://pokeidle.io/assets/site/assets/markitems/revive.png" },
+        raid: {
+          agora: Date.now(), offset: 0, hasResult: false, inscritos: 2897, maxEquipe: 5, token: { itemId: 70000, qtd: 1 },
+          edicao: { id: "gx-2026-11-30", numero: 6, dia: "2026-11-30", inscricoesDe: Date.now() - 86_400_000, inscricoesAte: Date.now() + (5 * 24 + 12.6) * 3600_000, equipeAte: Date.now() + 6 * 86_400_000, batalhaEm: Date.now() + 6 * 86_400_000, transmissaoEm: Date.now() + 6 * 86_400_000 + 60_000, fimEm: Date.now() + 7 * 86_400_000 },
+          gigantamax: { dex: 892, nome: "Urshifu Single Strike", tipos: ["FIGHTING", "DARK"], sprite: "/img/gigantamax/892.png", hpMax: 309_600_000, golpes: { gmax: { n: "G-Max One Blow", t: "DARK" }, max: { n: "Max Knuckle", t: "FIGHTING" }, onda: { n: "Gigantamax Roar", t: "DARK" } } },
+          bonus: { max: 25, xpMax: 20, farmMax: 5, horas: 12, tabela: [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((resto, i) => ({ resto, bonus: Math.round(i * 2.5), xp: i * 2, farm: Math.round(i / 2) })) },
+        },
+        accounts: accs.map((a, i) => ({
+          id: i + 1, nick: a.nick, level: a.level * 5, online: a.status !== "offline", items: { "70000": 21 - i * 7, "59194": i, "59300": 0 },
+          arena: i === 1 ? { key: "suicune", name: "Suicune" } : null, auto: i === 1, autoKey: i === 1 ? "suicune" : null,
+          wins: { suicune: 191, kyogre: 324, articuno: 12 }, session: { wins: i === 1 ? 4 : 0, losses: i === 1 ? 1 : 0 },
+          team: [60003, 60248, 60094, 60130, 60025].slice(0, 4 + (i % 2)).map((looktype, k) => ({ id: k + 1, name: "Pokémon", level: k === 1 ? 1055 : 100 + k * 40, looktype, shiny: false, hp: k === 2 ? 0 : 900, maxHp: 1000 })),
+          raid: { inscrito: i === 2 },
+          active: i <= 2, buyRevive: i === 1, revives: i === 1 ? 37 : 0,
+          run: i === 1 ? { key: "suicune", phase: "fighting", error: null, returnSlug: "shellder", stopping: false, finished: false, startedAt: Date.now() - 600_000 } : i === 2 ? { key: "entei", phase: "healing", error: null, returnSlug: "shellder", stopping: false, finished: false, startedAt: Date.now() } : null,
+          hp: i === 1 ? { hp: 61_200_000, maxHp: 309_600_000, name: "Suicune" } : null,
+          series: i === 1 ? { key: "suicune", name: "Suicune", startedAt: Date.now() - 600_000, wins: 83, losses: 2, entries: 85, tokens: 85, revives: 6, items: [{ itemId: 59300, name: "Fragmento de MEGA Stone", icon: ic("bronze_boss_token.png"), qty: 2 }] } : i === 2 ? { key: "entei", name: "Entei", startedAt: Date.now(), wins: 0, losses: 0, entries: 0, tokens: 0, revives: 0, items: [] } : null,
+          summary: i === 3 ? { key: "suicune", name: "Suicune", startedAt: Date.now() - 900_000, endedAt: ended, reason: "done", wins: 83, losses: 0, entries: 83, tokens: 83, revives: 12, items: [{ itemId: 59194, name: "Fragmento de Z-Move", icon: ic("tm_disk_elemental.png"), qty: 2 }, { itemId: 59300, name: "TM AoE Piece", icon: ic("bronze_boss_token.png"), qty: 1 }] } : null,
+          recent: i === 1 ? [{ won: true, key: "suicune", name: "Suicune", at: Date.now() - 90_000, auto: true, drops: [{ itemId: 59300, name: "Fragmento de MEGA Stone", qty: 1 }] }, { won: false, key: "suicune", name: "Suicune", at: Date.now() - 400_000, auto: false, drops: [] }] : [],
+        })),
+      });
+    }
     if (path === "/api/creatures") return json(creatures);
     if (path === "/api/pvp" && (!init?.method || init.method === "GET")) {
       const tiers = [["bronze", "I", 40, 5], ["ouro", "II", 745, 41], ["diamante", "III", 1390, 120], ["bronze", "I", 0, 0]] as const;

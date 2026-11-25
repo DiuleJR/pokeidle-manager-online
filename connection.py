@@ -33,6 +33,7 @@ from inventory import InventoryView
 from battle_pass import PASSE_NIVEL_MIN, pode_resgatar
 from maps import effective_tier, normalize_tiers
 from market import MarketClient
+from boss import BossManager
 from pvp import PvpManager
 from notify import GOLD, GREEN, RED, DailyStats, Notifier, fmt_duration, rare_icon_url
 from item_labels import item_name
@@ -249,6 +250,9 @@ class AccountConnection:
                 threshold=account.ball_restock_threshold, qty=account.ball_restock_qty))
         self.inventory = InventoryView(self.estado)
         self.pvp = PvpManager(account.name, self.estado, auto=account.pvp_auto)
+        self.boss = BossManager(account.name, self.estado, conn=self, buy_revive=account.boss_revive)
+        self.boss_catalog: list[dict] = []     # welcome.bossesCatalogo (todos os bosses)
+        self.boss_playable: list[dict] = []    # welcome.bossesJogaveis (os que já têm arena)
         self._log = logging.LoggerAdapter(log, {})
 
     # ------------------------------------------------------------------ logs
@@ -380,6 +384,9 @@ class AccountConnection:
                 self.itens_nossos = {int(i["id"]): i for i in welcome.get("itensNossos", [])
                                      if isinstance(i, dict) and "id" in i}
                 self.outland_tiers = normalize_tiers(welcome.get("outlandTiers"))
+                self.boss_catalog = [b for b in (welcome.get("bossesCatalogo") or []) if isinstance(b, dict)]
+                self.boss_playable = [b for b in (welcome.get("bossesJogaveis") or []) if isinstance(b, dict)]
+                log.info("[%s] bosses: %d no catálogo, %d com arena", self.acc.name, len(self.boss_catalog), len(self.boss_playable))
                 m = welcome.get("mercado")  # catálogo da vitrine + limites (preço mínimo, espera de compra)
                 self.mercado_cfg = m if isinstance(m, dict) else {}
                 if self.session_started is None:
@@ -402,6 +409,8 @@ class AccountConnection:
                 self.shop.bind(ws)
                 self.market.bind(ws)
                 self.pvp.bind(ws)
+                self.boss.bind(ws)
+                asyncio.create_task(self.boss.request_raid())
                 if self.acc.hunt_slug and self.acc.hunt_slug != self.estado.get("huntSlug"):
                     await self.hunt.select_hunt(self.acc.hunt_slug)
                 if self.on_online:
@@ -430,6 +439,7 @@ class AccountConnection:
                 finally:
                     self.market.unbind()
                     self.pvp.unbind()
+                    self.boss.unbind()
                     for t in background:
                         t.cancel()
                     await asyncio.gather(*background, return_exceptions=True)
@@ -465,6 +475,7 @@ class AccountConnection:
                 self.shop.handle_frame(msg)
                 self.market.handle_frame(msg)
                 self.pvp.handle_frame(msg)
+                self.boss.handle_frame(msg)
                 if msg.get("t") == "ranking.ficha" and self.on_ficha:
                     self.on_ficha(self, msg)
                 if msg.get("t") == "pvpMensal" and self.on_pvp_month:

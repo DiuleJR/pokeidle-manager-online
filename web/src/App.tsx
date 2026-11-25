@@ -1,7 +1,8 @@
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { LayoutDashboard, Map as MapIcon, MessagesSquare, Package, RotateCcw, Settings, Store, Swords, Ticket } from "lucide-react";
+import { LayoutDashboard, Map as MapIcon, MessagesSquare, Package, RotateCcw, Settings, Store, Skull, Swords, Ticket } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AccountCard, type CardDrag, type CardMode } from "@/components/AccountCard";
+import { BossView } from "@/components/BossView";
 import { ConnectionIndicator } from "@/components/ConnectionIndicator";
 import { AccountSelect, InventoryView } from "@/components/InventoryView";
 import { MapaView } from "@/components/MapaView";
@@ -13,25 +14,26 @@ import { SummaryBar } from "@/components/SummaryBar";
 import { UpdateBanner } from "@/components/UpdateCard";
 import { ChatDock, ChatPopoutHost, ChatView, CommunityColumn, CommunityStrip, useDockMode } from "@/components/Sidebars";
 import { SupportPopup, SupportStrip } from "@/components/SupportCard";
-import { ConfirmDialog, Frame } from "@/components/ui";
+import { ConfirmDialog, Frame, TabBoundary } from "@/components/ui";
 import { actions } from "@/lib/actions";
 import { startChat, totalUnread, useChat } from "@/lib/chat";
 import { useAccountIds, useAccountsMap } from "@/lib/telemetry";
 import { useCardOrder } from "@/lib/useCardOrder";
 
-type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "passe" | "pvp" | "config" | "chat";
+type Tab = "dashboard" | "inventario" | "mapa" | "mercado" | "passe" | "pvp" | "boss" | "config" | "chat";
 const TABS: { id: Tab; label: string; Icon: typeof Package }[] = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { id: "inventario", label: "Inventários", Icon: Package },
   { id: "mapa", label: "Mapa", Icon: MapIcon },
   { id: "mercado", label: "Mercado", Icon: Store },
   { id: "passe", label: "Passe", Icon: Ticket },
-  { id: "pvp", label: "PVP", Icon: Swords },
+  { id: "pvp", label: "Pvp", Icon: Swords },
+  { id: "boss", label: "Boss", Icon: Skull },
   { id: "config", label: "Configurações", Icon: Settings },
 ];
-/** Barra de baixo do celular, em duas fileiras de 4: Mapa, Mercado, PVP e Chat em cima; Dashboard, Inventários, Passe e Configurações embaixo. */
+/** Barra de baixo do celular, em duas fileiras de 4: Mapa, Mercado, PVP, Boss e Chat em cima (5); Dashboard, Inventários, Passe e Configurações embaixo (4). */
 const MOBILE_TABS: { id: Tab; label: string; Icon: typeof Package }[] = [
-  ...(["mapa", "mercado", "pvp"] as Tab[]).map((id) => TABS.find((t) => t.id === id)!),
+  ...(["mapa", "mercado", "pvp", "boss"] as Tab[]).map((id) => TABS.find((t) => t.id === id)!),
   { id: "chat", label: "Chat", Icon: MessagesSquare },
   ...(["dashboard", "inventario", "passe", "config"] as Tab[]).map((id) => TABS.find((t) => t.id === id)!),
 ];
@@ -42,8 +44,8 @@ const MODES: { id: CardMode; label: string }[] = [
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const readTab = (): Tab =>
-  location.hash === "#inventario" ? "inventario" : location.hash === "#mapa" ? "mapa" : location.hash === "#mercado" ? "mercado" : location.hash === "#passe" ? "passe" : location.hash === "#pvp" ? "pvp" : location.hash === "#config" ? "config" : location.hash === "#chat" ? "chat" : "dashboard";
-const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", mapa: "Mapa", mercado: "Mercado", passe: "Passe de Batalha", pvp: "PVP", config: "Configurações", chat: "Chat" };
+  location.hash === "#inventario" ? "inventario" : location.hash === "#mapa" ? "mapa" : location.hash === "#mercado" ? "mercado" : location.hash === "#passe" ? "passe" : location.hash === "#pvp" ? "pvp" : location.hash === "#boss" ? "boss" : location.hash === "#config" ? "config" : location.hash === "#chat" ? "chat" : "dashboard";
+const TITLES: Record<Tab, string> = { dashboard: "Painel de Contas", inventario: "Inventários", mapa: "Mapa", mercado: "Mercado", passe: "Passe de Batalha", pvp: "Pvp", boss: "Bosses", config: "Configurações", chat: "Chat" };
 
 function UnreadBadge() {
   const u = totalUnread(useChat());
@@ -318,7 +320,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25, ease: EASE }}
               >
-                {tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : tab === "mapa" ? <MapaView /> : tab === "mercado" ? <MarketView /> : tab === "passe" ? <PassView /> : tab === "pvp" ? <PvpView /> : tab === "chat" ? <ChatView /> : <SettingsView />}
+                <TabBoundary key={tab}>{tab === "dashboard" ? <Dashboard mode={mode} /> : tab === "inventario" ? <InventoryView account={account} /> : tab === "mapa" ? <MapaView /> : tab === "mercado" ? <MarketView /> : tab === "passe" ? <PassView /> : tab === "pvp" ? <PvpView /> : tab === "boss" ? <BossView /> : tab === "chat" ? <ChatView /> : <SettingsView />}</TabBoundary>
               </motion.div>
             </AnimatePresence>
           </main>
@@ -337,11 +339,11 @@ export default function App() {
 
       <nav
         aria-label="Navegação"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-12 border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-[repeat(20,minmax(0,1fr))] border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
       >
-        {/* Duas fileiras de 4 botões (3 colunas de 12 cada). */}
-        {MOBILE_TABS.map((t) => (
-          <MobileTabButton key={t.id} {...t} active={tab === t.id} onGo={go} span="col-span-3" />
+        {/* Duas fileiras: 5 botões em cima (4 colunas de 20 cada) e 4 embaixo (5 colunas cada). */}
+        {MOBILE_TABS.map((t, i) => (
+          <MobileTabButton key={t.id} {...t} active={tab === t.id} onGo={go} span={i < 5 ? "col-span-4" : "col-span-5"} />
         ))}
       </nav>
     </MotionConfig>

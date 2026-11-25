@@ -99,6 +99,7 @@ class AccountConfig:
     ball_restock_threshold: int = DEFAULT_BALL_RESTOCK_THRESHOLD
     ball_restock_qty: int = DEFAULT_BALL_RESTOCK_QTY
     pvp_auto: bool = False           # entra sozinho na fila do PVP ranqueado
+    boss_revive: bool = False        # na luta de boss: compra 100 Revives quando zerar e liga o auto-revive
 
     @property
     def name(self) -> str:
@@ -126,6 +127,7 @@ OPTION_DEFAULTS: dict = {
     "ball_restock_threshold": DEFAULT_BALL_RESTOCK_THRESHOLD,
     "ball_restock_qty": DEFAULT_BALL_RESTOCK_QTY,
     "pvp_auto": False,
+    "boss_revive": False,
 }
 
 
@@ -157,6 +159,7 @@ def build_account_config(d: dict) -> AccountConfig:
         ball_restock_threshold=int(o["ball_restock_threshold"]),
         ball_restock_qty=int(o["ball_restock_qty"]),
         pvp_auto=bool(o["pvp_auto"]),
+        boss_revive=bool(o["boss_revive"]),
     )
 
 

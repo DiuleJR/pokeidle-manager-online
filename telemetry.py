@@ -468,6 +468,8 @@ def create_app(
         register_chat_routes(app, manager, auth)
         from pvp_api import register_pvp_routes
         register_pvp_routes(app, manager, store, auth)
+        from boss_api import register_boss_routes
+        register_boss_routes(app, manager, store, auth)
         from pvp_team_api import register_pvp_team_routes
         register_pvp_team_routes(app, manager, auth)
         from pokemon_sheet_api import register_pokemon_sheet_routes
