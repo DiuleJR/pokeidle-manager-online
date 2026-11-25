@@ -215,6 +215,10 @@ conta normalmente. A conta sai pelo IP do próprio celular.
    envie o texto copiado para o celular (por exemplo, por uma mensagem para você mesmo) e cole
    no painel.
 
+Para economizar bateria e dados (desde a versão 1.10.1 o painel só recebe o que mudou e fica quase
+em repouso com a aba oculta), coloque `TELEMETRY_INTERVAL_S=3` no arquivo `.env`: o painel passa a
+atualizar a cada 3 s em vez de 1 s.
+
 Para o bot não parar em segundo plano (estas dicas **ainda não foram testadas**; o restante
 acima foi):
 
