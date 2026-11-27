@@ -51,6 +51,7 @@ export function AutoHuntControl({
         source_slug: currentSlug,
         target_slug: target.slug,
         pokemon_id: best.sheet.id,
+        pokemon_level: best.sheet.level,
         current_rate: current ? lineMetric(current, settings.metric) : 0,
         target_rate: lineMetric(target, settings.metric),
       }).then((res) => {
