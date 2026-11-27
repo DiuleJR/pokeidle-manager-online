@@ -369,7 +369,7 @@ def test_autohunt_requires_current_pokemon_and_available_hunt(env):
     assert c.post(advice, headers=H,
                   json=_auto_hunt_suggestion(target_slug="inexistente")).status_code == 400
     assert c.post(advice, headers=H,
-                  json=_auto_hunt_suggestion(target_rate=float("inf"))).status_code == 422
+                  json=_auto_hunt_suggestion(target_rate=-5)).status_code == 422
 
 
 def test_autohunt_enqueues_only_useful_hunt(env):
