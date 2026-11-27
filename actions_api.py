@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING, Literal
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+import config
+from autohunt import AutoHuntPolicy, decide
 
 from auth import Auth
 from connection import AccountConnection
@@ -31,6 +34,23 @@ PASS_CLAIM_TIMEOUT_S = 6.0      # o jogo confirma o resgate do passe com {"t": "
 
 class HuntIn(BaseModel):
     slug: str
+
+
+class AutoHuntConfigIn(BaseModel):
+    enabled: bool | None = None
+    metric: Literal["xp", "ouro"] | None = None
+    min_gain_pct: int | None = Field(None, ge=5, le=100)
+    cooldown_minutes: int | None = Field(None, ge=5, le=120)
+
+
+class AutoHuntSuggestionIn(BaseModel):
+    metric: Literal["xp", "ouro"]
+    source_slug: str = Field(min_length=1, max_length=64)
+    target_slug: str = Field(min_length=1, max_length=64)
+    pokemon_id: int = Field(ge=1)
+    pokemon_level: int = Field(ge=1)
+    current_rate: float = Field(ge=0, allow_inf_nan=False)
+    target_rate: float = Field(ge=0, allow_inf_nan=False)
 
 
 class OutlandTierIn(BaseModel):
@@ -157,6 +177,79 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
     def conn_of(acc_id: int) -> AccountConnection | None:
         return manager.get(acc_id)
 
+    def auto_hunt_public(row: dict) -> dict:
+        opts = {**config.OPTION_DEFAULTS, **(row.get("options") or {})}
+        return {"enabled": opts["auto_hunt"],
+                "metric": opts["auto_hunt_metric"],
+                "min_gain_pct": opts["auto_hunt_min_gain_pct"],
+                "cooldown_minutes": opts["auto_hunt_cooldown_minutes"]}
+
+    @app.get("/api/accounts/{acc_id}/autohunt")
+    async def get_auto_hunt(acc_id: int, request: Request, tok: str | None = Query(None, alias="token")):
+        if (r := guard(request, tok)):
+            return r
+        row = store.get_account(acc_id)
+        if row is None:
+            return JSONResponse({"error": "conta não encontrada"}, status_code=404)
+        return auto_hunt_public(row)
+
+    @app.patch("/api/accounts/{acc_id}/autohunt")
+    async def patch_auto_hunt(acc_id: int, body: AutoHuntConfigIn, request: Request,
+                              tok: str | None = Query(None, alias="token")):
+        if (r := guard(request, tok)):
+            return r
+        row = store.get_account(acc_id)
+        if row is None:
+            return JSONResponse({"error": "conta não encontrada"}, status_code=404)
+        names = {"enabled": "auto_hunt", "metric": "auto_hunt_metric",
+                 "min_gain_pct": "auto_hunt_min_gain_pct",
+                 "cooldown_minutes": "auto_hunt_cooldown_minutes"}
+        patch = {names[k]: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+        if patch:
+            store.update_account(acc_id, {"options": patch})
+            conn = conn_of(acc_id)
+            if conn is not None:
+                conn.acc = replace(conn.acc, **patch)
+        return auto_hunt_public(store.get_account(acc_id))
+
+    @app.post("/api/accounts/{acc_id}/autohunt/suggest")
+    async def suggest_auto_hunt(acc_id: int, body: AutoHuntSuggestionIn, request: Request,
+                                tok: str | None = Query(None, alias="token")):
+        """Uma sugestão /hunt autenticada; não há simulador executando no backend."""
+        if (r := guard(request, tok)):
+            return r
+        row = store.get_account(acc_id)
+        if row is None:
+            return JSONResponse({"error": "conta não encontrada"}, status_code=404)
+        conn = conn_of(acc_id)
+        if conn is None or not conn.can_send:
+            return JSONResponse({"error": "conta offline"}, status_code=409)
+        opts = auto_hunt_public(row)
+        if body.metric != opts["metric"]:
+            return JSONResponse({"error": "configuração de ranking mudou"}, status_code=409)
+        active = conn.hunt.active_pokemon()
+        if not active or active.get("id") != body.pokemon_id or int(active.get("level") or 0) != body.pokemon_level:
+            return JSONResponse({"error": "Pokémon equipado mudou; recalcule a hunt"}, status_code=409)
+        current = conn.hunt.session.slug if conn.hunt.session else conn.estado.get("huntSlug")
+        if current != body.source_slug:
+            return JSONResponse({"error": "hunt atual mudou; recalcule a sugestão"}, status_code=409)
+        target = next((h for h in conn.hunts if isinstance(h, dict) and h.get("slug") == body.target_slug), None)
+        if target is None or int(target.get("nivel") or 0) > int(conn.estado.get("level") or 0):
+            return JSONResponse({"error": "hunt indisponível ou nível insuficiente"}, status_code=400)
+        policy = AutoHuntPolicy(opts["enabled"], opts["metric"], opts["min_gain_pct"], opts["cooldown_minutes"])
+        now = time.monotonic()
+        accepted, reason = decide(
+            policy, current_slug=current, target_slug=body.target_slug,
+            current_rate=body.current_rate, target_rate=body.target_rate,
+            pending_slug=conn.pending_hunt,
+            elapsed_seconds=now - getattr(conn, "autohunt_last_at", -1e12),
+        )
+        if not accepted:
+            return {"ok": True, "action": "skipped", "reason": reason}
+        conn.autohunt_last_at = now
+        conn.queue_hunt(body.target_slug)
+        return {"ok": True, "action": "queued", "slug": body.target_slug}
+
     @app.get("/api/hunts")
     async def hunts(request: Request, tok: str | None = Query(None, alias="token"), account: str | None = None):
         if (r := guard(request, tok)):
@@ -192,6 +285,8 @@ def register_action_routes(app: FastAPI, manager: "AccountManager", store: Store
             return JSONResponse({"error": "A conta está offline."}, status_code=409)
         if body.slug not in {h.get("slug") for h in conn.hunts if isinstance(h, dict)}:
             return JSONResponse({"error": "Hunt desconhecida para esta conta."}, status_code=400)
+        # Uma escolha manual prevalece sobre sugestões automáticas durante o cooldown.
+        conn.autohunt_last_at = time.monotonic()
         # Em combate o jogo recusa a troca: entra na fila e o bot troca sozinho quando a trava acabar.
         wait = conn.combat_lock_ms()
         if wait > 0:
