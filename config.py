@@ -100,6 +100,10 @@ class AccountConfig:
     ball_restock_qty: int = DEFAULT_BALL_RESTOCK_QTY
     pvp_auto: bool = False           # entra sozinho na fila do PVP ranqueado
     boss_revive: bool = False        # na luta de boss: compra 100 Revives quando zerar e liga o auto-revive
+    auto_hunt: bool = False          # troca assistida por ranking calculado no navegador
+    auto_hunt_metric: str = "xp"
+    auto_hunt_min_gain_pct: int = 15
+    auto_hunt_cooldown_minutes: int = 15
 
     @property
     def name(self) -> str:
@@ -128,6 +132,10 @@ OPTION_DEFAULTS: dict = {
     "ball_restock_qty": DEFAULT_BALL_RESTOCK_QTY,
     "pvp_auto": False,
     "boss_revive": False,
+    "auto_hunt": False,
+    "auto_hunt_metric": "xp",
+    "auto_hunt_min_gain_pct": 15,
+    "auto_hunt_cooldown_minutes": 15,
 }
 
 
@@ -160,6 +168,10 @@ def build_account_config(d: dict) -> AccountConfig:
         ball_restock_qty=int(o["ball_restock_qty"]),
         pvp_auto=bool(o["pvp_auto"]),
         boss_revive=bool(o["boss_revive"]),
+        auto_hunt=bool(o["auto_hunt"]),
+        auto_hunt_metric=str(o["auto_hunt_metric"]),
+        auto_hunt_min_gain_pct=int(o["auto_hunt_min_gain_pct"]),
+        auto_hunt_cooldown_minutes=int(o["auto_hunt_cooldown_minutes"]),
     )
 
 
