@@ -39,7 +39,28 @@ export interface PokemonSheet {
   trainerLevel: number;
 }
 
+export interface AutoHuntSettings {
+  enabled: boolean;
+  metric: "xp" | "ouro";
+  min_gain_pct: number;
+  cooldown_minutes: number;
+}
+export interface AutoHuntAdvice {
+  ok: boolean;
+  action: "queued" | "skipped";
+  reason?: string;
+  slug?: string;
+}
+
 export const actions = {
+  getAutoHunt: (accId: string) =>
+    call<AutoHuntSettings>("GET", `/api/accounts/${numId(accId)}/autohunt`),
+  setAutoHunt: (accId: string, patch: Partial<AutoHuntSettings>) =>
+    call<AutoHuntSettings>("PATCH", `/api/accounts/${numId(accId)}/autohunt`, patch),
+  suggestAutoHunt: (accId: string, suggestion: {
+    metric: "xp" | "ouro"; source_slug: string; target_slug: string;
+    pokemon_id: number; current_rate: number; target_rate: number;
+  }) => call<AutoHuntAdvice>("POST", `/api/accounts/${numId(accId)}/autohunt/suggest`, suggestion),
   equip: (accId: string, kind: "ball" | "potion", id: number) =>
     call<EquipResult>("POST", `/api/accounts/${numId(accId)}/equip`, { kind, id }),
   selectHunt: (accId: string, slug: string) => call<HuntResult>("POST", `/api/accounts/${numId(accId)}/hunt`, { slug }),
