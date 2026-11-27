@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Loader2, Lock, Search, Swords, Timer, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BestHuntCard } from "@/components/BestHuntCard";
+import { AutoHuntControl } from "@/components/AutoHuntControl";
 import { HuntRow, TypeChip } from "@/components/HuntRow";
 import { PokemonSprite } from "@/components/Sprites";
 import { Reveal } from "@/components/ui";
@@ -346,6 +347,16 @@ export function MapaView() {
           onHunt={hunt}
         />
       </Reveal>
+
+      {selected && (
+        <AutoHuntControl
+          account={selected}
+          online={online}
+          best={best.data}
+          currentSlug={currentSlug}
+          hunts={cat?.hunts ?? []}
+        />
+      )}
 
       {/* Regiões */}
       <Reveal index={1}>
