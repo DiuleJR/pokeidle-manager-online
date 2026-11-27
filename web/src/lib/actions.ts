@@ -59,7 +59,7 @@ export const actions = {
     call<AutoHuntSettings>("PATCH", `/api/accounts/${numId(accId)}/autohunt`, patch),
   suggestAutoHunt: (accId: string, suggestion: {
     metric: "xp" | "ouro"; source_slug: string; target_slug: string;
-    pokemon_id: number; current_rate: number; target_rate: number;
+    pokemon_id: number; pokemon_level: number; current_rate: number; target_rate: number;
   }) => call<AutoHuntAdvice>("POST", `/api/accounts/${numId(accId)}/autohunt/suggest`, suggestion),
   equip: (accId: string, kind: "ball" | "potion", id: number) =>
     call<EquipResult>("POST", `/api/accounts/${numId(accId)}/equip`, { kind, id }),
