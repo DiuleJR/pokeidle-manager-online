@@ -319,3 +319,70 @@ def test_snapshot_reports_map_and_outland_tier(env):
     conn.hunt.session = HuntSession(slug="lapras")
     m = account_snapshot(conn)["map"]
     assert m["region"] == "outland" and m["label"] == "Outland 3" and m["outland"] == {"tier": 3, "label": "Outland 3", "mult": 1.5}
+
+
+
+# ------------------------------------------------------------ AutoHunt assistido
+def _auto_hunt_suggestion(**patch):
+    d = {"metric": "xp", "source_slug": "shellder", "target_slug": "lapras",
+         "pokemon_id": 123, "pokemon_level": 50, "current_rate": 100, "target_rate": 120}
+    d.update(patch)
+    return d
+
+
+def test_autohunt_defaults_off_and_requires_login(env):
+    c, conn, acc_id, _ = env
+    assert c.get(f"/api/accounts/{acc_id}/autohunt").status_code == 401
+    assert c.patch(f"/api/accounts/{acc_id}/autohunt", json={"enabled": True}).status_code == 401
+    assert c.post(f"/api/accounts/{acc_id}/autohunt/suggest", json=_auto_hunt_suggestion()).status_code == 401
+    assert c.get(f"/api/accounts/{acc_id}/autohunt", headers=H).json() == {
+        "enabled": False, "metric": "xp", "min_gain_pct": 15, "cooldown_minutes": 15,
+    }
+
+
+def test_autohunt_settings_persist_and_validate(env):
+    c, conn, acc_id, store = env
+    url = f"/api/accounts/{acc_id}/autohunt"
+    assert c.patch(url, headers=H, json={"enabled": True, "metric": "ouro",
+                                           "min_gain_pct": 20, "cooldown_minutes": 5}).status_code == 200
+    assert c.get(url, headers=H).json() == {
+        "enabled": True, "metric": "ouro", "min_gain_pct": 20, "cooldown_minutes": 5,
+    }
+    assert conn.acc.auto_hunt is True and conn.acc.auto_hunt_metric == "ouro"
+    assert store.get_account(acc_id)["options"]["auto_hunt"] is True
+    assert c.patch(url, headers=H, json={"min_gain_pct": 1}).status_code == 422
+    assert c.patch(url, headers=H, json={"metric": "shiny"}).status_code == 422
+    assert c.patch(url, headers=H, json={"cooldown_minutes": 0}).status_code == 422
+
+
+def test_autohunt_requires_current_pokemon_and_available_hunt(env):
+    c, conn, acc_id, _ = env
+    url = f"/api/accounts/{acc_id}/autohunt"
+    c.patch(url, headers=H, json={"enabled": True, "cooldown_minutes": 5})
+    advice = url + "/suggest"
+    assert c.post(advice, headers=H, json=_auto_hunt_suggestion()).status_code == 409
+    conn.estado.update({"activeId": 123, "pokemons": [{"id": 123, "level": 50}]})
+    assert c.post(advice, headers=H,
+                  json=_auto_hunt_suggestion(pokemon_level=99)).status_code == 409
+    assert c.post(advice, headers=H,
+                  json=_auto_hunt_suggestion(source_slug="outro")).status_code == 409
+    assert c.post(advice, headers=H,
+                  json=_auto_hunt_suggestion(target_slug="inexistente")).status_code == 400
+    assert c.post(advice, headers=H,
+                  json=_auto_hunt_suggestion(target_rate=float("inf"))).status_code == 422
+
+
+def test_autohunt_enqueues_only_useful_hunt(env):
+    c, conn, acc_id, _ = env
+    url = f"/api/accounts/{acc_id}/autohunt"
+    c.patch(url, headers=H, json={"enabled": True, "min_gain_pct": 15,
+                                   "cooldown_minutes": 5})
+    conn.estado.update({"activeId": 123, "pokemons": [{"id": 123, "level": 50}]})
+    advice = url + "/suggest"
+    below = c.post(advice, headers=H, json=_auto_hunt_suggestion(target_rate=110)).json()
+    assert below == {"ok": True, "action": "skipped", "reason": "melhoria abaixo do mínimo"}
+    success = c.post(advice, headers=H, json=_auto_hunt_suggestion()).json()
+    assert success["action"] == "queued" and conn.pending_hunt == "lapras"
+    blocked = c.post(advice, headers=H, json=_auto_hunt_suggestion()).json()
+    assert blocked == {"ok": True, "action": "skipped", "reason": "troca anterior pendente"}
+    assert conn.hunt._ws.sent == []  # fila aguarda confirmação do jogo
