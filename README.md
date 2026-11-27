@@ -38,6 +38,7 @@ navegador), com um painel web para acompanhar e configurar tudo.
 - Shinies vistos e capturados na sessão, exibidos fora de Outland e preservados até zerar a sessão
 - **Aba Mercado:** preços e média de 7 dias de todos os itens (com selo "barato"), vitrine de Pokémon com os filtros do jogo, histórico de vendas do servidor, anúncios e carteira de Gemas (somente leitura), calculadora de comissão, alertas no Discord e compra automática (sniper, desligada por padrão)
 - **Aba Mapa:** escolha uma conta e mande ela caçar em qualquer área do jogo, sem entrar nele. Regiões, filtros por tipo e nível, fraquezas e drops. Áreas acima do nível aparecem trancadas. Se a conta estiver em combate, o bot espera a trava acabar e troca sozinho
+- **AutoHunt assistido (experimental, desligado por padrão):** com a aba Mapa aberta, o ranking da calculadora envia ao backend sugestões de troca. A API valida autenticação, Pokémon equipado, hunt atual, nível, melhoria mínima e intervalo; a fila de combate conclui a troca mesmo se a aba for fechada. **A versão atual NÃO recalcula melhores hunts com o navegador fechado.** Não é um AutoHunt headless 24h; o motor /hunt ainda está no Web Worker do navegador.
 - **Dashboard:** clique na poção ou na bola de um card para trocá-la (se estiver sem estoque, o bot compra) e arraste os cards para mudar a ordem
 - Telemetria via FastAPI (`GET /api/telemetry`, `WS /ws/telemetry`) e dashboard React
 
